@@ -15,8 +15,10 @@ shadcn dashboard.
 
 ```bash
 cp .env.example .env
-cd apps/admin && vp install && vp build
+cd apps/admin && vp install
 cd ../..
+just sdk-generate
+just ui-build
 cargo run -p token-toxication-server --bin token-toxication-server
 ```
 
@@ -98,5 +100,9 @@ SQLite database, so keep `data/` private.
 
 The backend emits the ignored `openapi/token-toxication.openapi.json` with
 `utoipa`.
-The admin UI SDK under `apps/admin/src/generated/token-toxication` is generated
-with `openapi-nexus`.
+The ignored admin UI SDK under `apps/admin/src/generated/token-toxication` is
+generated with `openapi-nexus`.
+
+```bash
+just sdk-generate
+```

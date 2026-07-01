@@ -1,6 +1,7 @@
 /target/
 /data/
 /openapi/
+/apps/admin/src/generated/
 /apps/admin/dist/
 /apps/admin/node_modules/
 /apps/admin/.vite/
