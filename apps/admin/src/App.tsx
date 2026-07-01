@@ -22,7 +22,14 @@ import type { ApiKey, Dashboard, ProviderAccount, RequestLog } from "./types";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -69,7 +76,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Toaster } from "@/components/ui/sonner";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
-type View = "overview" | "keys" | "accounts" | "logs" | "settings";
+type View = "overview" | "keys" | "accounts" | "setup" | "logs" | "settings";
 
 type CreateKeyForm = {
   name: string;
@@ -100,6 +107,7 @@ const views: Array<{
   { id: "overview", label: "Overview", icon: LayoutDashboardIcon },
   { id: "keys", label: "API Keys", icon: KeyRoundIcon },
   { id: "accounts", label: "Provider Accounts", icon: CableIcon },
+  { id: "setup", label: "Client Setup", icon: TerminalSquareIcon },
   { id: "logs", label: "Request Log", icon: ActivityIcon },
   { id: "settings", label: "Settings", icon: SettingsIcon },
 ];
@@ -178,6 +186,7 @@ function App() {
   const [createKeyForm, setCreateKeyForm] = useState<CreateKeyForm>(emptyKeyForm);
   const [createAccountForm, setCreateAccountForm] = useState<CreateAccountForm>(emptyAccountForm);
   const [createdSecret, setCreatedSecret] = useState<string | null>(null);
+  const [clientSetupApiKey, setClientSetupApiKey] = useState("");
 
   const refresh = useCallback(async () => {
     if (!getStoredToken()) {
@@ -250,6 +259,7 @@ function App() {
       dailyCostLimit: Number(createKeyForm.dailyCostLimit) || 0,
     });
     setCreatedSecret(response.secret);
+    setClientSetupApiKey(response.secret);
     setCreateKeyForm(emptyKeyForm);
     setIsKeySheetOpen(false);
     toast.success("API key created");
@@ -470,6 +480,13 @@ function App() {
                       onToggle={toggleAccount}
                     />
                   ) : null}
+                  {view === "setup" ? (
+                    <ClientSetupView
+                      accounts={accounts}
+                      apiKey={clientSetupApiKey}
+                      setApiKey={setClientSetupApiKey}
+                    />
+                  ) : null}
                   {view === "logs" ? <RequestLogsView logs={logs} /> : null}
                   {view === "settings" ? <SettingsView /> : null}
                 </>
@@ -509,10 +526,23 @@ function App() {
               {createdSecret}
             </AlertDescription>
           </Alert>
-          <Button type="button" onClick={() => createdSecret && copyText(createdSecret)}>
-            <ClipboardCopyIcon data-icon="inline-start" />
-            Copy secret
-          </Button>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <Button type="button" onClick={() => createdSecret && copyText(createdSecret)}>
+              <ClipboardCopyIcon data-icon="inline-start" />
+              Copy secret
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setView("setup");
+                setCreatedSecret(null);
+              }}
+            >
+              <TerminalSquareIcon data-icon="inline-start" />
+              Client setup
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
       <Toaster />
@@ -893,6 +923,253 @@ function AccountsView({
             ))
           )}
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ClientSetupView({
+  accounts,
+  apiKey,
+  setApiKey,
+}: {
+  accounts: ProviderAccount[];
+  apiKey: string;
+  setApiKey: React.Dispatch<React.SetStateAction<string>>;
+}) {
+  const serviceOrigin = useMemo(
+    () => (typeof window === "undefined" ? "http://127.0.0.1:3000" : window.location.origin),
+    [],
+  );
+  const codexModels = useMemo(
+    () => modelHintsForWireApis(accounts, ["openai-responses"]),
+    [accounts],
+  );
+  const claudeModels = useMemo(
+    () => modelHintsForWireApis(accounts, ["anthropic-messages"]),
+    [accounts],
+  );
+  const opencodeModels = useMemo(
+    () => modelHintsForWireApis(accounts, ["openai-chat", "openai-responses"]),
+    [accounts],
+  );
+  const [codexModel, setCodexModel] = useState(codexModels[0] ?? "gpt-5");
+  const [claudeModel, setClaudeModel] = useState(claudeModels[0] ?? "claude-sonnet-4-5");
+  const [opencodeModel, setOpencodeModel] = useState(opencodeModels[0] ?? "deepseek-v4");
+
+  useEffect(() => {
+    setCodexModel((current) => current || codexModels[0] || "gpt-5");
+  }, [codexModels]);
+
+  useEffect(() => {
+    setClaudeModel((current) => current || claudeModels[0] || "claude-sonnet-4-5");
+  }, [claudeModels]);
+
+  useEffect(() => {
+    setOpencodeModel((current) => current || opencodeModels[0] || "deepseek-v4");
+  }, [opencodeModels]);
+
+  const snippets = useMemo(
+    () =>
+      buildClientSetupSnippets({
+        apiKey,
+        serviceOrigin,
+        codexModel,
+        claudeModel,
+        opencodeModel,
+      }),
+    [apiKey, serviceOrigin, codexModel, claudeModel, opencodeModel],
+  );
+  const keyLooksValid = apiKey.trim() === "" || apiKey.trim().startsWith("tokentoxication-");
+
+  return (
+    <div className="flex flex-col gap-5">
+      <Card>
+        <CardHeader>
+          <CardTitle>Client Setup</CardTitle>
+          <CardDescription>
+            Generate copy-paste configuration for local AI coding clients.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 lg:grid-cols-[1fr_1fr]">
+          <Alert className="lg:col-span-2">
+            <KeyRoundIcon className="size-4" />
+            <AlertTitle>Use a relay API key secret</AlertTitle>
+            <AlertDescription>
+              Newly created keys are prefilled here once. Existing rows only show previews, so paste
+              the original tokentoxication-* value before copying a setup block.
+            </AlertDescription>
+          </Alert>
+          {!keyLooksValid ? (
+            <Alert variant="destructive" className="lg:col-span-2">
+              <KeyRoundIcon className="size-4" />
+              <AlertTitle>Unexpected key prefix</AlertTitle>
+              <AlertDescription>Client keys should start with tokentoxication-.</AlertDescription>
+            </Alert>
+          ) : null}
+          <Field label="Relay API key" htmlFor="setup-api-key">
+            <Input
+              id="setup-api-key"
+              type="password"
+              value={apiKey}
+              onChange={(event) => setApiKey(event.target.value)}
+              placeholder="tokentoxication-..."
+              autoComplete="off"
+            />
+          </Field>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <SettingRow label="OpenAI base" value={snippets.openaiBaseUrl} />
+            <SettingRow label="Anthropic base" value={snippets.anthropicBaseUrl} />
+          </div>
+          <ClientModelField
+            id="setup-codex-model"
+            label="Codex model"
+            value={codexModel}
+            onChange={setCodexModel}
+            hints={codexModels}
+          />
+          <ClientModelField
+            id="setup-claude-model"
+            label="Claude Code model"
+            value={claudeModel}
+            onChange={setClaudeModel}
+            hints={claudeModels}
+          />
+          <ClientModelField
+            id="setup-opencode-model"
+            label="opencode model"
+            value={opencodeModel}
+            onChange={setOpencodeModel}
+            hints={opencodeModels}
+          />
+          <Alert className="lg:col-span-2">
+            <TerminalSquareIcon className="size-4" />
+            <AlertTitle>Model discovery uses exact model hints</AlertTitle>
+            <AlertDescription>
+              Add active provider accounts with exact model_hint values for the model list
+              endpoints. Catch-all accounts still route traffic, but they are not advertised.
+            </AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
+
+      <Tabs defaultValue="codex">
+        <TabsList>
+          <TabsTrigger value="codex">Codex</TabsTrigger>
+          <TabsTrigger value="claude">Claude Code</TabsTrigger>
+          <TabsTrigger value="opencode">opencode</TabsTrigger>
+        </TabsList>
+        <TabsContent value="codex">
+          <ClientSnippetCard
+            title="Codex profile"
+            description="Writes a dedicated profile using the Responses wire API."
+            endpoint="/openai/v1/responses"
+            model={codexModel}
+            snippet={snippets.codex}
+          />
+        </TabsContent>
+        <TabsContent value="claude">
+          <ClientSnippetCard
+            title="Claude Code environment"
+            description="Points Claude Code at the Anthropic Messages namespace."
+            endpoint="/anthropic/v1/messages"
+            model={claudeModel}
+            snippet={snippets.claudeCode}
+          />
+        </TabsContent>
+        <TabsContent value="opencode">
+          <ClientSnippetCard
+            title="opencode project config"
+            description="Creates an OpenAI-compatible provider backed by the chat namespace."
+            endpoint="/openai/v1/chat/completions"
+            model={opencodeModel}
+            snippet={snippets.opencode}
+          />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+function ClientModelField({
+  id,
+  label,
+  value,
+  onChange,
+  hints,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  hints: string[];
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <Field label={label} htmlFor={id}>
+        <Input
+          id={id}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder="Exact model name"
+        />
+      </Field>
+      {hints.length > 0 ? (
+        <div className="flex flex-wrap gap-2">
+          {hints.map((hint) => (
+            <Button
+              key={hint}
+              type="button"
+              variant={hint === value ? "secondary" : "outline"}
+              size="xs"
+              onClick={() => onChange(hint)}
+            >
+              {hint}
+            </Button>
+          ))}
+        </div>
+      ) : (
+        <span className="text-xs text-muted-foreground">
+          No active provider account advertises this protocol yet.
+        </span>
+      )}
+    </div>
+  );
+}
+
+function ClientSnippetCard({
+  title,
+  description,
+  endpoint,
+  model,
+  snippet,
+}: {
+  title: string;
+  description: string;
+  endpoint: string;
+  model: string;
+  snippet: string;
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
+        <CardAction>
+          <Button type="button" onClick={() => copyText(snippet)}>
+            <ClipboardCopyIcon data-icon="inline-start" />
+            Copy
+          </Button>
+        </CardAction>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <div className="grid gap-3 md:grid-cols-2">
+          <SettingRow label="Route" value={endpoint} />
+          <SettingRow label="Model" value={model || "not set"} />
+        </div>
+        <pre className="max-h-[560px] overflow-auto rounded-md border bg-muted/40 p-3 text-xs leading-5">
+          <code>{snippet}</code>
+        </pre>
       </CardContent>
     </Card>
   );
@@ -1448,6 +1725,110 @@ function applyAccountPreset(
     wireApi: preset.wireApi,
     modelHint: preset.modelHint,
   }));
+}
+
+function modelHintsForWireApis(accounts: ProviderAccount[], wireApis: string[]) {
+  const acceptedWireApis = new Set(wireApis);
+  const hints = accounts
+    .filter(
+      (account) =>
+        account.isActive && account.status !== "blocked" && acceptedWireApis.has(account.wireApi),
+    )
+    .map((account) => account.modelHint.trim())
+    .filter(Boolean);
+  return Array.from(new Set(hints)).sort((left, right) => left.localeCompare(right));
+}
+
+function buildClientSetupSnippets({
+  apiKey,
+  serviceOrigin,
+  codexModel,
+  claudeModel,
+  opencodeModel,
+}: {
+  apiKey: string;
+  serviceOrigin: string;
+  codexModel: string;
+  claudeModel: string;
+  opencodeModel: string;
+}) {
+  const origin = serviceOrigin.replace(/\/+$/, "");
+  const relayApiKey = apiKey.trim() || "tokentoxication-REPLACE_ME";
+  const openaiBaseUrl = `${origin}/openai/v1`;
+  const anthropicBaseUrl = `${origin}/anthropic`;
+  const codexModelName = codexModel.trim() || "gpt-5";
+  const claudeModelName = claudeModel.trim() || "claude-sonnet-4-5";
+  const opencodeModelName = opencodeModel.trim() || "deepseek-v4";
+  const opencodeProvider = "token-toxication";
+  const opencodeConfig = JSON.stringify(
+    {
+      $schema: "https://opencode.ai/config.json",
+      provider: {
+        [opencodeProvider]: {
+          npm: "@ai-sdk/openai-compatible",
+          name: "Token Toxication",
+          options: {
+            baseURL: openaiBaseUrl,
+            apiKey: "{env:TOKEN_TOXICATION_API_KEY}",
+          },
+          models: {
+            [opencodeModelName]: {
+              name: opencodeModelName,
+            },
+          },
+        },
+      },
+      model: `${opencodeProvider}/${opencodeModelName}`,
+      small_model: `${opencodeProvider}/${opencodeModelName}`,
+    },
+    null,
+    2,
+  );
+
+  return {
+    openaiBaseUrl,
+    anthropicBaseUrl,
+    codex: [
+      `export TOKEN_TOXICATION_API_KEY=${shellQuote(relayApiKey)}`,
+      "mkdir -p ~/.codex",
+      "cat > ~/.codex/token-toxication.config.toml <<'TOML'",
+      `model = ${tomlString(codexModelName)}`,
+      `model_provider = ${tomlString("token-toxication")}`,
+      "",
+      "[model_providers.token-toxication]",
+      `name = ${tomlString("Token Toxication")}`,
+      `base_url = ${tomlString(openaiBaseUrl)}`,
+      `env_key = ${tomlString("TOKEN_TOXICATION_API_KEY")}`,
+      `wire_api = ${tomlString("responses")}`,
+      "TOML",
+      "",
+      "codex --profile token-toxication",
+    ].join("\n"),
+    claudeCode: [
+      `export ANTHROPIC_BASE_URL=${shellQuote(anthropicBaseUrl)}`,
+      `export ANTHROPIC_AUTH_TOKEN=${shellQuote(relayApiKey)}`,
+      `export ANTHROPIC_MODEL=${shellQuote(claudeModelName)}`,
+      "export CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1",
+      "",
+      `claude -p ${shellQuote("Reply with one word: connected")}`,
+    ].join("\n"),
+    opencode: [
+      `export TOKEN_TOXICATION_API_KEY=${shellQuote(relayApiKey)}`,
+      "cat > opencode.json <<'JSON'",
+      opencodeConfig,
+      "JSON",
+      "",
+      "opencode",
+    ].join("\n"),
+  };
+}
+
+function shellQuote(value: string) {
+  return `'${value.replace(/'/g, "'\\''")}'`;
+}
+
+function tomlString(value: string) {
+  return JSON.stringify(value);
 }
 
 function wireApiLabel(value: string) {
