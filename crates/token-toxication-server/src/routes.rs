@@ -415,7 +415,9 @@ pub async fn delete_api_key(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<StatusCode, AppError> {
-    state.db.delete_api_key(&id).await?;
+    if !state.db.delete_api_key(&id).await? {
+        return Err(AppError::NotFound("API key not found".into()));
+    }
     Ok(StatusCode::NO_CONTENT)
 }
 

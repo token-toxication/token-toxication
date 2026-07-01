@@ -296,10 +296,10 @@ impl Db {
         Ok(updated)
     }
 
-    pub async fn delete_api_key(&self, id: &str) -> rusqlite::Result<()> {
+    pub async fn delete_api_key(&self, id: &str) -> rusqlite::Result<bool> {
         let conn = self.conn.lock().await;
-        conn.execute("DELETE FROM api_keys WHERE id = ?1", params![id])?;
-        Ok(())
+        let deleted = conn.execute("DELETE FROM api_keys WHERE id = ?1", params![id])?;
+        Ok(deleted > 0)
     }
 
     pub async fn get_api_key(&self, id: &str) -> rusqlite::Result<Option<ApiKeyView>> {
@@ -845,5 +845,42 @@ mod tests {
         ] {
             assert_eq!(normalize_wire_api("", provider), "openai-chat");
         }
+    }
+
+    #[tokio::test]
+    async fn delete_api_key_reports_missing_rows() {
+        let path =
+            std::env::temp_dir().join(format!("token-toxication-{}.sqlite3", Uuid::new_v4()));
+        let db = Db::open(&path).await.expect("open test database");
+        let key = db
+            .create_api_key(
+                CreateApiKeyRequest {
+                    name: "Client".to_string(),
+                    description: String::new(),
+                    permissions: Vec::new(),
+                    rate_limit_per_minute: 0,
+                    concurrency_limit: 0,
+                    daily_cost_limit: 0.0,
+                    expires_at: None,
+                },
+                "tokentoxication-test-secret",
+            )
+            .await
+            .expect("create api key");
+
+        assert!(db.delete_api_key(&key.id).await.expect("delete api key"));
+        assert!(
+            db.get_api_key(&key.id)
+                .await
+                .expect("get api key")
+                .is_none()
+        );
+        assert!(
+            !db.delete_api_key(&key.id)
+                .await
+                .expect("delete missing api key")
+        );
+
+        let _ = std::fs::remove_file(path);
     }
 }

@@ -13,6 +13,7 @@ import {
   SettingsIcon,
   ShieldCheckIcon,
   TerminalSquareIcon,
+  Trash2Icon,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -280,6 +281,16 @@ function App() {
     await refresh();
   }
 
+  async function deleteApiKey(key: ApiKey) {
+    if (!window.confirm(`Delete API key "${key.name}"? This cannot be undone.`)) {
+      return;
+    }
+
+    await api.deleteApiKey(key.id);
+    toast.success("API key deleted");
+    await refresh();
+  }
+
   async function toggleAccount(account: ProviderAccount) {
     await api.updateProviderAccount(account.id, { isActive: !account.isActive });
     toast.success(account.isActive ? "Provider paused" : "Provider activated");
@@ -449,6 +460,7 @@ function App() {
                       apiKeys={apiKeys}
                       onCreate={() => setIsKeySheetOpen(true)}
                       onToggle={toggleApiKey}
+                      onDelete={deleteApiKey}
                     />
                   ) : null}
                   {view === "accounts" ? (
@@ -632,10 +644,12 @@ function ApiKeysView({
   apiKeys,
   onCreate,
   onToggle,
+  onDelete,
 }: {
   apiKeys: ApiKey[];
   onCreate: () => void;
   onToggle: (key: ApiKey) => void;
+  onDelete: (key: ApiKey) => void;
 }) {
   return (
     <Card>
@@ -659,7 +673,7 @@ function ApiKeysView({
                 <TableHead>Permissions</TableHead>
                 <TableHead>Limits</TableHead>
                 <TableHead>Last used</TableHead>
-                <TableHead className="text-right">State</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -685,9 +699,29 @@ function ApiKeysView({
                   </TableCell>
                   <TableCell>{formatDate(key.lastUsedAt)}</TableCell>
                   <TableCell className="text-right">
-                    <Button type="button" variant="outline" size="sm" onClick={() => onToggle(key)}>
-                      {key.isActive ? "Active" : "Paused"}
-                    </Button>
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onToggle(key)}
+                      >
+                        {key.isActive ? "Active" : "Paused"}
+                      </Button>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="icon-sm"
+                            onClick={() => onDelete(key)}
+                          >
+                            <Trash2Icon />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Delete API key</TooltipContent>
+                      </Tooltip>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -717,9 +751,24 @@ function ApiKeysView({
                       {key.keyPreview}
                     </div>
                   </div>
-                  <Button type="button" variant="outline" size="sm" onClick={() => onToggle(key)}>
-                    {key.isActive ? "Active" : "Paused"}
-                  </Button>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Button type="button" variant="outline" size="sm" onClick={() => onToggle(key)}>
+                      {key.isActive ? "Active" : "Paused"}
+                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="icon-sm"
+                          onClick={() => onDelete(key)}
+                        >
+                          <Trash2Icon />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Delete API key</TooltipContent>
+                    </Tooltip>
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
                   <span>
