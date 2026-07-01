@@ -25,10 +25,13 @@ use crate::{
     error::AppError,
     models::{
         AnthropicModel, AnthropicModelListResponse, ApiKeyListResponse, ApiKeyRecord,
-        ApiKeyResponse, CreateApiKeyRequest, CreateApiKeyResponse, CreateProviderAccountRequest,
-        Dashboard, HealthResponse, MetricsResponse, OpenAiModel, OpenAiModelListResponse,
-        ProviderAccountListResponse, ProviderAccountResponse, RequestLog, RequestLogListResponse,
-        UpdateApiKeyRequest, UpdateProviderAccountRequest,
+        ApiKeyResponse, CreateApiKeyRequest, CreateApiKeyResponse, CreateModelCatalogEntryRequest,
+        CreateProviderAccountRequest, CreateProviderModelRouteRequest, Dashboard, HealthResponse,
+        MetricsResponse, ModelCatalogEntryResponse, ModelCatalogListResponse, OpenAiModel,
+        OpenAiModelListResponse, ProviderAccountListResponse, ProviderAccountResponse,
+        ProviderModelRouteListResponse, ProviderModelRouteResponse, RequestLog,
+        RequestLogListResponse, UpdateApiKeyRequest, UpdateModelCatalogEntryRequest,
+        UpdateProviderAccountRequest, UpdateProviderModelRouteRequest,
     },
 };
 
@@ -51,6 +54,19 @@ pub fn admin_routes(state: AppState) -> Router<AppState> {
         .route(
             "/provider-accounts/{id}",
             patch(update_provider_account).delete(delete_provider_account),
+        )
+        .route(
+            "/model-catalog",
+            get(list_model_catalog).post(create_model_catalog_entry),
+        )
+        .route("/model-catalog/{id}", patch(update_model_catalog_entry))
+        .route(
+            "/provider-model-routes",
+            get(list_provider_model_routes).post(create_provider_model_route),
+        )
+        .route(
+            "/provider-model-routes/{id}",
+            patch(update_provider_model_route).delete(delete_provider_model_route),
         )
         .route("/request-logs", get(list_request_logs))
         .route_layer(middleware::from_fn_with_state(state, require_admin));
@@ -216,20 +232,27 @@ async fn relay_json_endpoint(
     let started = Instant::now();
     let api_key = authenticate_relay_api_key(&state, &headers, uri.query()).await?;
 
-    let request_json: Value = serde_json::from_slice(&body)
+    let mut request_json: Value = serde_json::from_slice(&body)
         .map_err(|error| AppError::BadRequest(format!("invalid JSON body: {error}")))?;
     wire_api.validate(&request_json)?;
     let model = request_json
         .get("model")
         .and_then(Value::as_str)
         .map(ToOwned::to_owned);
+    let Some(public_model) = model.clone() else {
+        return Err(AppError::BadRequest("request model is required".into()));
+    };
     let api_key_id = api_key.view.id;
 
-    let account = state
+    let selection = state
         .db
         .select_provider_account_for_wire(wire_api.account_value(), model.as_deref())
         .await?
         .ok_or_else(|| AppError::Forbidden("no active provider account is available".into()))?;
+    request_json["model"] = Value::String(selection.upstream_model_id.clone());
+    let body = serde_json::to_vec(&request_json)
+        .map_err(|error| AppError::Internal(format!("serialize upstream request: {error}")))?;
+    let account = selection.account;
 
     let upstream_url = upstream_url(&account.account.base_url, wire_api.upstream_path());
     let request = match state.http.post(&upstream_url) {
@@ -245,7 +268,10 @@ async fn relay_json_endpoint(
                 &account.account.id,
                 api_key_id.clone(),
                 wire_api,
-                model.clone(),
+                (
+                    Some(public_model.clone()),
+                    Some(selection.upstream_model_id.clone()),
+                ),
                 started,
                 error.to_string(),
             )
@@ -262,7 +288,10 @@ async fn relay_json_endpoint(
                 &account.account.id,
                 api_key_id.clone(),
                 wire_api,
-                model.clone(),
+                (
+                    Some(public_model.clone()),
+                    Some(selection.upstream_model_id.clone()),
+                ),
                 started,
                 error.to_string(),
             )
@@ -302,7 +331,8 @@ async fn relay_json_endpoint(
                         provider_account_id: Some(account.account.id.clone()),
                         method: "POST".to_string(),
                         path: wire_api.public_path().to_string(),
-                        model: model.clone(),
+                        model: Some(selection.public_model_id.clone()),
+                        upstream_model: Some(selection.upstream_model_id.clone()),
                         status_code: status.as_u16(),
                         latency_ms: started.elapsed().as_millis() as u64,
                         input_tokens: 0,
@@ -349,7 +379,8 @@ async fn relay_json_endpoint(
                         provider_account_id: Some(account.account.id.clone()),
                         method: "POST".to_string(),
                         path: wire_api.public_path().to_string(),
-                        model: model.clone(),
+                        model: Some(selection.public_model_id.clone()),
+                        upstream_model: Some(selection.upstream_model_id.clone()),
                         status_code: status.as_u16(),
                         latency_ms: started.elapsed().as_millis() as u64,
                         input_tokens: usage.0,
@@ -376,7 +407,10 @@ async fn relay_json_endpoint(
                 &account.account.id,
                 api_key_id,
                 wire_api,
-                model,
+                (
+                    Some(selection.public_model_id),
+                    Some(selection.upstream_model_id),
+                ),
                 started,
                 error.to_string(),
             )
@@ -391,10 +425,11 @@ async fn record_upstream_failure(
     account_id: &str,
     api_key_id: String,
     wire_api: WireApi,
-    model: Option<String>,
+    models: (Option<String>, Option<String>),
     started: Instant,
     error: String,
 ) -> Result<(), AppError> {
+    let (model, upstream_model) = models;
     state
         .db
         .mark_provider_result(account_id, "degraded", Some(&error))
@@ -408,6 +443,7 @@ async fn record_upstream_failure(
             method: "POST".to_string(),
             path: wire_api.public_path().to_string(),
             model,
+            upstream_model,
             status_code: StatusCode::BAD_GATEWAY.as_u16(),
             latency_ms: started.elapsed().as_millis() as u64,
             input_tokens: 0,
@@ -524,6 +560,113 @@ pub async fn delete_provider_account(
     Path(id): Path<String>,
 ) -> Result<StatusCode, AppError> {
     state.db.delete_provider_account(&id).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn list_model_catalog(
+    State(state): State<AppState>,
+) -> Result<Json<ModelCatalogListResponse>, AppError> {
+    Ok(Json(ModelCatalogListResponse {
+        data: state.db.list_model_catalog().await?,
+    }))
+}
+
+pub async fn create_model_catalog_entry(
+    State(state): State<AppState>,
+    Json(input): Json<CreateModelCatalogEntryRequest>,
+) -> Result<(StatusCode, Json<ModelCatalogEntryResponse>), AppError> {
+    if input.id.trim().is_empty() {
+        return Err(AppError::BadRequest("model id is required".into()));
+    }
+    let entry = state
+        .db
+        .create_model_catalog_entry(input)
+        .await
+        .map_err(map_write_error)?;
+    Ok((
+        StatusCode::CREATED,
+        Json(ModelCatalogEntryResponse { data: entry }),
+    ))
+}
+
+pub async fn update_model_catalog_entry(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(input): Json<UpdateModelCatalogEntryRequest>,
+) -> Result<Json<ModelCatalogEntryResponse>, AppError> {
+    let entry = state
+        .db
+        .update_model_catalog_entry(&id, input)
+        .await
+        .map_err(map_write_or_not_found)?;
+    Ok(Json(ModelCatalogEntryResponse { data: entry }))
+}
+
+pub async fn list_provider_model_routes(
+    State(state): State<AppState>,
+) -> Result<Json<ProviderModelRouteListResponse>, AppError> {
+    Ok(Json(ProviderModelRouteListResponse {
+        data: state.db.list_provider_model_routes().await?,
+    }))
+}
+
+pub async fn create_provider_model_route(
+    State(state): State<AppState>,
+    Json(input): Json<CreateProviderModelRouteRequest>,
+) -> Result<(StatusCode, Json<ProviderModelRouteResponse>), AppError> {
+    validate_provider_model_route_input(
+        &input.public_model_id,
+        &input.provider_account_id,
+        &input.upstream_model_id,
+    )?;
+    let route = state
+        .db
+        .create_provider_model_route(input)
+        .await
+        .map_err(map_write_error)?;
+    Ok((
+        StatusCode::CREATED,
+        Json(ProviderModelRouteResponse { data: route }),
+    ))
+}
+
+pub async fn update_provider_model_route(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(input): Json<UpdateProviderModelRouteRequest>,
+) -> Result<Json<ProviderModelRouteResponse>, AppError> {
+    if input
+        .public_model_id
+        .as_deref()
+        .is_some_and(|value| value.trim().is_empty())
+        || input
+            .provider_account_id
+            .as_deref()
+            .is_some_and(|value| value.trim().is_empty())
+        || input
+            .upstream_model_id
+            .as_deref()
+            .is_some_and(|value| value.trim().is_empty())
+    {
+        return Err(AppError::BadRequest(
+            "public model, provider account, and upstream model cannot be empty".into(),
+        ));
+    }
+    let route = state
+        .db
+        .update_provider_model_route(&id, input)
+        .await
+        .map_err(map_write_or_not_found)?;
+    Ok(Json(ProviderModelRouteResponse { data: route }))
+}
+
+pub async fn delete_provider_model_route(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<StatusCode, AppError> {
+    if !state.db.delete_provider_model_route(&id).await? {
+        return Err(AppError::NotFound("provider model route not found".into()));
+    }
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -694,7 +837,7 @@ async fn authenticate_relay_api_key(
 async fn openai_models(state: &AppState) -> Result<Vec<OpenAiModel>, AppError> {
     let models = state
         .db
-        .list_model_catalog(&["openai-chat", "openai-responses"])
+        .list_routable_model_catalog(&["openai-chat", "openai-responses"])
         .await?;
     Ok(models
         .into_iter()
@@ -708,12 +851,15 @@ async fn openai_models(state: &AppState) -> Result<Vec<OpenAiModel>, AppError> {
 }
 
 async fn anthropic_models(state: &AppState) -> Result<Vec<AnthropicModel>, AppError> {
-    let models = state.db.list_model_catalog(&["anthropic-messages"]).await?;
+    let models = state
+        .db
+        .list_routable_model_catalog(&["anthropic-messages"])
+        .await?;
     Ok(models
         .into_iter()
         .map(|model| AnthropicModel {
             r#type: "model".to_string(),
-            display_name: model.id.clone(),
+            display_name: model.display_name,
             id: model.id,
             created_at: model.created_at,
         })
@@ -725,4 +871,42 @@ fn map_not_found(error: rusqlite::Error) -> AppError {
         rusqlite::Error::QueryReturnedNoRows => AppError::NotFound("record not found".into()),
         error => AppError::Database(error),
     }
+}
+
+fn map_write_or_not_found(error: rusqlite::Error) -> AppError {
+    match error {
+        rusqlite::Error::QueryReturnedNoRows => AppError::NotFound("record not found".into()),
+        _ => map_write_error(error),
+    }
+}
+
+fn map_write_error(error: rusqlite::Error) -> AppError {
+    let message = error.to_string();
+    if message.contains("UNIQUE constraint failed")
+        || message.contains("FOREIGN KEY constraint failed")
+        || message.contains("NOT NULL constraint failed")
+    {
+        AppError::BadRequest(
+            "invalid model catalog or route data; check duplicate primary routes and references"
+                .into(),
+        )
+    } else {
+        AppError::Database(error)
+    }
+}
+
+fn validate_provider_model_route_input(
+    public_model_id: &str,
+    provider_account_id: &str,
+    upstream_model_id: &str,
+) -> Result<(), AppError> {
+    if public_model_id.trim().is_empty()
+        || provider_account_id.trim().is_empty()
+        || upstream_model_id.trim().is_empty()
+    {
+        return Err(AppError::BadRequest(
+            "public model, provider account, and upstream model are required".into(),
+        ));
+    }
+    Ok(())
 }

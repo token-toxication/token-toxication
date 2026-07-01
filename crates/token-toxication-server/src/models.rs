@@ -71,7 +71,6 @@ pub struct ProviderAccount {
     pub base_url: String,
     pub auth_mode: String,
     pub wire_api: String,
-    pub model_hint: String,
     pub is_active: bool,
     pub priority: i32,
     pub status: String,
@@ -98,8 +97,6 @@ pub struct CreateProviderAccountRequest {
     #[serde(default)]
     pub wire_api: String,
     pub api_key: String,
-    #[serde(default)]
-    pub model_hint: String,
     #[serde(default = "default_active")]
     pub is_active: bool,
     #[serde(default)]
@@ -115,7 +112,6 @@ pub struct UpdateProviderAccountRequest {
     pub auth_mode: Option<String>,
     pub wire_api: Option<String>,
     pub api_key: Option<String>,
-    pub model_hint: Option<String>,
     pub is_active: Option<bool>,
     pub priority: Option<i32>,
 }
@@ -129,6 +125,7 @@ pub struct RequestLog {
     pub method: String,
     pub path: String,
     pub model: Option<String>,
+    pub upstream_model: Option<String>,
     pub status_code: u16,
     pub latency_ms: u64,
     pub input_tokens: u64,
@@ -203,6 +200,97 @@ pub struct ProviderAccountListResponse {
 #[serde(rename_all = "camelCase")]
 pub struct ProviderAccountResponse {
     pub data: ProviderAccount,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelCatalogEntry {
+    pub id: String,
+    pub display_name: String,
+    pub family: String,
+    pub enabled: bool,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateModelCatalogEntryRequest {
+    pub id: String,
+    #[serde(default)]
+    pub display_name: String,
+    #[serde(default)]
+    pub family: String,
+    #[serde(default = "default_active")]
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateModelCatalogEntryRequest {
+    pub display_name: Option<String>,
+    pub family: Option<String>,
+    pub enabled: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelCatalogListResponse {
+    pub data: Vec<ModelCatalogEntry>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelCatalogEntryResponse {
+    pub data: ModelCatalogEntry,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderModelRoute {
+    pub id: String,
+    pub public_model_id: String,
+    pub provider_account_id: String,
+    pub upstream_model_id: String,
+    pub wire_api: String,
+    pub role: String,
+    pub enabled: bool,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateProviderModelRouteRequest {
+    pub public_model_id: String,
+    pub provider_account_id: String,
+    pub upstream_model_id: String,
+    pub wire_api: String,
+    #[serde(default = "default_route_role")]
+    pub role: String,
+    #[serde(default = "default_active")]
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateProviderModelRouteRequest {
+    pub public_model_id: Option<String>,
+    pub provider_account_id: Option<String>,
+    pub upstream_model_id: Option<String>,
+    pub wire_api: Option<String>,
+    pub role: Option<String>,
+    pub enabled: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderModelRouteListResponse {
+    pub data: Vec<ProviderModelRoute>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderModelRouteResponse {
+    pub data: ProviderModelRoute,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -285,4 +373,8 @@ pub fn default_auth_mode() -> String {
 
 pub fn default_active() -> bool {
     true
+}
+
+pub fn default_route_role() -> String {
+    "primary".to_string()
 }

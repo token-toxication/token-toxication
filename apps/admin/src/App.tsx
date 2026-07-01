@@ -4,6 +4,7 @@ import {
   CableIcon,
   CheckIcon,
   ClipboardCopyIcon,
+  DatabaseIcon,
   KeyRoundIcon,
   LayoutDashboardIcon,
   LogOutIcon,
@@ -18,7 +19,14 @@ import {
 import { toast } from "sonner";
 
 import { api, clearStoredToken, getStoredToken, setStoredToken } from "./api";
-import type { ApiKey, Dashboard, ProviderAccount, RequestLog } from "./types";
+import type {
+  ApiKey,
+  Dashboard,
+  ModelCatalogEntry,
+  ProviderAccount,
+  ProviderModelRoute,
+  RequestLog,
+} from "./types";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -76,7 +84,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Toaster } from "@/components/ui/sonner";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
-type View = "overview" | "keys" | "accounts" | "setup" | "logs" | "settings";
+type View = "overview" | "keys" | "accounts" | "models" | "setup" | "logs" | "settings";
 
 type CreateKeyForm = {
   name: string;
@@ -94,9 +102,24 @@ type CreateAccountForm = {
   authMode: string;
   wireApi: string;
   apiKey: string;
-  modelHint: string;
   isActive: boolean;
   priority: string;
+};
+
+type ModelCatalogForm = {
+  id: string;
+  displayName: string;
+  family: string;
+  enabled: boolean;
+};
+
+type ProviderRouteForm = {
+  publicModelId: string;
+  providerAccountId: string;
+  upstreamModelId: string;
+  wireApi: string;
+  role: string;
+  enabled: boolean;
 };
 
 const views: Array<{
@@ -107,6 +130,7 @@ const views: Array<{
   { id: "overview", label: "Overview", icon: LayoutDashboardIcon },
   { id: "keys", label: "API Keys", icon: KeyRoundIcon },
   { id: "accounts", label: "Provider Accounts", icon: CableIcon },
+  { id: "models", label: "Model Catalog", icon: DatabaseIcon },
   { id: "setup", label: "Client Setup", icon: TerminalSquareIcon },
   { id: "logs", label: "Request Log", icon: ActivityIcon },
   { id: "settings", label: "Settings", icon: SettingsIcon },
@@ -128,9 +152,24 @@ const emptyAccountForm: CreateAccountForm = {
   authMode: "x-api-key",
   wireApi: "anthropic-messages",
   apiKey: "",
-  modelHint: "",
   isActive: true,
   priority: "0",
+};
+
+const emptyModelForm: ModelCatalogForm = {
+  id: "",
+  displayName: "",
+  family: "other",
+  enabled: true,
+};
+
+const emptyRouteForm: ProviderRouteForm = {
+  publicModelId: "",
+  providerAccountId: "",
+  upstreamModelId: "",
+  wireApi: "openai-chat",
+  role: "primary",
+  enabled: true,
 };
 
 const accountPresets = [
@@ -142,7 +181,6 @@ const accountPresets = [
     baseUrl: "https://api.anthropic.com",
     authMode: "x-api-key",
     wireApi: "anthropic-messages",
-    modelHint: "",
   },
   {
     id: "codex",
@@ -152,7 +190,6 @@ const accountPresets = [
     baseUrl: "https://api.openai.com",
     authMode: "bearer",
     wireApi: "openai-responses",
-    modelHint: "gpt-5",
   },
   {
     id: "deepseek-v4",
@@ -162,13 +199,12 @@ const accountPresets = [
     baseUrl: "https://api.deepseek.com",
     authMode: "bearer",
     wireApi: "openai-chat",
-    modelHint: "deepseek-v4",
   },
 ] satisfies Array<
-  Pick<
-    CreateAccountForm,
-    "name" | "provider" | "baseUrl" | "authMode" | "wireApi" | "modelHint"
-  > & { id: string; label: string }
+  Pick<CreateAccountForm, "name" | "provider" | "baseUrl" | "authMode" | "wireApi"> & {
+    id: string;
+    label: string;
+  }
 >;
 
 function App() {
@@ -179,12 +215,18 @@ function App() {
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
   const [accounts, setAccounts] = useState<ProviderAccount[]>([]);
+  const [modelCatalog, setModelCatalog] = useState<ModelCatalogEntry[]>([]);
+  const [modelRoutes, setModelRoutes] = useState<ProviderModelRoute[]>([]);
   const [logs, setLogs] = useState<RequestLog[]>([]);
   const [isLoading, setIsLoading] = useState(Boolean(token));
   const [isKeySheetOpen, setIsKeySheetOpen] = useState(false);
   const [isAccountSheetOpen, setIsAccountSheetOpen] = useState(false);
+  const [isModelSheetOpen, setIsModelSheetOpen] = useState(false);
+  const [isRouteSheetOpen, setIsRouteSheetOpen] = useState(false);
   const [createKeyForm, setCreateKeyForm] = useState<CreateKeyForm>(emptyKeyForm);
   const [createAccountForm, setCreateAccountForm] = useState<CreateAccountForm>(emptyAccountForm);
+  const [createModelForm, setCreateModelForm] = useState<ModelCatalogForm>(emptyModelForm);
+  const [createRouteForm, setCreateRouteForm] = useState<ProviderRouteForm>(emptyRouteForm);
   const [createdSecret, setCreatedSecret] = useState<string | null>(null);
   const [clientSetupApiKey, setClientSetupApiKey] = useState("");
 
@@ -194,15 +236,20 @@ function App() {
     }
     setIsLoading(true);
     try {
-      const [nextDashboard, nextKeys, nextAccounts, nextLogs] = await Promise.all([
-        api.dashboard(),
-        api.apiKeys(),
-        api.providerAccounts(),
-        api.requestLogs(50),
-      ]);
+      const [nextDashboard, nextKeys, nextAccounts, nextCatalog, nextRoutes, nextLogs] =
+        await Promise.all([
+          api.dashboard(),
+          api.apiKeys(),
+          api.providerAccounts(),
+          api.modelCatalog(),
+          api.providerModelRoutes(),
+          api.requestLogs(50),
+        ]);
       setDashboard(nextDashboard);
       setApiKeys(nextKeys);
       setAccounts(nextAccounts);
+      setModelCatalog(nextCatalog);
+      setModelRoutes(nextRoutes);
       setLogs(nextLogs);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to load dashboard");
@@ -275,7 +322,6 @@ function App() {
       authMode: createAccountForm.authMode,
       wireApi: createAccountForm.wireApi,
       apiKey: createAccountForm.apiKey,
-      modelHint: createAccountForm.modelHint,
       isActive: createAccountForm.isActive,
       priority: numberFromInput(createAccountForm.priority),
     });
@@ -285,9 +331,70 @@ function App() {
     await refresh();
   }
 
+  async function handleCreateModel(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await api.createModelCatalogEntry({
+      id: createModelForm.id,
+      displayName: createModelForm.displayName,
+      family: createModelForm.family,
+      enabled: createModelForm.enabled,
+    });
+    setCreateModelForm(emptyModelForm);
+    setIsModelSheetOpen(false);
+    toast.success("Model added");
+    await refresh();
+  }
+
+  async function handleCreateRoute(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await api.createProviderModelRoute({
+      publicModelId: createRouteForm.publicModelId,
+      providerAccountId: createRouteForm.providerAccountId,
+      upstreamModelId: createRouteForm.upstreamModelId,
+      wireApi: createRouteForm.wireApi,
+      role: createRouteForm.role,
+      enabled: createRouteForm.enabled,
+    });
+    setCreateRouteForm(emptyRouteForm);
+    setIsRouteSheetOpen(false);
+    toast.success("Provider route added");
+    await refresh();
+  }
+
   async function toggleApiKey(key: ApiKey) {
     await api.updateApiKey(key.id, { isActive: !key.isActive });
     toast.success(key.isActive ? "API key paused" : "API key activated");
+    await refresh();
+  }
+
+  async function toggleModel(entry: ModelCatalogEntry) {
+    await api.updateModelCatalogEntry(entry.id, { enabled: !entry.enabled });
+    toast.success(entry.enabled ? "Model disabled" : "Model enabled");
+    await refresh();
+  }
+
+  async function updateModelDetails(
+    entry: ModelCatalogEntry,
+    values: { displayName: string; family: string },
+  ) {
+    await api.updateModelCatalogEntry(entry.id, values);
+    toast.success("Model updated");
+    await refresh();
+  }
+
+  async function toggleRoute(route: ProviderModelRoute) {
+    await api.updateProviderModelRoute(route.id, { enabled: !route.enabled });
+    toast.success(route.enabled ? "Route disabled" : "Route enabled");
+    await refresh();
+  }
+
+  async function deleteRoute(route: ProviderModelRoute) {
+    if (!window.confirm(`Delete route for "${route.publicModelId}"?`)) {
+      return;
+    }
+
+    await api.deleteProviderModelRoute(route.id);
+    toast.success("Provider route deleted");
     await refresh();
   }
 
@@ -476,13 +583,29 @@ function App() {
                   {view === "accounts" ? (
                     <AccountsView
                       accounts={accounts}
+                      routes={modelRoutes}
                       onCreate={() => setIsAccountSheetOpen(true)}
                       onToggle={toggleAccount}
+                    />
+                  ) : null}
+                  {view === "models" ? (
+                    <ModelCatalogView
+                      accounts={accounts}
+                      models={modelCatalog}
+                      routes={modelRoutes}
+                      onCreateModel={() => setIsModelSheetOpen(true)}
+                      onCreateRoute={() => setIsRouteSheetOpen(true)}
+                      onUpdateModel={updateModelDetails}
+                      onToggleModel={toggleModel}
+                      onToggleRoute={toggleRoute}
+                      onDeleteRoute={deleteRoute}
                     />
                   ) : null}
                   {view === "setup" ? (
                     <ClientSetupView
                       accounts={accounts}
+                      models={modelCatalog}
+                      routes={modelRoutes}
                       apiKey={clientSetupApiKey}
                       setApiKey={setClientSetupApiKey}
                     />
@@ -509,6 +632,22 @@ function App() {
         setForm={setCreateAccountForm}
         onOpenChange={setIsAccountSheetOpen}
         onSubmit={handleCreateAccount}
+      />
+      <CreateModelSheet
+        open={isModelSheetOpen}
+        form={createModelForm}
+        setForm={setCreateModelForm}
+        onOpenChange={setIsModelSheetOpen}
+        onSubmit={handleCreateModel}
+      />
+      <CreateRouteSheet
+        open={isRouteSheetOpen}
+        form={createRouteForm}
+        setForm={setCreateRouteForm}
+        models={modelCatalog}
+        accounts={accounts}
+        onOpenChange={setIsRouteSheetOpen}
+        onSubmit={handleCreateRoute}
       />
       <Dialog
         open={Boolean(createdSecret)}
@@ -819,10 +958,12 @@ function ApiKeysView({
 
 function AccountsView({
   accounts,
+  routes,
   onCreate,
   onToggle,
 }: {
   accounts: ProviderAccount[];
+  routes: ProviderModelRoute[];
   onCreate: () => void;
   onToggle: (account: ProviderAccount) => void;
 }) {
@@ -831,7 +972,7 @@ function AccountsView({
       <CardHeader className="flex-row items-start justify-between gap-4">
         <div className="flex flex-col gap-1">
           <CardTitle>Provider Accounts</CardTitle>
-          <CardDescription>Upstream credentials and model routing hints.</CardDescription>
+          <CardDescription>Upstream credentials used by model routes.</CardDescription>
         </div>
         <Button type="button" onClick={onCreate}>
           <PlusIcon data-icon="inline-start" />
@@ -847,7 +988,7 @@ function AccountsView({
                 <TableHead>Provider</TableHead>
                 <TableHead>Protocol</TableHead>
                 <TableHead>Base URL</TableHead>
-                <TableHead>Model hint</TableHead>
+                <TableHead>Routes</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Routing</TableHead>
               </TableRow>
@@ -859,7 +1000,7 @@ function AccountsView({
                   <TableCell>{account.provider}</TableCell>
                   <TableCell>{wireApiLabel(account.wireApi)}</TableCell>
                   <TableCell className="max-w-[280px] truncate">{account.baseUrl}</TableCell>
-                  <TableCell>{account.modelHint || "Any model"}</TableCell>
+                  <TableCell>{routeCountForAccount(routes, account.id)}</TableCell>
                   <TableCell>{statusBadge(account.status, account.isActive)}</TableCell>
                   <TableCell className="text-right">
                     <Button
@@ -908,7 +1049,7 @@ function AccountsView({
                 </div>
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-xs text-muted-foreground">
-                    {account.modelHint || "Any model"}
+                    {routeCountForAccount(routes, account.id)} routes
                   </span>
                   <Button
                     type="button"
@@ -928,12 +1069,301 @@ function AccountsView({
   );
 }
 
+function ModelCatalogView({
+  accounts,
+  models,
+  routes,
+  onCreateModel,
+  onCreateRoute,
+  onUpdateModel,
+  onToggleModel,
+  onToggleRoute,
+  onDeleteRoute,
+}: {
+  accounts: ProviderAccount[];
+  models: ModelCatalogEntry[];
+  routes: ProviderModelRoute[];
+  onCreateModel: () => void;
+  onCreateRoute: () => void;
+  onUpdateModel: (
+    entry: ModelCatalogEntry,
+    values: { displayName: string; family: string },
+  ) => void;
+  onToggleModel: (entry: ModelCatalogEntry) => void;
+  onToggleRoute: (route: ProviderModelRoute) => void;
+  onDeleteRoute: (route: ProviderModelRoute) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [family, setFamily] = useState("all");
+  const [drafts, setDrafts] = useState<Record<string, { displayName: string; family: string }>>({});
+  const families = useMemo(
+    () => ["all", ...Array.from(new Set(models.map((model) => model.family))).sort()],
+    [models],
+  );
+  const filteredModels = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return models.filter((model) => {
+      const matchesFamily = family === "all" || model.family === family;
+      const matchesQuery =
+        needle === "" ||
+        model.id.toLowerCase().includes(needle) ||
+        model.displayName.toLowerCase().includes(needle) ||
+        model.family.toLowerCase().includes(needle);
+      return matchesFamily && matchesQuery;
+    });
+  }, [family, models, query]);
+
+  useEffect(() => {
+    setDrafts((current) => {
+      const next: Record<string, { displayName: string; family: string }> = {};
+      models.forEach((model) => {
+        next[model.id] = current[model.id] ?? {
+          displayName: model.displayName,
+          family: model.family,
+        };
+      });
+      return next;
+    });
+  }, [models]);
+
+  return (
+    <div className="flex flex-col gap-5">
+      <Card>
+        <CardHeader className="flex-row items-start justify-between gap-4">
+          <div className="flex flex-col gap-1">
+            <CardTitle>Model Catalog</CardTitle>
+            <CardDescription>Every exact model name clients may send.</CardDescription>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" onClick={onCreateRoute}>
+              <RouteIcon data-icon="inline-start" />
+              Add Route
+            </Button>
+            <Button type="button" onClick={onCreateModel}>
+              <PlusIcon data-icon="inline-start" />
+              Add Model
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
+            <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search model, display name, or family"
+            />
+            <div className="flex flex-wrap gap-2">
+              {families.map((item) => (
+                <Button
+                  key={item}
+                  type="button"
+                  size="xs"
+                  variant={family === item ? "secondary" : "outline"}
+                  onClick={() => setFamily(item)}
+                >
+                  {item}
+                </Button>
+              ))}
+            </div>
+          </div>
+          <div className="hidden md:block">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Model</TableHead>
+                  <TableHead>Display Name</TableHead>
+                  <TableHead>Family</TableHead>
+                  <TableHead>Routes</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredModels.map((model) => {
+                  const draft = drafts[model.id] ?? {
+                    displayName: model.displayName,
+                    family: model.family,
+                  };
+                  const changed =
+                    draft.displayName !== model.displayName || draft.family !== model.family;
+                  return (
+                    <TableRow key={model.id}>
+                      <TableCell className="font-mono text-xs">{model.id}</TableCell>
+                      <TableCell>
+                        <Input
+                          value={draft.displayName}
+                          onChange={(event) =>
+                            setDrafts((current) => ({
+                              ...current,
+                              [model.id]: { ...draft, displayName: event.target.value },
+                            }))
+                          }
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          value={draft.family}
+                          onChange={(event) =>
+                            setDrafts((current) => ({
+                              ...current,
+                              [model.id]: { ...draft, family: event.target.value },
+                            }))
+                          }
+                        />
+                      </TableCell>
+                      <TableCell>{routeCountForModel(routes, model.id)}</TableCell>
+                      <TableCell>
+                        {model.enabled
+                          ? statusBadge("healthy", true)
+                          : statusBadge("paused", false)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={!changed}
+                            onClick={() => onUpdateModel(model, draft)}
+                          >
+                            Save
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => onToggleModel(model)}
+                          >
+                            {model.enabled ? "Disable" : "Enable"}
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+                {filteredModels.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6}>
+                      <EmptyNotice
+                        title="No catalog models"
+                        body="Add exact public model names before creating provider routes."
+                      />
+                    </TableCell>
+                  </TableRow>
+                ) : null}
+              </TableBody>
+            </Table>
+          </div>
+          <div className="grid gap-3 md:hidden">
+            {filteredModels.length === 0 ? (
+              <EmptyNotice
+                title="No catalog models"
+                body="Add exact public model names before creating provider routes."
+              />
+            ) : (
+              filteredModels.map((model) => (
+                <div key={model.id} className="flex flex-col gap-3 rounded-md border p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="truncate font-mono text-sm">{model.id}</div>
+                      <div className="truncate text-xs text-muted-foreground">
+                        {model.displayName}
+                      </div>
+                    </div>
+                    {model.enabled ? statusBadge("healthy", true) : statusBadge("paused", false)}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant="outline">{model.family}</Badge>
+                    <Badge variant="secondary">{routeCountForModel(routes, model.id)} routes</Badge>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Provider Model Routes</CardTitle>
+          <CardDescription>
+            Primary and backup bindings from public models to upstream models.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Public Model</TableHead>
+                <TableHead>Upstream Model</TableHead>
+                <TableHead>Provider Account</TableHead>
+                <TableHead>Protocol</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {routes.map((route) => (
+                <TableRow key={route.id}>
+                  <TableCell className="font-mono text-xs">{route.publicModelId}</TableCell>
+                  <TableCell className="font-mono text-xs">{route.upstreamModelId}</TableCell>
+                  <TableCell>{accountName(accounts, route.providerAccountId)}</TableCell>
+                  <TableCell>{wireApiLabel(route.wireApi)}</TableCell>
+                  <TableCell>{routeRoleBadge(route.role)}</TableCell>
+                  <TableCell>
+                    {route.enabled ? statusBadge("healthy", true) : statusBadge("paused", false)}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onToggleRoute(route)}
+                      >
+                        {route.enabled ? "Disable" : "Enable"}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="icon-sm"
+                        onClick={() => onDeleteRoute(route)}
+                      >
+                        <Trash2Icon />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {routes.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7}>
+                    <EmptyNotice
+                      title="No provider routes"
+                      body="Add a route to make a catalog model reachable."
+                    />
+                  </TableCell>
+                </TableRow>
+              ) : null}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 function ClientSetupView({
   accounts,
+  models,
+  routes,
   apiKey,
   setApiKey,
 }: {
   accounts: ProviderAccount[];
+  models: ModelCatalogEntry[];
+  routes: ProviderModelRoute[];
   apiKey: string;
   setApiKey: React.Dispatch<React.SetStateAction<string>>;
 }) {
@@ -942,16 +1372,16 @@ function ClientSetupView({
     [],
   );
   const codexModels = useMemo(
-    () => modelHintsForWireApis(accounts, ["openai-responses"]),
-    [accounts],
+    () => routableModelsForWireApis(models, routes, accounts, ["openai-responses"]),
+    [accounts, models, routes],
   );
   const claudeModels = useMemo(
-    () => modelHintsForWireApis(accounts, ["anthropic-messages"]),
-    [accounts],
+    () => routableModelsForWireApis(models, routes, accounts, ["anthropic-messages"]),
+    [accounts, models, routes],
   );
   const opencodeModels = useMemo(
-    () => modelHintsForWireApis(accounts, ["openai-chat", "openai-responses"]),
-    [accounts],
+    () => routableModelsForWireApis(models, routes, accounts, ["openai-chat"]),
+    [accounts, models, routes],
   );
   const [codexModel, setCodexModel] = useState(codexModels[0] ?? "gpt-5");
   const [claudeModel, setClaudeModel] = useState(claudeModels[0] ?? "claude-sonnet-4-5");
@@ -977,8 +1407,9 @@ function ClientSetupView({
         codexModel,
         claudeModel,
         opencodeModel,
+        opencodeModels,
       }),
-    [apiKey, serviceOrigin, codexModel, claudeModel, opencodeModel],
+    [apiKey, serviceOrigin, codexModel, claudeModel, opencodeModel, opencodeModels],
   );
   const keyLooksValid = apiKey.trim() === "" || apiKey.trim().startsWith("tokentoxication-");
 
@@ -1044,10 +1475,9 @@ function ClientSetupView({
           />
           <Alert className="lg:col-span-2">
             <TerminalSquareIcon className="size-4" />
-            <AlertTitle>Model discovery uses exact model hints</AlertTitle>
+            <AlertTitle>Model discovery uses the catalog</AlertTitle>
             <AlertDescription>
-              Add active provider accounts with exact model_hint values for the model list
-              endpoints. Catch-all accounts still route traffic, but they are not advertised.
+              Setup snippets only use enabled catalog models with active provider routes.
             </AlertDescription>
           </Alert>
         </CardContent>
@@ -1206,7 +1636,7 @@ function RequestLogsView({
                 <TableRow key={log.id}>
                   <TableCell>{formatDate(log.createdAt)}</TableCell>
                   <TableCell className="font-mono text-xs">{log.path}</TableCell>
-                  <TableCell>{log.model || "unknown"}</TableCell>
+                  <TableCell>{formatLogModel(log)}</TableCell>
                   <TableCell>{statusCodeBadge(log.statusCode)}</TableCell>
                   <TableCell>{log.latencyMs}ms</TableCell>
                   <TableCell>{formatNumber(log.inputTokens + log.outputTokens)}</TableCell>
@@ -1238,7 +1668,7 @@ function RequestLogsView({
                   <div className="min-w-0">
                     <div className="truncate font-mono text-xs">{log.path}</div>
                     <div className="truncate text-xs text-muted-foreground">
-                      {log.model || "unknown"}
+                      {formatLogModel(log)}
                     </div>
                   </div>
                   {statusCodeBadge(log.statusCode)}
@@ -1506,16 +1936,7 @@ function CreateAccountSheet({
                 </SelectContent>
               </Select>
             </Field>
-            <Field label="Model hint" htmlFor="account-model-hint">
-              <Input
-                id="account-model-hint"
-                value={form.modelHint}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, modelHint: event.target.value }))
-                }
-                placeholder="claude, gpt-5, deepseek, qwen, kimi, glm"
-              />
-            </Field>
+            <SettingRow label="Route binding" value="Configured in Model Catalog" />
           </div>
           <Field label="Base URL" htmlFor="account-base-url">
             <Input
@@ -1570,6 +1991,236 @@ function CreateAccountSheet({
             <Button type="submit">
               <CableIcon data-icon="inline-start" />
               Add account
+            </Button>
+          </SheetFooter>
+        </form>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function CreateModelSheet({
+  open,
+  form,
+  setForm,
+  onOpenChange,
+  onSubmit,
+}: {
+  open: boolean;
+  form: ModelCatalogForm;
+  setForm: React.Dispatch<React.SetStateAction<ModelCatalogForm>>;
+  onOpenChange: (open: boolean) => void;
+  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent className="sm:max-w-md">
+        <SheetHeader>
+          <SheetTitle>Add catalog model</SheetTitle>
+          <SheetDescription>Register an exact public model name clients may send.</SheetDescription>
+        </SheetHeader>
+        <form className="flex flex-col gap-4 px-4" onSubmit={onSubmit}>
+          <Field label="Model ID" htmlFor="model-id">
+            <Input
+              id="model-id"
+              value={form.id}
+              onChange={(event) => setForm((current) => ({ ...current, id: event.target.value }))}
+              placeholder="MiniMax-M3"
+              required
+            />
+          </Field>
+          <Field label="Display name" htmlFor="model-display-name">
+            <Input
+              id="model-display-name"
+              value={form.displayName}
+              onChange={(event) =>
+                setForm((current) => ({ ...current, displayName: event.target.value }))
+              }
+              placeholder="Defaults to model ID"
+            />
+          </Field>
+          <Field label="Family" htmlFor="model-family">
+            <Input
+              id="model-family"
+              value={form.family}
+              onChange={(event) =>
+                setForm((current) => ({ ...current, family: event.target.value }))
+              }
+              placeholder="minimax, deepseek, glm, openai, anthropic"
+            />
+          </Field>
+          <div className="flex items-center justify-between gap-3 rounded-md border p-3">
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="model-enabled">Advertise when routed</Label>
+              <span className="text-xs text-muted-foreground">
+                Disabled models are hidden from client model lists.
+              </span>
+            </div>
+            <Switch
+              id="model-enabled"
+              checked={form.enabled}
+              onCheckedChange={(checked) =>
+                setForm((current) => ({ ...current, enabled: checked }))
+              }
+            />
+          </div>
+          <SheetFooter>
+            <Button type="submit">
+              <DatabaseIcon data-icon="inline-start" />
+              Add model
+            </Button>
+          </SheetFooter>
+        </form>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function CreateRouteSheet({
+  open,
+  form,
+  setForm,
+  models,
+  accounts,
+  onOpenChange,
+  onSubmit,
+}: {
+  open: boolean;
+  form: ProviderRouteForm;
+  setForm: React.Dispatch<React.SetStateAction<ProviderRouteForm>>;
+  models: ModelCatalogEntry[];
+  accounts: ProviderAccount[];
+  onOpenChange: (open: boolean) => void;
+  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent className="overflow-y-auto sm:max-w-lg">
+        <SheetHeader>
+          <SheetTitle>Add provider model route</SheetTitle>
+          <SheetDescription>Bind a public model to an upstream provider model.</SheetDescription>
+        </SheetHeader>
+        <form className="flex flex-col gap-4 px-4" onSubmit={onSubmit}>
+          <Field label="Public model" htmlFor="route-public-model">
+            <Select
+              value={form.publicModelId || "__none"}
+              onValueChange={(value) =>
+                setForm((current) => ({
+                  ...current,
+                  publicModelId: value === "__none" ? "" : value,
+                  upstreamModelId: current.upstreamModelId || (value === "__none" ? "" : value),
+                }))
+              }
+            >
+              <SelectTrigger id="route-public-model">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectItem value="__none" disabled>
+                    Select model
+                  </SelectItem>
+                  {models.map((model) => (
+                    <SelectItem key={model.id} value={model.id}>
+                      {model.id}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label="Provider account" htmlFor="route-provider-account">
+            <Select
+              value={form.providerAccountId || "__none"}
+              onValueChange={(value) =>
+                setForm((current) => ({
+                  ...current,
+                  providerAccountId: value === "__none" ? "" : value,
+                }))
+              }
+            >
+              <SelectTrigger id="route-provider-account">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectItem value="__none" disabled>
+                    Select account
+                  </SelectItem>
+                  {accounts.map((account) => (
+                    <SelectItem key={account.id} value={account.id}>
+                      {account.name}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label="Upstream model ID" htmlFor="route-upstream-model">
+            <Input
+              id="route-upstream-model"
+              value={form.upstreamModelId}
+              onChange={(event) =>
+                setForm((current) => ({ ...current, upstreamModelId: event.target.value }))
+              }
+              placeholder="Exact upstream model ID"
+              required
+            />
+          </Field>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Protocol" htmlFor="route-wire-api">
+              <Select
+                value={form.wireApi}
+                onValueChange={(value) => setForm((current) => ({ ...current, wireApi: value }))}
+              >
+                <SelectTrigger id="route-wire-api">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectItem value="anthropic-messages">Anthropic Messages</SelectItem>
+                    <SelectItem value="openai-responses">OpenAI Responses</SelectItem>
+                    <SelectItem value="openai-chat">OpenAI Chat</SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Role" htmlFor="route-role">
+              <Select
+                value={form.role}
+                onValueChange={(value) => setForm((current) => ({ ...current, role: value }))}
+              >
+                <SelectTrigger id="route-role">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectItem value="primary">Primary</SelectItem>
+                    <SelectItem value="backup">Backup</SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </Field>
+          </div>
+          <div className="flex items-center justify-between gap-3 rounded-md border p-3">
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="route-enabled">Enabled</Label>
+              <span className="text-xs text-muted-foreground">
+                Enabled primary routes must be unique for a model and protocol.
+              </span>
+            </div>
+            <Switch
+              id="route-enabled"
+              checked={form.enabled}
+              onCheckedChange={(checked) =>
+                setForm((current) => ({ ...current, enabled: checked }))
+              }
+            />
+          </div>
+          <SheetFooter>
+            <Button type="submit">
+              <RouteIcon data-icon="inline-start" />
+              Add route
             </Button>
           </SheetFooter>
         </form>
@@ -1673,6 +2324,29 @@ function statusBadge(status: string, active: boolean) {
   return <Badge variant="outline">{status}</Badge>;
 }
 
+function routeRoleBadge(role: string) {
+  if (role === "primary") {
+    return <Badge variant="secondary">primary</Badge>;
+  }
+  return <Badge variant="outline">{role}</Badge>;
+}
+
+function routeCountForAccount(routes: ProviderModelRoute[], accountId: string) {
+  return routes.filter((route) => route.providerAccountId === accountId).length;
+}
+
+function routeCountForModel(routes: ProviderModelRoute[], modelId: string) {
+  return routes.filter((route) => route.publicModelId === modelId).length;
+}
+
+function accountName(accounts: ProviderAccount[], accountId: string) {
+  return accounts.find((account) => account.id === accountId)?.name ?? accountId;
+}
+
+function uniqueSorted(values: string[]) {
+  return Array.from(new Set(values)).sort((left, right) => left.localeCompare(right));
+}
+
 function statusCodeBadge(status: number) {
   if (status >= 200 && status < 300) {
     return <Badge variant="secondary">{status}</Badge>;
@@ -1681,6 +2355,14 @@ function statusCodeBadge(status: number) {
     return <Badge variant="destructive">{status}</Badge>;
   }
   return <Badge variant="outline">{status}</Badge>;
+}
+
+function formatLogModel(log: RequestLog) {
+  const publicModel = log.model || "unknown";
+  if (!log.upstreamModel || log.upstreamModel === publicModel) {
+    return publicModel;
+  }
+  return `${publicModel} -> ${log.upstreamModel}`;
 }
 
 function buildTrend(logs: readonly RequestLog[]) {
@@ -1702,8 +2384,7 @@ function accountPresetValue(form: CreateAccountForm) {
         preset.provider === form.provider &&
         preset.baseUrl === form.baseUrl &&
         preset.authMode === form.authMode &&
-        preset.wireApi === form.wireApi &&
-        preset.modelHint === form.modelHint,
+        preset.wireApi === form.wireApi,
     )?.id ?? "custom"
   );
 }
@@ -1723,20 +2404,34 @@ function applyAccountPreset(
     baseUrl: preset.baseUrl,
     authMode: preset.authMode,
     wireApi: preset.wireApi,
-    modelHint: preset.modelHint,
   }));
 }
 
-function modelHintsForWireApis(accounts: ProviderAccount[], wireApis: string[]) {
+function routableModelsForWireApis(
+  models: ModelCatalogEntry[],
+  routes: ProviderModelRoute[],
+  accounts: ProviderAccount[],
+  wireApis: string[],
+) {
   const acceptedWireApis = new Set(wireApis);
-  const hints = accounts
-    .filter(
-      (account) =>
-        account.isActive && account.status !== "blocked" && acceptedWireApis.has(account.wireApi),
-    )
-    .map((account) => account.modelHint.trim())
-    .filter(Boolean);
-  return Array.from(new Set(hints)).sort((left, right) => left.localeCompare(right));
+  const activeAccounts = new Set(
+    accounts
+      .filter((account) => account.isActive && account.status !== "blocked")
+      .map((account) => account.id),
+  );
+  const routableIds = new Set(
+    routes
+      .filter(
+        (route) =>
+          route.enabled &&
+          acceptedWireApis.has(route.wireApi) &&
+          activeAccounts.has(route.providerAccountId),
+      )
+      .map((route) => route.publicModelId),
+  );
+  return uniqueSorted(
+    models.filter((model) => model.enabled && routableIds.has(model.id)).map((model) => model.id),
+  );
 }
 
 function buildClientSetupSnippets({
@@ -1745,12 +2440,14 @@ function buildClientSetupSnippets({
   codexModel,
   claudeModel,
   opencodeModel,
+  opencodeModels,
 }: {
   apiKey: string;
   serviceOrigin: string;
   codexModel: string;
   claudeModel: string;
   opencodeModel: string;
+  opencodeModels: string[];
 }) {
   const origin = serviceOrigin.replace(/\/+$/, "");
   const relayApiKey = apiKey.trim() || "tokentoxication-REPLACE_ME";
@@ -1759,6 +2456,10 @@ function buildClientSetupSnippets({
   const codexModelName = codexModel.trim() || "gpt-5";
   const claudeModelName = claudeModel.trim() || "claude-sonnet-4-5";
   const opencodeModelName = opencodeModel.trim() || "deepseek-v4";
+  const opencodeModelNames = uniqueSorted([
+    opencodeModelName,
+    ...opencodeModels.map((model) => model.trim()).filter(Boolean),
+  ]);
   const opencodeProvider = "token-toxication";
   const opencodeConfig = JSON.stringify(
     {
@@ -1771,11 +2472,14 @@ function buildClientSetupSnippets({
             baseURL: openaiBaseUrl,
             apiKey: "{env:TOKEN_TOXICATION_API_KEY}",
           },
-          models: {
-            [opencodeModelName]: {
-              name: opencodeModelName,
-            },
-          },
+          models: Object.fromEntries(
+            opencodeModelNames.map((model) => [
+              model,
+              {
+                name: model,
+              },
+            ]),
+          ),
         },
       },
       model: `${opencodeProvider}/${opencodeModelName}`,

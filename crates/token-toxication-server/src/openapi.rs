@@ -3,11 +3,14 @@ use utoipa::OpenApi;
 
 use crate::models::{
     AdminUser, AnthropicModel, AnthropicModelListResponse, ApiKeyListResponse, ApiKeyResponse,
-    ApiKeyView, CreateApiKeyRequest, CreateApiKeyResponse, CreateProviderAccountRequest, Dashboard,
-    ErrorDetail, ErrorResponse, HealthResponse, LoginRequest, LoginResponse, MetricsResponse,
-    OpenAiModel, OpenAiModelListResponse, ProviderAccount, ProviderAccountListResponse,
-    ProviderAccountResponse, RequestLog, RequestLogListResponse, UpdateApiKeyRequest,
-    UpdateProviderAccountRequest, UsageSummary,
+    ApiKeyView, CreateApiKeyRequest, CreateApiKeyResponse, CreateModelCatalogEntryRequest,
+    CreateProviderAccountRequest, CreateProviderModelRouteRequest, Dashboard, ErrorDetail,
+    ErrorResponse, HealthResponse, LoginRequest, LoginResponse, MetricsResponse, ModelCatalogEntry,
+    ModelCatalogEntryResponse, ModelCatalogListResponse, OpenAiModel, OpenAiModelListResponse,
+    ProviderAccount, ProviderAccountListResponse, ProviderAccountResponse, ProviderModelRoute,
+    ProviderModelRouteListResponse, ProviderModelRouteResponse, RequestLog, RequestLogListResponse,
+    UpdateApiKeyRequest, UpdateModelCatalogEntryRequest, UpdateProviderAccountRequest,
+    UpdateProviderModelRouteRequest, UsageSummary,
 };
 
 #[derive(OpenApi)]
@@ -33,6 +36,13 @@ use crate::models::{
         create_provider_account,
         update_provider_account,
         delete_provider_account,
+        list_model_catalog,
+        create_model_catalog_entry,
+        update_model_catalog_entry,
+        list_provider_model_routes,
+        create_provider_model_route,
+        update_provider_model_route,
+        delete_provider_model_route,
         list_request_logs,
         list_anthropic_models,
         get_anthropic_model,
@@ -52,6 +62,8 @@ use crate::models::{
         CreateApiKeyRequest,
         CreateApiKeyResponse,
         CreateProviderAccountRequest,
+        CreateModelCatalogEntryRequest,
+        CreateProviderModelRouteRequest,
         Dashboard,
         ErrorDetail,
         ErrorResponse,
@@ -59,15 +71,23 @@ use crate::models::{
         LoginRequest,
         LoginResponse,
         MetricsResponse,
+        ModelCatalogEntry,
+        ModelCatalogEntryResponse,
+        ModelCatalogListResponse,
         OpenAiModel,
         OpenAiModelListResponse,
         ProviderAccount,
         ProviderAccountListResponse,
         ProviderAccountResponse,
+        ProviderModelRoute,
+        ProviderModelRouteListResponse,
+        ProviderModelRouteResponse,
         RequestLog,
         RequestLogListResponse,
         UpdateApiKeyRequest,
+        UpdateModelCatalogEntryRequest,
         UpdateProviderAccountRequest,
+        UpdateProviderModelRouteRequest,
         UsageSummary,
     )),
     tags(
@@ -232,6 +252,84 @@ pub fn update_provider_account() {}
     ),
 )]
 pub fn delete_provider_account() {}
+
+#[utoipa::path(
+    get,
+    path = "/admin/api/model-catalog",
+    tag = "Admin",
+    responses((status = 200, description = "Model catalog entries", body = ModelCatalogListResponse)),
+)]
+pub fn list_model_catalog() {}
+
+#[utoipa::path(
+    post,
+    path = "/admin/api/model-catalog",
+    tag = "Admin",
+    request_body = CreateModelCatalogEntryRequest,
+    responses(
+        (status = 201, description = "Created model catalog entry", body = ModelCatalogEntryResponse),
+        (status = 400, description = "Invalid model catalog entry", body = ErrorResponse),
+    ),
+)]
+pub fn create_model_catalog_entry() {}
+
+#[utoipa::path(
+    patch,
+    path = "/admin/api/model-catalog/{id}",
+    tag = "Admin",
+    params(("id" = String, Path, description = "Public model id")),
+    request_body = UpdateModelCatalogEntryRequest,
+    responses(
+        (status = 200, description = "Updated model catalog entry", body = ModelCatalogEntryResponse),
+        (status = 404, description = "Model catalog entry not found", body = ErrorResponse),
+    ),
+)]
+pub fn update_model_catalog_entry() {}
+
+#[utoipa::path(
+    get,
+    path = "/admin/api/provider-model-routes",
+    tag = "Admin",
+    responses((status = 200, description = "Provider model routes", body = ProviderModelRouteListResponse)),
+)]
+pub fn list_provider_model_routes() {}
+
+#[utoipa::path(
+    post,
+    path = "/admin/api/provider-model-routes",
+    tag = "Admin",
+    request_body = CreateProviderModelRouteRequest,
+    responses(
+        (status = 201, description = "Created provider model route", body = ProviderModelRouteResponse),
+        (status = 400, description = "Invalid provider model route", body = ErrorResponse),
+    ),
+)]
+pub fn create_provider_model_route() {}
+
+#[utoipa::path(
+    patch,
+    path = "/admin/api/provider-model-routes/{id}",
+    tag = "Admin",
+    params(("id" = String, Path, description = "Provider model route id")),
+    request_body = UpdateProviderModelRouteRequest,
+    responses(
+        (status = 200, description = "Updated provider model route", body = ProviderModelRouteResponse),
+        (status = 404, description = "Provider model route not found", body = ErrorResponse),
+    ),
+)]
+pub fn update_provider_model_route() {}
+
+#[utoipa::path(
+    delete,
+    path = "/admin/api/provider-model-routes/{id}",
+    tag = "Admin",
+    params(("id" = String, Path, description = "Provider model route id")),
+    responses(
+        (status = 204, description = "Deleted provider model route"),
+        (status = 404, description = "Provider model route not found", body = ErrorResponse),
+    ),
+)]
+pub fn delete_provider_model_route() {}
 
 #[utoipa::path(
     get,

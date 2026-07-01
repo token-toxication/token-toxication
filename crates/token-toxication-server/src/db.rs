@@ -8,18 +8,29 @@ use uuid::Uuid;
 use crate::{
     auth::{hash_secret, key_preview},
     models::{
-        ApiKeyRecord, ApiKeyView, CreateApiKeyRequest, CreateProviderAccountRequest, Dashboard,
-        ProviderAccount, ProviderAccountRecord, RequestLog, UpdateApiKeyRequest,
-        UpdateProviderAccountRequest, UsageSummary,
+        ApiKeyRecord, ApiKeyView, CreateApiKeyRequest, CreateModelCatalogEntryRequest,
+        CreateProviderAccountRequest, CreateProviderModelRouteRequest, Dashboard,
+        ModelCatalogEntry, ProviderAccount, ProviderAccountRecord, ProviderModelRoute, RequestLog,
+        UpdateApiKeyRequest, UpdateModelCatalogEntryRequest, UpdateProviderAccountRequest,
+        UpdateProviderModelRouteRequest, UsageSummary,
     },
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ModelCatalogEntry {
+pub struct RoutableModelCatalogEntry {
     pub id: String,
+    pub display_name: String,
+    pub family: String,
     pub provider: String,
     pub wire_api: String,
     pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ProviderRouteSelection {
+    pub account: ProviderAccountRecord,
+    pub public_model_id: String,
+    pub upstream_model_id: String,
 }
 
 #[derive(Clone)]
@@ -64,7 +75,6 @@ impl Db {
                 auth_mode TEXT NOT NULL,
                 wire_api TEXT NOT NULL DEFAULT 'anthropic-messages',
                 api_key TEXT NOT NULL,
-                model_hint TEXT NOT NULL DEFAULT '',
                 is_active INTEGER NOT NULL DEFAULT 1,
                 priority INTEGER NOT NULL DEFAULT 0,
                 status TEXT NOT NULL DEFAULT 'healthy',
@@ -80,6 +90,7 @@ impl Db {
                 method TEXT NOT NULL,
                 path TEXT NOT NULL,
                 model TEXT,
+                upstream_model TEXT,
                 status_code INTEGER NOT NULL,
                 latency_ms INTEGER NOT NULL,
                 input_tokens INTEGER NOT NULL DEFAULT 0,
@@ -96,6 +107,27 @@ impl Db {
                 created_at TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS model_catalog (
+                id TEXT PRIMARY KEY,
+                display_name TEXT NOT NULL,
+                family TEXT NOT NULL DEFAULT 'other',
+                enabled INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS provider_model_routes (
+                id TEXT PRIMARY KEY,
+                public_model_id TEXT NOT NULL,
+                provider_account_id TEXT NOT NULL,
+                upstream_model_id TEXT NOT NULL,
+                wire_api TEXT NOT NULL,
+                role TEXT NOT NULL DEFAULT 'primary',
+                enabled INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY(public_model_id) REFERENCES model_catalog(id) ON DELETE CASCADE,
+                FOREIGN KEY(provider_account_id) REFERENCES provider_accounts(id) ON DELETE CASCADE
+            );
+
             CREATE INDEX IF NOT EXISTS idx_request_logs_created_at ON request_logs(created_at DESC);
             CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash);
             "#,
@@ -106,10 +138,18 @@ impl Db {
             "wire_api",
             "TEXT NOT NULL DEFAULT 'anthropic-messages'",
         )?;
+        ensure_column(&conn, "request_logs", "upstream_model", "TEXT")?;
         conn.execute_batch(
             r#"
             CREATE INDEX IF NOT EXISTS idx_provider_accounts_wire_api
                 ON provider_accounts(wire_api, is_active, status);
+            CREATE INDEX IF NOT EXISTS idx_model_catalog_enabled
+                ON model_catalog(enabled, id);
+            CREATE INDEX IF NOT EXISTS idx_provider_model_routes_lookup
+                ON provider_model_routes(public_model_id, wire_api, enabled, role);
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_provider_model_routes_primary
+                ON provider_model_routes(public_model_id, wire_api)
+                WHERE enabled = 1 AND role = 'primary';
             "#,
         )?;
 
@@ -336,7 +376,6 @@ impl Db {
             base_url: normalize_base_url(&input.base_url),
             auth_mode: normalize_auth_mode(&input.auth_mode),
             wire_api: normalize_wire_api(&input.wire_api, &input.provider),
-            model_hint: input.model_hint,
             is_active: input.is_active,
             priority: input.priority,
             status: "healthy".to_string(),
@@ -348,9 +387,9 @@ impl Db {
         let conn = self.conn.lock().await;
         conn.execute(
             "INSERT INTO provider_accounts
-             (id, name, provider, base_url, auth_mode, wire_api, api_key, model_hint, is_active,
+             (id, name, provider, base_url, auth_mode, wire_api, api_key, is_active,
               priority, status, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
             params![
                 &account.id,
                 &account.name,
@@ -359,7 +398,6 @@ impl Db {
                 &account.auth_mode,
                 &account.wire_api,
                 input.api_key,
-                &account.model_hint,
                 bool_to_i64(account.is_active),
                 account.priority,
                 &account.status,
@@ -372,7 +410,7 @@ impl Db {
     pub async fn list_provider_accounts(&self) -> rusqlite::Result<Vec<ProviderAccount>> {
         let conn = self.conn.lock().await;
         let mut stmt = conn.prepare(
-            "SELECT id, name, provider, base_url, auth_mode, wire_api, api_key, model_hint, is_active,
+            "SELECT id, name, provider, base_url, auth_mode, wire_api, api_key, is_active,
                     priority, status, last_error, created_at, last_used_at
              FROM provider_accounts
              ORDER BY priority DESC, created_at DESC",
@@ -380,35 +418,260 @@ impl Db {
         rows_to_accounts(&mut stmt, params![])
     }
 
-    pub async fn list_model_catalog(
-        &self,
-        wire_apis: &[&str],
-    ) -> rusqlite::Result<Vec<ModelCatalogEntry>> {
+    pub async fn list_model_catalog(&self) -> rusqlite::Result<Vec<ModelCatalogEntry>> {
         let conn = self.conn.lock().await;
         let mut stmt = conn.prepare(
-            "SELECT provider, wire_api, model_hint, created_at
-             FROM provider_accounts
-             WHERE is_active = 1
-               AND status != 'blocked'
-               AND model_hint != ''
-             ORDER BY priority DESC, created_at ASC",
+            "SELECT id, display_name, family, enabled, created_at
+             FROM model_catalog
+             ORDER BY id ASC",
+        )?;
+        let rows = stmt.query_map([], model_catalog_from_row)?;
+        rows.collect()
+    }
+
+    pub async fn create_model_catalog_entry(
+        &self,
+        input: CreateModelCatalogEntryRequest,
+    ) -> rusqlite::Result<ModelCatalogEntry> {
+        let now = Utc::now();
+        let id = input.id.trim().to_string();
+        let display_name = default_display_name(input.display_name, &id);
+        let entry = ModelCatalogEntry {
+            id,
+            display_name,
+            family: normalize_family(&input.family),
+            enabled: input.enabled,
+            created_at: now,
+        };
+        let conn = self.conn.lock().await;
+        conn.execute(
+            "INSERT INTO model_catalog (id, display_name, family, enabled, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![
+                &entry.id,
+                &entry.display_name,
+                &entry.family,
+                bool_to_i64(entry.enabled),
+                entry.created_at.to_rfc3339(),
+            ],
+        )?;
+        Ok(entry)
+    }
+
+    pub async fn update_model_catalog_entry(
+        &self,
+        id: &str,
+        input: UpdateModelCatalogEntryRequest,
+    ) -> rusqlite::Result<ModelCatalogEntry> {
+        let current = self
+            .get_model_catalog_entry(id)
+            .await?
+            .ok_or(rusqlite::Error::QueryReturnedNoRows)?;
+        let updated = ModelCatalogEntry {
+            id: current.id,
+            display_name: input
+                .display_name
+                .map(|value| default_display_name(value, &current.display_name))
+                .unwrap_or(current.display_name),
+            family: input
+                .family
+                .map(|value| normalize_family(&value))
+                .unwrap_or(current.family),
+            enabled: input.enabled.unwrap_or(current.enabled),
+            created_at: current.created_at,
+        };
+        let conn = self.conn.lock().await;
+        conn.execute(
+            "UPDATE model_catalog
+             SET display_name = ?1, family = ?2, enabled = ?3
+             WHERE id = ?4",
+            params![
+                &updated.display_name,
+                &updated.family,
+                bool_to_i64(updated.enabled),
+                &updated.id,
+            ],
+        )?;
+        Ok(updated)
+    }
+
+    pub async fn get_model_catalog_entry(
+        &self,
+        id: &str,
+    ) -> rusqlite::Result<Option<ModelCatalogEntry>> {
+        let conn = self.conn.lock().await;
+        let mut stmt = conn.prepare(
+            "SELECT id, display_name, family, enabled, created_at
+             FROM model_catalog
+             WHERE id = ?1",
+        )?;
+        stmt.query_row(params![id], model_catalog_from_row)
+            .optional()
+    }
+
+    pub async fn list_provider_model_routes(&self) -> rusqlite::Result<Vec<ProviderModelRoute>> {
+        let conn = self.conn.lock().await;
+        let mut stmt = conn.prepare(
+            "SELECT id, public_model_id, provider_account_id, upstream_model_id, wire_api,
+                    role, enabled, created_at
+             FROM provider_model_routes
+             ORDER BY public_model_id ASC,
+                      CASE role WHEN 'primary' THEN 0 WHEN 'backup' THEN 1 ELSE 2 END,
+                      created_at ASC",
+        )?;
+        let rows = stmt.query_map([], provider_model_route_from_row)?;
+        rows.collect()
+    }
+
+    pub async fn create_provider_model_route(
+        &self,
+        input: CreateProviderModelRouteRequest,
+    ) -> rusqlite::Result<ProviderModelRoute> {
+        let now = Utc::now();
+        let route = ProviderModelRoute {
+            id: Uuid::new_v4().to_string(),
+            public_model_id: input.public_model_id.trim().to_string(),
+            provider_account_id: input.provider_account_id.trim().to_string(),
+            upstream_model_id: input.upstream_model_id.trim().to_string(),
+            wire_api: normalize_wire_api(&input.wire_api, ""),
+            role: normalize_route_role(&input.role),
+            enabled: input.enabled,
+            created_at: now,
+        };
+        let conn = self.conn.lock().await;
+        conn.execute(
+            "INSERT INTO provider_model_routes
+             (id, public_model_id, provider_account_id, upstream_model_id, wire_api, role,
+              enabled, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![
+                &route.id,
+                &route.public_model_id,
+                &route.provider_account_id,
+                &route.upstream_model_id,
+                &route.wire_api,
+                &route.role,
+                bool_to_i64(route.enabled),
+                route.created_at.to_rfc3339(),
+            ],
+        )?;
+        Ok(route)
+    }
+
+    pub async fn update_provider_model_route(
+        &self,
+        id: &str,
+        input: UpdateProviderModelRouteRequest,
+    ) -> rusqlite::Result<ProviderModelRoute> {
+        let current = self
+            .get_provider_model_route(id)
+            .await?
+            .ok_or(rusqlite::Error::QueryReturnedNoRows)?;
+        let route = ProviderModelRoute {
+            id: current.id,
+            public_model_id: input
+                .public_model_id
+                .map(|value| value.trim().to_string())
+                .unwrap_or(current.public_model_id),
+            provider_account_id: input
+                .provider_account_id
+                .map(|value| value.trim().to_string())
+                .unwrap_or(current.provider_account_id),
+            upstream_model_id: input
+                .upstream_model_id
+                .map(|value| value.trim().to_string())
+                .unwrap_or(current.upstream_model_id),
+            wire_api: input
+                .wire_api
+                .map(|value| normalize_wire_api(&value, ""))
+                .unwrap_or(current.wire_api),
+            role: input
+                .role
+                .map(|value| normalize_route_role(&value))
+                .unwrap_or(current.role),
+            enabled: input.enabled.unwrap_or(current.enabled),
+            created_at: current.created_at,
+        };
+        let conn = self.conn.lock().await;
+        conn.execute(
+            "UPDATE provider_model_routes
+             SET public_model_id = ?1, provider_account_id = ?2, upstream_model_id = ?3,
+                 wire_api = ?4, role = ?5, enabled = ?6
+             WHERE id = ?7",
+            params![
+                &route.public_model_id,
+                &route.provider_account_id,
+                &route.upstream_model_id,
+                &route.wire_api,
+                &route.role,
+                bool_to_i64(route.enabled),
+                &route.id,
+            ],
+        )?;
+        Ok(route)
+    }
+
+    pub async fn get_provider_model_route(
+        &self,
+        id: &str,
+    ) -> rusqlite::Result<Option<ProviderModelRoute>> {
+        let conn = self.conn.lock().await;
+        let mut stmt = conn.prepare(
+            "SELECT id, public_model_id, provider_account_id, upstream_model_id, wire_api,
+                    role, enabled, created_at
+             FROM provider_model_routes
+             WHERE id = ?1",
+        )?;
+        stmt.query_row(params![id], provider_model_route_from_row)
+            .optional()
+    }
+
+    pub async fn delete_provider_model_route(&self, id: &str) -> rusqlite::Result<bool> {
+        let conn = self.conn.lock().await;
+        let deleted = conn.execute(
+            "DELETE FROM provider_model_routes WHERE id = ?1",
+            params![id],
+        )?;
+        Ok(deleted > 0)
+    }
+
+    pub async fn list_routable_model_catalog(
+        &self,
+        wire_apis: &[&str],
+    ) -> rusqlite::Result<Vec<RoutableModelCatalogEntry>> {
+        let conn = self.conn.lock().await;
+        let mut stmt = conn.prepare(
+            "SELECT m.id, m.display_name, m.family, a.provider, r.wire_api, m.created_at
+             FROM model_catalog m
+             JOIN provider_model_routes r ON r.public_model_id = m.id
+             JOIN provider_accounts a ON a.id = r.provider_account_id
+             WHERE m.enabled = 1
+               AND r.enabled = 1
+               AND a.is_active = 1
+               AND a.status != 'blocked'
+             ORDER BY m.id ASC,
+                      CASE r.role WHEN 'primary' THEN 0 WHEN 'backup' THEN 1 ELSE 2 END,
+                      a.priority DESC,
+                      COALESCE(a.last_used_at, '') ASC,
+                      r.created_at ASC",
         )?;
         let rows = stmt.query_map([], |row| {
-            Ok(ModelCatalogEntry {
-                provider: row.get(0)?,
-                wire_api: row.get(1)?,
-                id: row.get::<_, String>(2)?.trim().to_string(),
-                created_at: parse_time(row.get::<_, String>(3)?.as_str()),
+            Ok(RoutableModelCatalogEntry {
+                id: row.get(0)?,
+                display_name: row.get(1)?,
+                family: row.get(2)?,
+                provider: row.get(3)?,
+                wire_api: row.get(4)?,
+                created_at: parse_time(row.get::<_, String>(5)?.as_str()),
             })
         })?;
         let mut models = Vec::new();
         for row in rows {
             let model = row?;
-            if model.id.is_empty()
-                || !wire_apis.contains(&model.wire_api.as_str())
+            if !wire_apis.contains(&model.wire_api.as_str())
                 || models
                     .iter()
-                    .any(|existing: &ModelCatalogEntry| existing.id == model.id)
+                    .any(|existing: &RoutableModelCatalogEntry| existing.id == model.id)
             {
                 continue;
             }
@@ -420,7 +683,7 @@ impl Db {
     pub async fn select_provider_account(
         &self,
         model: Option<&str>,
-    ) -> rusqlite::Result<Option<ProviderAccountRecord>> {
+    ) -> rusqlite::Result<Option<ProviderRouteSelection>> {
         self.select_provider_account_for_wire("anthropic-messages", model)
             .await
     }
@@ -429,31 +692,32 @@ impl Db {
         &self,
         wire_api: &str,
         model: Option<&str>,
-    ) -> rusqlite::Result<Option<ProviderAccountRecord>> {
+    ) -> rusqlite::Result<Option<ProviderRouteSelection>> {
+        let Some(model) = model else {
+            return Ok(None);
+        };
         let wire_api = normalize_wire_api(wire_api, "");
         let conn = self.conn.lock().await;
         let mut stmt = conn.prepare(
-            "SELECT id, name, provider, base_url, auth_mode, wire_api, api_key, model_hint, is_active,
-                    priority, status, last_error, created_at, last_used_at
-             FROM provider_accounts
-             WHERE is_active = 1
-               AND status != 'blocked'
-               AND wire_api = ?1
-               AND (?2 IS NULL OR model_hint = '' OR LOWER(?2) LIKE '%' || LOWER(model_hint) || '%')
-             ORDER BY
-               CASE
-                 WHEN ?2 IS NOT NULL
-                  AND model_hint != ''
-                  AND LOWER(?2) LIKE '%' || LOWER(model_hint) || '%'
-                 THEN 0
-                 ELSE 1
-               END,
-               priority DESC,
-               COALESCE(last_used_at, '') ASC,
-               created_at ASC
+            "SELECT a.id, a.name, a.provider, a.base_url, a.auth_mode, a.wire_api, a.api_key,
+                    a.is_active, a.priority, a.status, a.last_error, a.created_at, a.last_used_at,
+                    r.public_model_id, r.upstream_model_id
+             FROM model_catalog m
+             JOIN provider_model_routes r ON r.public_model_id = m.id
+             JOIN provider_accounts a ON a.id = r.provider_account_id
+             WHERE m.id = ?2
+               AND m.enabled = 1
+               AND r.wire_api = ?1
+               AND r.enabled = 1
+               AND a.is_active = 1
+               AND a.status != 'blocked'
+             ORDER BY CASE r.role WHEN 'primary' THEN 0 WHEN 'backup' THEN 1 ELSE 2 END,
+                      a.priority DESC,
+                      COALESCE(a.last_used_at, '') ASC,
+                      r.created_at ASC
              LIMIT 1",
         )?;
-        stmt.query_row(params![wire_api, model], account_from_row)
+        stmt.query_row(params![wire_api, model], route_selection_from_row)
             .optional()
     }
 
@@ -487,7 +751,6 @@ impl Db {
                 .map(|mode| normalize_auth_mode(&mode))
                 .unwrap_or(current.auth_mode),
             wire_api,
-            model_hint: input.model_hint.unwrap_or(current.model_hint),
             is_active: input.is_active.unwrap_or(current.is_active),
             priority: input.priority.unwrap_or(current.priority),
             status: current.status,
@@ -500,9 +763,8 @@ impl Db {
         if let Some(api_key) = input.api_key {
             conn.execute(
                 "UPDATE provider_accounts SET name = ?1, provider = ?2, base_url = ?3,
-                 auth_mode = ?4, wire_api = ?5, api_key = ?6, model_hint = ?7,
-                 is_active = ?8, priority = ?9
-                 WHERE id = ?10",
+                 auth_mode = ?4, wire_api = ?5, api_key = ?6, is_active = ?7, priority = ?8
+                 WHERE id = ?9",
                 params![
                     &account.name,
                     &account.provider,
@@ -510,7 +772,6 @@ impl Db {
                     &account.auth_mode,
                     &account.wire_api,
                     api_key,
-                    &account.model_hint,
                     bool_to_i64(account.is_active),
                     account.priority,
                     &account.id,
@@ -519,15 +780,14 @@ impl Db {
         } else {
             conn.execute(
                 "UPDATE provider_accounts SET name = ?1, provider = ?2, base_url = ?3,
-                 auth_mode = ?4, wire_api = ?5, model_hint = ?6, is_active = ?7, priority = ?8
-                 WHERE id = ?9",
+                 auth_mode = ?4, wire_api = ?5, is_active = ?6, priority = ?7
+                 WHERE id = ?8",
                 params![
                     &account.name,
                     &account.provider,
                     &account.base_url,
                     &account.auth_mode,
                     &account.wire_api,
-                    &account.model_hint,
                     bool_to_i64(account.is_active),
                     account.priority,
                     &account.id,
@@ -543,7 +803,7 @@ impl Db {
     ) -> rusqlite::Result<Option<ProviderAccount>> {
         let conn = self.conn.lock().await;
         let mut stmt = conn.prepare(
-            "SELECT id, name, provider, base_url, auth_mode, wire_api, api_key, model_hint, is_active,
+            "SELECT id, name, provider, base_url, auth_mode, wire_api, api_key, is_active,
                     priority, status, last_error, created_at, last_used_at
              FROM provider_accounts WHERE id = ?1",
         )?;
@@ -576,9 +836,9 @@ impl Db {
         let conn = self.conn.lock().await;
         conn.execute(
             "INSERT INTO request_logs
-             (id, api_key_id, provider_account_id, method, path, model, status_code, latency_ms,
-              input_tokens, output_tokens, cost_usd, created_at, error)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+             (id, api_key_id, provider_account_id, method, path, model, upstream_model,
+              status_code, latency_ms, input_tokens, output_tokens, cost_usd, created_at, error)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
             params![
                 log.id,
                 log.api_key_id,
@@ -586,6 +846,7 @@ impl Db {
                 log.method,
                 log.path,
                 log.model,
+                log.upstream_model,
                 log.status_code,
                 log.latency_ms,
                 log.input_tokens,
@@ -601,8 +862,8 @@ impl Db {
     pub async fn list_request_logs(&self, limit: u32) -> rusqlite::Result<Vec<RequestLog>> {
         let conn = self.conn.lock().await;
         let mut stmt = conn.prepare(
-            "SELECT id, api_key_id, provider_account_id, method, path, model, status_code,
-                    latency_ms, input_tokens, output_tokens, cost_usd, created_at, error
+            "SELECT id, api_key_id, provider_account_id, method, path, model, upstream_model,
+                    status_code, latency_ms, input_tokens, output_tokens, cost_usd, created_at, error
              FROM request_logs
              ORDER BY created_at DESC
              LIMIT ?1",
@@ -709,15 +970,45 @@ fn account_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ProviderAccount
             base_url: row.get(3)?,
             auth_mode: row.get(4)?,
             wire_api: row.get(5)?,
-            model_hint: row.get(7)?,
-            is_active: row.get::<_, i64>(8)? == 1,
-            priority: row.get(9)?,
-            status: row.get(10)?,
-            last_error: row.get(11)?,
-            created_at: parse_time(row.get::<_, String>(12)?.as_str()),
-            last_used_at: parse_time_opt(row.get::<_, Option<String>>(13)?.as_deref()),
+            is_active: row.get::<_, i64>(7)? == 1,
+            priority: row.get(8)?,
+            status: row.get(9)?,
+            last_error: row.get(10)?,
+            created_at: parse_time(row.get::<_, String>(11)?.as_str()),
+            last_used_at: parse_time_opt(row.get::<_, Option<String>>(12)?.as_deref()),
         },
         api_key: row.get(6)?,
+    })
+}
+
+fn model_catalog_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ModelCatalogEntry> {
+    Ok(ModelCatalogEntry {
+        id: row.get(0)?,
+        display_name: row.get(1)?,
+        family: row.get(2)?,
+        enabled: row.get::<_, i64>(3)? == 1,
+        created_at: parse_time(row.get::<_, String>(4)?.as_str()),
+    })
+}
+
+fn provider_model_route_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ProviderModelRoute> {
+    Ok(ProviderModelRoute {
+        id: row.get(0)?,
+        public_model_id: row.get(1)?,
+        provider_account_id: row.get(2)?,
+        upstream_model_id: row.get(3)?,
+        wire_api: row.get(4)?,
+        role: row.get(5)?,
+        enabled: row.get::<_, i64>(6)? == 1,
+        created_at: parse_time(row.get::<_, String>(7)?.as_str()),
+    })
+}
+
+fn route_selection_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ProviderRouteSelection> {
+    Ok(ProviderRouteSelection {
+        account: account_from_row(row)?,
+        public_model_id: row.get(13)?,
+        upstream_model_id: row.get(14)?,
     })
 }
 
@@ -729,13 +1020,14 @@ fn request_log_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<RequestLog>
         method: row.get(3)?,
         path: row.get(4)?,
         model: row.get(5)?,
-        status_code: row.get::<_, i64>(6)? as u16,
-        latency_ms: row.get::<_, i64>(7)? as u64,
-        input_tokens: row.get::<_, i64>(8)? as u64,
-        output_tokens: row.get::<_, i64>(9)? as u64,
-        cost_usd: row.get(10)?,
-        created_at: parse_time(row.get::<_, String>(11)?.as_str()),
-        error: row.get(12)?,
+        upstream_model: row.get(6)?,
+        status_code: row.get::<_, i64>(7)? as u16,
+        latency_ms: row.get::<_, i64>(8)? as u64,
+        input_tokens: row.get::<_, i64>(9)? as u64,
+        output_tokens: row.get::<_, i64>(10)? as u64,
+        cost_usd: row.get(11)?,
+        created_at: parse_time(row.get::<_, String>(12)?.as_str()),
+        error: row.get(13)?,
     })
 }
 
@@ -828,51 +1120,193 @@ fn normalize_base_url(value: &str) -> String {
     value.trim().trim_end_matches('/').to_string()
 }
 
+fn normalize_family(value: &str) -> String {
+    match value.trim().to_lowercase().as_str() {
+        "" => "other".to_string(),
+        "anthropic" | "claude" => "anthropic".to_string(),
+        "openai" | "gpt" | "codex" => "openai".to_string(),
+        "z.ai" | "zai" | "zhipu" | "zhipuai" => "glm".to_string(),
+        other => other.to_string(),
+    }
+}
+
+fn normalize_route_role(value: &str) -> String {
+    match value.trim().to_lowercase().as_str() {
+        "backup" | "secondary" | "fallback" => "backup".to_string(),
+        _ => "primary".to_string(),
+    }
+}
+
+fn default_display_name(value: String, fallback: &str) -> String {
+    let value = value.trim();
+    if value.is_empty() {
+        fallback.to_string()
+    } else {
+        value.to_string()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn model_specific_provider_wins_over_catch_all() {
+    async fn primary_route_wins_and_rewrites_upstream_model() {
         let path =
             std::env::temp_dir().join(format!("token-toxication-{}.sqlite3", Uuid::new_v4()));
         let db = Db::open(&path).await.expect("open test database");
 
-        db.create_provider_account(CreateProviderAccountRequest {
-            name: "Catch all".to_string(),
-            provider: "openai-compatible".to_string(),
-            base_url: "https://catch-all.example.com/".to_string(),
-            auth_mode: "bearer".to_string(),
-            wire_api: "openai-chat".to_string(),
-            api_key: "catch-all-key".to_string(),
-            model_hint: String::new(),
-            is_active: true,
-            priority: 100,
+        let backup = db
+            .create_provider_account(CreateProviderAccountRequest {
+                name: "Backup".to_string(),
+                provider: "openai-compatible".to_string(),
+                base_url: "https://backup.example.com/".to_string(),
+                auth_mode: "bearer".to_string(),
+                wire_api: "openai-chat".to_string(),
+                api_key: "backup-key".to_string(),
+                is_active: true,
+                priority: 100,
+            })
+            .await
+            .expect("create backup account");
+        let primary = db
+            .create_provider_account(CreateProviderAccountRequest {
+                name: "Primary".to_string(),
+                provider: "minimax".to_string(),
+                base_url: "https://minimax.example.com/".to_string(),
+                auth_mode: "bearer".to_string(),
+                wire_api: "openai-chat".to_string(),
+                api_key: "primary-key".to_string(),
+                is_active: true,
+                priority: 0,
+            })
+            .await
+            .expect("create primary account");
+        db.create_model_catalog_entry(CreateModelCatalogEntryRequest {
+            id: "MiniMax-M3".to_string(),
+            display_name: String::new(),
+            family: "minimax".to_string(),
+            enabled: true,
         })
         .await
-        .expect("create catch-all account");
-        db.create_provider_account(CreateProviderAccountRequest {
-            name: "Qwen".to_string(),
-            provider: "qwen".to_string(),
-            base_url: "https://qwen.example.com/".to_string(),
-            auth_mode: "bearer".to_string(),
+        .expect("create catalog model");
+        db.create_provider_model_route(CreateProviderModelRouteRequest {
+            public_model_id: "MiniMax-M3".to_string(),
+            provider_account_id: backup.id,
+            upstream_model_id: "backup-minimax-m3".to_string(),
             wire_api: "openai-chat".to_string(),
-            api_key: "qwen-key".to_string(),
-            model_hint: "qwen".to_string(),
-            is_active: true,
-            priority: 0,
+            role: "backup".to_string(),
+            enabled: true,
         })
         .await
-        .expect("create qwen account");
+        .expect("create backup route");
+        db.create_provider_model_route(CreateProviderModelRouteRequest {
+            public_model_id: "MiniMax-M3".to_string(),
+            provider_account_id: primary.id,
+            upstream_model_id: "MiniMax-M3".to_string(),
+            wire_api: "openai-chat".to_string(),
+            role: "primary".to_string(),
+            enabled: true,
+        })
+        .await
+        .expect("create primary route");
 
         let selected = db
-            .select_provider_account_for_wire("openai-chat", Some("qwen-plus"))
+            .select_provider_account_for_wire("openai-chat", Some("MiniMax-M3"))
             .await
             .expect("select provider")
             .expect("selected provider");
 
-        assert_eq!(selected.account.provider, "qwen");
-        assert_eq!(selected.account.base_url, "https://qwen.example.com");
+        assert_eq!(selected.account.account.provider, "minimax");
+        assert_eq!(
+            selected.account.account.base_url,
+            "https://minimax.example.com"
+        );
+        assert_eq!(selected.public_model_id, "MiniMax-M3");
+        assert_eq!(selected.upstream_model_id, "MiniMax-M3");
+        assert!(
+            db.select_provider_account_for_wire("openai-chat", Some("minimax-m3"))
+                .await
+                .expect("select lowercase")
+                .is_none()
+        );
+
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[tokio::test]
+    async fn backup_route_is_selected_after_primary_is_blocked() {
+        let path =
+            std::env::temp_dir().join(format!("token-toxication-{}.sqlite3", Uuid::new_v4()));
+        let db = Db::open(&path).await.expect("open test database");
+
+        let primary = db
+            .create_provider_account(CreateProviderAccountRequest {
+                name: "Primary".to_string(),
+                provider: "deepseek".to_string(),
+                base_url: "https://primary.example.com/".to_string(),
+                auth_mode: "bearer".to_string(),
+                wire_api: "openai-chat".to_string(),
+                api_key: "primary-key".to_string(),
+                is_active: true,
+                priority: 100,
+            })
+            .await
+            .expect("create primary account");
+        let backup = db
+            .create_provider_account(CreateProviderAccountRequest {
+                name: "Backup".to_string(),
+                provider: "deepseek".to_string(),
+                base_url: "https://backup.example.com/".to_string(),
+                auth_mode: "bearer".to_string(),
+                wire_api: "openai-chat".to_string(),
+                api_key: "backup-key".to_string(),
+                is_active: true,
+                priority: 0,
+            })
+            .await
+            .expect("create backup account");
+        db.create_model_catalog_entry(CreateModelCatalogEntryRequest {
+            id: "deepseek-v4-pro".to_string(),
+            display_name: String::new(),
+            family: "deepseek".to_string(),
+            enabled: true,
+        })
+        .await
+        .expect("create catalog model");
+        db.create_provider_model_route(CreateProviderModelRouteRequest {
+            public_model_id: "deepseek-v4-pro".to_string(),
+            provider_account_id: primary.id.clone(),
+            upstream_model_id: "deepseek-v4-pro".to_string(),
+            wire_api: "openai-chat".to_string(),
+            role: "primary".to_string(),
+            enabled: true,
+        })
+        .await
+        .expect("create primary route");
+        db.create_provider_model_route(CreateProviderModelRouteRequest {
+            public_model_id: "deepseek-v4-pro".to_string(),
+            provider_account_id: backup.id,
+            upstream_model_id: "deepseek-v4-pro-backup".to_string(),
+            wire_api: "openai-chat".to_string(),
+            role: "backup".to_string(),
+            enabled: true,
+        })
+        .await
+        .expect("create backup route");
+
+        db.mark_provider_result(&primary.id, "blocked", Some("401"))
+            .await
+            .expect("mark primary blocked");
+
+        let selected = db
+            .select_provider_account_for_wire("openai-chat", Some("deepseek-v4-pro"))
+            .await
+            .expect("select provider")
+            .expect("selected provider");
+
+        assert_eq!(selected.account.account.name, "Backup");
+        assert_eq!(selected.upstream_model_id, "deepseek-v4-pro-backup");
 
         let _ = std::fs::remove_file(path);
     }
@@ -930,71 +1364,105 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn model_catalog_lists_active_model_hints_for_wire_api() {
+    async fn model_catalog_lists_enabled_routable_models_for_wire_api() {
         let path =
             std::env::temp_dir().join(format!("token-toxication-{}.sqlite3", Uuid::new_v4()));
         let db = Db::open(&path).await.expect("open test database");
 
-        db.create_provider_account(CreateProviderAccountRequest {
-            name: "DeepSeek".to_string(),
-            provider: "deepseek".to_string(),
-            base_url: "https://api.deepseek.com".to_string(),
-            auth_mode: "bearer".to_string(),
+        let deepseek = db
+            .create_provider_account(CreateProviderAccountRequest {
+                name: "DeepSeek".to_string(),
+                provider: "deepseek".to_string(),
+                base_url: "https://api.deepseek.com".to_string(),
+                auth_mode: "bearer".to_string(),
+                wire_api: "openai-chat".to_string(),
+                api_key: "deepseek-key".to_string(),
+                is_active: true,
+                priority: 10,
+            })
+            .await
+            .expect("create deepseek account");
+        let duplicate = db
+            .create_provider_account(CreateProviderAccountRequest {
+                name: "Duplicate".to_string(),
+                provider: "openai".to_string(),
+                base_url: "https://api.openai.com".to_string(),
+                auth_mode: "bearer".to_string(),
+                wire_api: "openai-responses".to_string(),
+                api_key: "openai-key".to_string(),
+                is_active: true,
+                priority: 0,
+            })
+            .await
+            .expect("create duplicate account");
+        let inactive = db
+            .create_provider_account(CreateProviderAccountRequest {
+                name: "Inactive".to_string(),
+                provider: "openai".to_string(),
+                base_url: "https://api.openai.com".to_string(),
+                auth_mode: "bearer".to_string(),
+                wire_api: "openai-responses".to_string(),
+                api_key: "openai-key".to_string(),
+                is_active: false,
+                priority: 100,
+            })
+            .await
+            .expect("create inactive account");
+        db.create_model_catalog_entry(CreateModelCatalogEntryRequest {
+            id: "deepseek-v4-pro".to_string(),
+            display_name: "DeepSeek V4 Pro".to_string(),
+            family: "deepseek".to_string(),
+            enabled: true,
+        })
+        .await
+        .expect("create deepseek model");
+        db.create_model_catalog_entry(CreateModelCatalogEntryRequest {
+            id: "gpt-5.5".to_string(),
+            display_name: String::new(),
+            family: "openai".to_string(),
+            enabled: true,
+        })
+        .await
+        .expect("create inactive model");
+        db.create_provider_model_route(CreateProviderModelRouteRequest {
+            public_model_id: "deepseek-v4-pro".to_string(),
+            provider_account_id: deepseek.id,
+            upstream_model_id: "deepseek-v4-pro".to_string(),
             wire_api: "openai-chat".to_string(),
-            api_key: "deepseek-key".to_string(),
-            model_hint: "deepseek-v4-pro".to_string(),
-            is_active: true,
-            priority: 10,
+            role: "primary".to_string(),
+            enabled: true,
         })
         .await
-        .expect("create deepseek account");
-        db.create_provider_account(CreateProviderAccountRequest {
-            name: "Catch all".to_string(),
-            provider: "openai-compatible".to_string(),
-            base_url: "https://catch-all.example.com".to_string(),
-            auth_mode: "bearer".to_string(),
-            wire_api: "openai-chat".to_string(),
-            api_key: "catch-all-key".to_string(),
-            model_hint: String::new(),
-            is_active: true,
-            priority: 0,
-        })
-        .await
-        .expect("create catch-all account");
-        db.create_provider_account(CreateProviderAccountRequest {
-            name: "Inactive".to_string(),
-            provider: "openai".to_string(),
-            base_url: "https://api.openai.com".to_string(),
-            auth_mode: "bearer".to_string(),
+        .expect("create primary route");
+        db.create_provider_model_route(CreateProviderModelRouteRequest {
+            public_model_id: "deepseek-v4-pro".to_string(),
+            provider_account_id: duplicate.id,
+            upstream_model_id: "deepseek-v4-pro".to_string(),
             wire_api: "openai-responses".to_string(),
-            api_key: "openai-key".to_string(),
-            model_hint: "gpt-5".to_string(),
-            is_active: false,
-            priority: 100,
+            role: "backup".to_string(),
+            enabled: true,
         })
         .await
-        .expect("create inactive account");
-        db.create_provider_account(CreateProviderAccountRequest {
-            name: "Duplicate".to_string(),
-            provider: "openai".to_string(),
-            base_url: "https://api.openai.com".to_string(),
-            auth_mode: "bearer".to_string(),
+        .expect("create duplicate route");
+        db.create_provider_model_route(CreateProviderModelRouteRequest {
+            public_model_id: "gpt-5.5".to_string(),
+            provider_account_id: inactive.id,
+            upstream_model_id: "gpt-5.5".to_string(),
             wire_api: "openai-responses".to_string(),
-            api_key: "openai-key".to_string(),
-            model_hint: "deepseek-v4-pro".to_string(),
-            is_active: true,
-            priority: 0,
+            role: "primary".to_string(),
+            enabled: true,
         })
         .await
-        .expect("create duplicate account");
+        .expect("create inactive route");
 
         let models = db
-            .list_model_catalog(&["openai-chat", "openai-responses"])
+            .list_routable_model_catalog(&["openai-chat", "openai-responses"])
             .await
             .expect("list model catalog");
 
         assert_eq!(models.len(), 1);
         assert_eq!(models[0].id, "deepseek-v4-pro");
+        assert_eq!(models[0].display_name, "DeepSeek V4 Pro");
         assert_eq!(models[0].provider, "deepseek");
         assert_eq!(models[0].wire_api, "openai-chat");
 

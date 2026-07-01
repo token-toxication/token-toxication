@@ -3,13 +3,19 @@ import type {
   ApiKey,
   CreateApiKeyRequest,
   CreateApiKeyResponse,
+  CreateModelCatalogEntryRequest,
   CreateProviderAccountRequest,
+  CreateProviderModelRouteRequest,
   Dashboard,
   LoginResponse,
+  ModelCatalogEntry,
   ProviderAccount,
+  ProviderModelRoute,
   RequestLog,
   UpdateApiKeyRequest,
+  UpdateModelCatalogEntryRequest,
   UpdateProviderAccountRequest,
+  UpdateProviderModelRouteRequest,
 } from "./types";
 import type { ErrorResponse } from "./generated/token-toxication";
 
@@ -134,6 +140,50 @@ export const api = {
 
   async deleteProviderAccount(id: string) {
     await callApi(adminApi.deleteProviderAccountRaw({ id }));
+  },
+
+  async modelCatalog(): Promise<ModelCatalogEntry[]> {
+    const response = await callApi(adminApi.listModelCatalog());
+    return [...response.data];
+  },
+
+  async createModelCatalogEntry(
+    payload: CreateModelCatalogEntryRequest,
+  ): Promise<ModelCatalogEntry> {
+    const response = await callApi(adminApi.createModelCatalogEntry({ body: payload }));
+    return unwrapResult(response).data;
+  },
+
+  async updateModelCatalogEntry(
+    id: string,
+    payload: UpdateModelCatalogEntryRequest,
+  ): Promise<ModelCatalogEntry> {
+    const response = await callApi(adminApi.updateModelCatalogEntry({ id, body: payload }));
+    return unwrapResult(response).data;
+  },
+
+  async providerModelRoutes(): Promise<ProviderModelRoute[]> {
+    const response = await callApi(adminApi.listProviderModelRoutes());
+    return [...response.data];
+  },
+
+  async createProviderModelRoute(
+    payload: CreateProviderModelRouteRequest,
+  ): Promise<ProviderModelRoute> {
+    const response = await callApi(adminApi.createProviderModelRoute({ body: payload }));
+    return unwrapResult(response).data;
+  },
+
+  async updateProviderModelRoute(
+    id: string,
+    payload: UpdateProviderModelRouteRequest,
+  ): Promise<ProviderModelRoute> {
+    const response = await callApi(adminApi.updateProviderModelRoute({ id, body: payload }));
+    return unwrapResult(response).data;
+  },
+
+  async deleteProviderModelRoute(id: string) {
+    await callApi(adminApi.deleteProviderModelRouteRaw({ id }));
   },
 
   async requestLogs(limit = 50): Promise<RequestLog[]> {

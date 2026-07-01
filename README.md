@@ -14,7 +14,6 @@ shadcn dashboard.
 ## Quick Start
 
 ```bash
-cp .env.example .env
 cd apps/admin && vp install
 cd ../..
 just sdk-generate
@@ -22,8 +21,9 @@ just ui-build
 cargo run -p token-toxication-server --bin token-toxication-server
 ```
 
-Open `http://localhost:3000` and sign in with `TT_ADMIN_USERNAME` /
-`TT_ADMIN_PASSWORD`. Add at least one provider account before using the relay.
+Open `http://localhost:3000` and sign in with the configured admin username and
+password. Add a provider account, catalog model, and provider model route before
+using the relay.
 
 Anthropic Messages relay:
 
@@ -53,14 +53,14 @@ curl http://localhost:3000/openai/v1/responses \
 ```
 
 Model discovery uses the same relay API key authentication. Concrete model names
-come from active provider accounts with a non-empty `model_hint`:
+come from enabled catalog entries with at least one active provider model route:
 
 ```bash
 curl http://localhost:3000/openai/v1/models \
   -H "Authorization: Bearer tokentoxication-..."
 ```
 
-## Provider Accounts
+## Provider Accounts and Model Routes
 
 Each provider account has a `wire_api` protocol:
 
@@ -71,12 +71,22 @@ Each provider account has a `wire_api` protocol:
 For Anthropic-compatible clients, use base URL `http://localhost:3000/anthropic`.
 
 There is no global upstream base URL. Each provider account owns its base URL,
-auth mode, wire protocol, priority, and optional `model_hint`. For
-OpenAI-compatible chat providers such as Qwen, Kimi, GLM, and DeepSeek, create
-accounts with `openai-chat` and model hints such as `qwen`, `kimi`, `glm`, or
-`deepseek`; clients can keep using `/openai/v1/chat/completions` and switch only
-the model name. Use exact model names as `model_hint` values when clients need
-`/openai/v1/models` or `/anthropic/v1/models` discovery.
+auth mode, wire protocol, priority, and health state. Model names live in the
+model catalog, and provider model routes bind each public model name to a
+provider account plus exact upstream model name.
+
+For OpenAI-compatible chat providers such as Qwen, Kimi, GLM, MiniMax, and
+DeepSeek, create provider accounts with `openai-chat`, add catalog models such
+as `deepseek-v4-pro`, `MiniMax-M3`, or `glm-5.2`, then create primary and backup
+routes for those models. Clients can keep using `/openai/v1/chat/completions`
+and switch only the model name.
+
+Provider model routes are exact and case-preserving. If a client sends
+`MiniMax-M3`, Token Toxication looks up that exact catalog model and rewrites the
+forwarded JSON body to the selected route's `upstreamModelId`. If the primary
+route's provider account is blocked or disabled, the next request uses an
+eligible backup route. It does not retry another provider inside the same
+request.
 
 For Codex, add an OpenAI provider account with base URL
 `https://api.openai.com`, Bearer auth, and `openai-responses`. Configure Codex
