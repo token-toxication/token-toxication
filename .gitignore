@@ -1,0 +1,10 @@
+/target/
+/data/
+/openapi/
+/apps/admin/dist/
+/apps/admin/node_modules/
+/apps/admin/.vite/
+/apps/admin/.vscode/
+*.log
+.DS_Store
+.env

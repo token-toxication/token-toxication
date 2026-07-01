@@ -1,0 +1,1454 @@
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  ActivityIcon,
+  CableIcon,
+  CheckIcon,
+  ClipboardCopyIcon,
+  KeyRoundIcon,
+  LayoutDashboardIcon,
+  LogOutIcon,
+  PlusIcon,
+  RefreshCcwIcon,
+  RouteIcon,
+  SettingsIcon,
+  ShieldCheckIcon,
+  TerminalSquareIcon,
+} from "lucide-react";
+import { toast } from "sonner";
+
+import { api, clearStoredToken, getStoredToken, setStoredToken } from "./api";
+import type { ApiKey, Dashboard, ProviderAccount, RequestLog } from "./types";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import { Toaster } from "@/components/ui/sonner";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+
+type View = "overview" | "keys" | "accounts" | "logs" | "settings";
+
+type CreateKeyForm = {
+  name: string;
+  description: string;
+  permissions: string;
+  rateLimitPerMinute: string;
+  concurrencyLimit: string;
+  dailyCostLimit: string;
+};
+
+type CreateAccountForm = {
+  name: string;
+  provider: string;
+  baseUrl: string;
+  authMode: string;
+  wireApi: string;
+  apiKey: string;
+  modelHint: string;
+  isActive: boolean;
+  priority: string;
+};
+
+const views: Array<{
+  id: View;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+}> = [
+  { id: "overview", label: "Overview", icon: LayoutDashboardIcon },
+  { id: "keys", label: "API Keys", icon: KeyRoundIcon },
+  { id: "accounts", label: "Provider Accounts", icon: CableIcon },
+  { id: "logs", label: "Request Log", icon: ActivityIcon },
+  { id: "settings", label: "Settings", icon: SettingsIcon },
+];
+
+const emptyKeyForm: CreateKeyForm = {
+  name: "",
+  description: "",
+  permissions: "all",
+  rateLimitPerMinute: "0",
+  concurrencyLimit: "0",
+  dailyCostLimit: "0",
+};
+
+const emptyAccountForm: CreateAccountForm = {
+  name: "",
+  provider: "anthropic",
+  baseUrl: "https://api.anthropic.com",
+  authMode: "x-api-key",
+  wireApi: "anthropic-messages",
+  apiKey: "",
+  modelHint: "",
+  isActive: true,
+  priority: "0",
+};
+
+const accountPresets = [
+  {
+    id: "anthropic",
+    label: "Anthropic",
+    name: "Anthropic primary",
+    provider: "anthropic",
+    baseUrl: "https://api.anthropic.com",
+    authMode: "x-api-key",
+    wireApi: "anthropic-messages",
+    modelHint: "",
+  },
+  {
+    id: "codex",
+    label: "Codex / OpenAI",
+    name: "OpenAI Responses",
+    provider: "openai",
+    baseUrl: "https://api.openai.com",
+    authMode: "bearer",
+    wireApi: "openai-responses",
+    modelHint: "gpt-5",
+  },
+  {
+    id: "deepseek-v4",
+    label: "DeepSeek v4",
+    name: "DeepSeek v4",
+    provider: "deepseek",
+    baseUrl: "https://api.deepseek.com",
+    authMode: "bearer",
+    wireApi: "openai-chat",
+    modelHint: "deepseek-v4",
+  },
+] satisfies Array<
+  Pick<
+    CreateAccountForm,
+    "name" | "provider" | "baseUrl" | "authMode" | "wireApi" | "modelHint"
+  > & { id: string; label: string }
+>;
+
+function App() {
+  const [token, setToken] = useState(() => getStoredToken());
+  const [username, setUsername] = useState("admin");
+  const [password, setPassword] = useState("");
+  const [view, setView] = useState<View>("overview");
+  const [dashboard, setDashboard] = useState<Dashboard | null>(null);
+  const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
+  const [accounts, setAccounts] = useState<ProviderAccount[]>([]);
+  const [logs, setLogs] = useState<RequestLog[]>([]);
+  const [isLoading, setIsLoading] = useState(Boolean(token));
+  const [isKeySheetOpen, setIsKeySheetOpen] = useState(false);
+  const [isAccountSheetOpen, setIsAccountSheetOpen] = useState(false);
+  const [createKeyForm, setCreateKeyForm] = useState<CreateKeyForm>(emptyKeyForm);
+  const [createAccountForm, setCreateAccountForm] = useState<CreateAccountForm>(emptyAccountForm);
+  const [createdSecret, setCreatedSecret] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    if (!getStoredToken()) {
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const [nextDashboard, nextKeys, nextAccounts, nextLogs] = await Promise.all([
+        api.dashboard(),
+        api.apiKeys(),
+        api.providerAccounts(),
+        api.requestLogs(50),
+      ]);
+      setDashboard(nextDashboard);
+      setApiKeys(nextKeys);
+      setAccounts(nextAccounts);
+      setLogs(nextLogs);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to load dashboard");
+      if (error instanceof Error && /token|session|credentials/i.test(error.message)) {
+        clearStoredToken();
+        setToken(null);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh, token]);
+
+  async function handleLogin(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    try {
+      const response = await api.login(username, password);
+      setStoredToken(response.token);
+      setToken(response.token);
+      setPassword("");
+      toast.success("Signed in");
+      await refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Sign-in failed");
+    }
+  }
+
+  async function handleLogout() {
+    try {
+      await api.logout();
+    } catch {
+      // Local logout still clears the session token.
+    }
+    clearStoredToken();
+    setToken(null);
+    setDashboard(null);
+    toast.success("Signed out");
+  }
+
+  async function handleCreateKey(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const response = await api.createApiKey({
+      name: createKeyForm.name,
+      description: createKeyForm.description,
+      permissions:
+        createKeyForm.permissions === "all"
+          ? []
+          : createKeyForm.permissions.split(",").map((item) => item.trim()),
+      rateLimitPerMinute: numberFromInput(createKeyForm.rateLimitPerMinute),
+      concurrencyLimit: numberFromInput(createKeyForm.concurrencyLimit),
+      dailyCostLimit: Number(createKeyForm.dailyCostLimit) || 0,
+    });
+    setCreatedSecret(response.secret);
+    setCreateKeyForm(emptyKeyForm);
+    setIsKeySheetOpen(false);
+    toast.success("API key created");
+    await refresh();
+  }
+
+  async function handleCreateAccount(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await api.createProviderAccount({
+      name: createAccountForm.name,
+      provider: createAccountForm.provider,
+      baseUrl: createAccountForm.baseUrl,
+      authMode: createAccountForm.authMode,
+      wireApi: createAccountForm.wireApi,
+      apiKey: createAccountForm.apiKey,
+      modelHint: createAccountForm.modelHint,
+      isActive: createAccountForm.isActive,
+      priority: numberFromInput(createAccountForm.priority),
+    });
+    setCreateAccountForm(emptyAccountForm);
+    setIsAccountSheetOpen(false);
+    toast.success("Provider account created");
+    await refresh();
+  }
+
+  async function toggleApiKey(key: ApiKey) {
+    await api.updateApiKey(key.id, { isActive: !key.isActive });
+    toast.success(key.isActive ? "API key paused" : "API key activated");
+    await refresh();
+  }
+
+  async function toggleAccount(account: ProviderAccount) {
+    await api.updateProviderAccount(account.id, { isActive: !account.isActive });
+    toast.success(account.isActive ? "Provider paused" : "Provider activated");
+    await refresh();
+  }
+
+  if (!token) {
+    return (
+      <TooltipProvider>
+        <main className="min-h-svh bg-background text-foreground">
+          <div className="mx-auto flex min-h-svh w-full max-w-md flex-col justify-center gap-6 px-6">
+            <div className="flex flex-col gap-2">
+              <div className="flex size-11 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+                <RouteIcon className="size-5" />
+              </div>
+              <h1 className="text-2xl font-semibold">Token Toxication</h1>
+              <p className="text-sm text-muted-foreground">Relay operations console</p>
+            </div>
+            <Card>
+              <CardHeader>
+                <CardTitle>Admin sign in</CardTitle>
+                <CardDescription>
+                  Use the credentials from your service environment.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form className="flex flex-col gap-4" onSubmit={handleLogin}>
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="username">Username</Label>
+                    <Input
+                      id="username"
+                      value={username}
+                      onChange={(event) => setUsername(event.target.value)}
+                      autoComplete="username"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="password">Password</Label>
+                    <Input
+                      id="password"
+                      type="password"
+                      value={password}
+                      onChange={(event) => setPassword(event.target.value)}
+                      autoComplete="current-password"
+                    />
+                  </div>
+                  <Button type="submit">
+                    <ShieldCheckIcon data-icon="inline-start" />
+                    Sign in
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+          </div>
+        </main>
+        <Toaster />
+      </TooltipProvider>
+    );
+  }
+
+  return (
+    <TooltipProvider>
+      <div className="min-h-svh bg-background text-foreground">
+        <div className="grid min-h-svh grid-cols-1 lg:grid-cols-[260px_1fr]">
+          <aside className="border-b bg-sidebar text-sidebar-foreground lg:border-r lg:border-b-0">
+            <div className="flex h-full flex-col gap-6 p-4">
+              <div className="flex items-center gap-3 px-2">
+                <div className="flex size-9 items-center justify-center rounded-md bg-sidebar-primary text-sidebar-primary-foreground">
+                  <RouteIcon className="size-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-semibold">Token Toxication</div>
+                  <div className="text-xs text-muted-foreground">Relay control plane</div>
+                </div>
+              </div>
+              <nav className="grid gap-1">
+                {views.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <Button
+                      key={item.id}
+                      type="button"
+                      variant={view === item.id ? "secondary" : "ghost"}
+                      className="justify-start"
+                      onClick={() => setView(item.id)}
+                    >
+                      <Icon data-icon="inline-start" />
+                      {item.label}
+                    </Button>
+                  );
+                })}
+              </nav>
+              <div className="mt-auto flex flex-col gap-3 rounded-lg border bg-background p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-medium">Codex endpoint</div>
+                    <div className="text-xs text-muted-foreground">/openai/v1/responses</div>
+                  </div>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="outline"
+                        onClick={() => copyText(`${window.location.origin}/openai/v1/responses`)}
+                      >
+                        <ClipboardCopyIcon />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Copy endpoint</TooltipContent>
+                  </Tooltip>
+                </div>
+              </div>
+            </div>
+          </aside>
+
+          <main className="min-w-0">
+            <header className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur">
+              <div className="flex min-h-16 items-center justify-between gap-3 px-5">
+                <div className="min-w-0">
+                  <div className="text-sm text-muted-foreground">Environment</div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline">
+                      <CheckIcon className="size-3" />
+                      Local
+                    </Badge>
+                    <span className="truncate text-sm font-medium">{currentViewLabel(view)}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button type="button" variant="outline" onClick={refresh}>
+                    <RefreshCcwIcon data-icon="inline-start" />
+                    Refresh
+                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button type="button" variant="secondary">
+                        <TerminalSquareIcon data-icon="inline-start" />
+                        Admin
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={handleLogout}>
+                        <LogOutIcon className="size-4" />
+                        Sign out
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
+            </header>
+
+            <div className="flex flex-col gap-5 p-5">
+              {isLoading ? (
+                <LoadingState />
+              ) : (
+                <>
+                  {view === "overview" && dashboard ? (
+                    <Overview
+                      dashboard={dashboard}
+                      onCreateKey={() => setIsKeySheetOpen(true)}
+                      onCreateAccount={() => setIsAccountSheetOpen(true)}
+                    />
+                  ) : null}
+                  {view === "keys" ? (
+                    <ApiKeysView
+                      apiKeys={apiKeys}
+                      onCreate={() => setIsKeySheetOpen(true)}
+                      onToggle={toggleApiKey}
+                    />
+                  ) : null}
+                  {view === "accounts" ? (
+                    <AccountsView
+                      accounts={accounts}
+                      onCreate={() => setIsAccountSheetOpen(true)}
+                      onToggle={toggleAccount}
+                    />
+                  ) : null}
+                  {view === "logs" ? <RequestLogsView logs={logs} /> : null}
+                  {view === "settings" ? <SettingsView /> : null}
+                </>
+              )}
+            </div>
+          </main>
+        </div>
+      </div>
+
+      <CreateKeySheet
+        open={isKeySheetOpen}
+        form={createKeyForm}
+        setForm={setCreateKeyForm}
+        onOpenChange={setIsKeySheetOpen}
+        onSubmit={handleCreateKey}
+      />
+      <CreateAccountSheet
+        open={isAccountSheetOpen}
+        form={createAccountForm}
+        setForm={setCreateAccountForm}
+        onOpenChange={setIsAccountSheetOpen}
+        onSubmit={handleCreateAccount}
+      />
+      <Dialog
+        open={Boolean(createdSecret)}
+        onOpenChange={(open) => !open && setCreatedSecret(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>API key secret</DialogTitle>
+            <DialogDescription>This secret is shown once.</DialogDescription>
+          </DialogHeader>
+          <Alert>
+            <KeyRoundIcon className="size-4" />
+            <AlertTitle>Store this value now</AlertTitle>
+            <AlertDescription className="break-all font-mono text-xs">
+              {createdSecret}
+            </AlertDescription>
+          </Alert>
+          <Button type="button" onClick={() => createdSecret && copyText(createdSecret)}>
+            <ClipboardCopyIcon data-icon="inline-start" />
+            Copy secret
+          </Button>
+        </DialogContent>
+      </Dialog>
+      <Toaster />
+    </TooltipProvider>
+  );
+}
+
+function Overview({
+  dashboard,
+  onCreateKey,
+  onCreateAccount,
+}: {
+  dashboard: Dashboard;
+  onCreateKey: () => void;
+  onCreateAccount: () => void;
+}) {
+  const trend = useMemo(() => buildTrend(dashboard.recentRequests), [dashboard.recentRequests]);
+  return (
+    <div className="flex flex-col gap-5">
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <MetricCard
+          title="Requests today"
+          value={formatNumber(dashboard.usage.requestsToday)}
+          detail={`${formatNumber(dashboard.usage.totalRequests)} total`}
+          icon={ActivityIcon}
+        />
+        <MetricCard
+          title="Tokens today"
+          value={formatNumber(dashboard.usage.tokensToday)}
+          detail={`${formatNumber(dashboard.usage.totalTokens)} total`}
+          icon={TerminalSquareIcon}
+        />
+        <MetricCard
+          title="Active API keys"
+          value={`${dashboard.activeApiKeys}/${dashboard.totalApiKeys}`}
+          detail="usable client credentials"
+          icon={KeyRoundIcon}
+        />
+        <MetricCard
+          title="Healthy accounts"
+          value={`${dashboard.healthyAccounts}/${dashboard.totalAccounts}`}
+          detail="active upstream accounts"
+          icon={CableIcon}
+        />
+      </section>
+
+      <section className="grid gap-5 xl:grid-cols-[1.25fr_0.75fr]">
+        <Card>
+          <CardHeader className="flex-row items-start justify-between gap-4">
+            <div className="flex flex-col gap-1">
+              <CardTitle>Request flow</CardTitle>
+              <CardDescription>Recent relay volume across the local log window.</CardDescription>
+            </div>
+            <Button type="button" onClick={onCreateKey}>
+              <PlusIcon data-icon="inline-start" />
+              API Key
+            </Button>
+          </CardHeader>
+          <CardContent>
+            <TrendChart values={trend} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex-row items-start justify-between gap-4">
+            <div className="flex flex-col gap-1">
+              <CardTitle>Provider pool</CardTitle>
+              <CardDescription>Routing health and availability.</CardDescription>
+            </div>
+            <Button type="button" variant="outline" onClick={onCreateAccount}>
+              <PlusIcon data-icon="inline-start" />
+              Account
+            </Button>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            {dashboard.accounts.length === 0 ? (
+              <EmptyNotice
+                title="No provider accounts"
+                body="Add a provider account to relay traffic."
+              />
+            ) : (
+              dashboard.accounts.slice(0, 5).map((account) => (
+                <div key={account.id} className="flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-medium">{account.name}</div>
+                    <div className="truncate text-xs text-muted-foreground">
+                      {account.provider} · {wireApiLabel(account.wireApi)}
+                    </div>
+                  </div>
+                  {statusBadge(account.status, account.isActive)}
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
+      </section>
+
+      <RequestLogsView logs={dashboard.recentRequests} compact />
+    </div>
+  );
+}
+
+function MetricCard({
+  title,
+  value,
+  detail,
+  icon: Icon,
+}: {
+  title: string;
+  value: string;
+  detail: string;
+  icon: React.ComponentType<{ className?: string }>;
+}) {
+  return (
+    <Card>
+      <CardHeader className="flex-row items-center justify-between gap-3 pb-2">
+        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        <Icon className="size-4 text-muted-foreground" />
+      </CardHeader>
+      <CardContent className="flex flex-col gap-2">
+        <div className="text-2xl font-semibold">{value}</div>
+        <div className="text-xs text-muted-foreground">{detail}</div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ApiKeysView({
+  apiKeys,
+  onCreate,
+  onToggle,
+}: {
+  apiKeys: ApiKey[];
+  onCreate: () => void;
+  onToggle: (key: ApiKey) => void;
+}) {
+  return (
+    <Card>
+      <CardHeader className="flex-row items-start justify-between gap-4">
+        <div className="flex flex-col gap-1">
+          <CardTitle>API Keys</CardTitle>
+          <CardDescription>Client credentials, limits, and service permissions.</CardDescription>
+        </div>
+        <Button type="button" onClick={onCreate}>
+          <PlusIcon data-icon="inline-start" />
+          Create
+        </Button>
+      </CardHeader>
+      <CardContent>
+        <div className="hidden md:block">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Preview</TableHead>
+                <TableHead>Permissions</TableHead>
+                <TableHead>Limits</TableHead>
+                <TableHead>Last used</TableHead>
+                <TableHead className="text-right">State</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {apiKeys.map((key) => (
+                <TableRow key={key.id}>
+                  <TableCell>
+                    <div className="flex flex-col gap-1">
+                      <span className="font-medium">{key.name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {key.description || "No description"}
+                      </span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="font-mono text-xs">{key.keyPreview}</TableCell>
+                  <TableCell>
+                    {key.permissions.length === 0 ? "All" : key.permissions.join(", ")}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-col gap-1 text-xs text-muted-foreground">
+                      <span>{key.rateLimitPerMinute || "No"} rpm</span>
+                      <span>{key.concurrencyLimit || "No"} concurrent</span>
+                    </div>
+                  </TableCell>
+                  <TableCell>{formatDate(key.lastUsedAt)}</TableCell>
+                  <TableCell className="text-right">
+                    <Button type="button" variant="outline" size="sm" onClick={() => onToggle(key)}>
+                      {key.isActive ? "Active" : "Paused"}
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {apiKeys.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6}>
+                    <EmptyNotice
+                      title="No API keys"
+                      body="Create a key before connecting a client."
+                    />
+                  </TableCell>
+                </TableRow>
+              ) : null}
+            </TableBody>
+          </Table>
+        </div>
+        <div className="grid gap-3 md:hidden">
+          {apiKeys.length === 0 ? (
+            <EmptyNotice title="No API keys" body="Create a key before connecting a client." />
+          ) : (
+            apiKeys.map((key) => (
+              <div key={key.id} className="flex flex-col gap-3 rounded-md border p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-medium">{key.name}</div>
+                    <div className="truncate font-mono text-xs text-muted-foreground">
+                      {key.keyPreview}
+                    </div>
+                  </div>
+                  <Button type="button" variant="outline" size="sm" onClick={() => onToggle(key)}>
+                    {key.isActive ? "Active" : "Paused"}
+                  </Button>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                  <span>
+                    {key.permissions.length === 0 ? "All services" : key.permissions.join(", ")}
+                  </span>
+                  <span>{formatDate(key.lastUsedAt)}</span>
+                  <span>{key.rateLimitPerMinute || "No"} rpm</span>
+                  <span>{key.concurrencyLimit || "No"} concurrent</span>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function AccountsView({
+  accounts,
+  onCreate,
+  onToggle,
+}: {
+  accounts: ProviderAccount[];
+  onCreate: () => void;
+  onToggle: (account: ProviderAccount) => void;
+}) {
+  return (
+    <Card>
+      <CardHeader className="flex-row items-start justify-between gap-4">
+        <div className="flex flex-col gap-1">
+          <CardTitle>Provider Accounts</CardTitle>
+          <CardDescription>Upstream credentials and model routing hints.</CardDescription>
+        </div>
+        <Button type="button" onClick={onCreate}>
+          <PlusIcon data-icon="inline-start" />
+          Add Account
+        </Button>
+      </CardHeader>
+      <CardContent>
+        <div className="hidden md:block">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Provider</TableHead>
+                <TableHead>Protocol</TableHead>
+                <TableHead>Base URL</TableHead>
+                <TableHead>Model hint</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Routing</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {accounts.map((account) => (
+                <TableRow key={account.id}>
+                  <TableCell className="font-medium">{account.name}</TableCell>
+                  <TableCell>{account.provider}</TableCell>
+                  <TableCell>{wireApiLabel(account.wireApi)}</TableCell>
+                  <TableCell className="max-w-[280px] truncate">{account.baseUrl}</TableCell>
+                  <TableCell>{account.modelHint || "Any model"}</TableCell>
+                  <TableCell>{statusBadge(account.status, account.isActive)}</TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onToggle(account)}
+                    >
+                      {account.isActive ? "Enabled" : "Disabled"}
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {accounts.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7}>
+                    <EmptyNotice
+                      title="No provider accounts"
+                      body="Add an account to make the relay schedulable."
+                    />
+                  </TableCell>
+                </TableRow>
+              ) : null}
+            </TableBody>
+          </Table>
+        </div>
+        <div className="grid gap-3 md:hidden">
+          {accounts.length === 0 ? (
+            <EmptyNotice
+              title="No provider accounts"
+              body="Add an account to make the relay schedulable."
+            />
+          ) : (
+            accounts.map((account) => (
+              <div key={account.id} className="flex flex-col gap-3 rounded-md border p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-medium">{account.name}</div>
+                    <div className="truncate text-xs text-muted-foreground">{account.baseUrl}</div>
+                  </div>
+                  {statusBadge(account.status, account.isActive)}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant="outline">{account.provider}</Badge>
+                  <Badge variant="secondary">{wireApiLabel(account.wireApi)}</Badge>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-xs text-muted-foreground">
+                    {account.modelHint || "Any model"}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onToggle(account)}
+                  >
+                    {account.isActive ? "Enabled" : "Disabled"}
+                  </Button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function RequestLogsView({
+  logs,
+  compact = false,
+}: {
+  logs: readonly RequestLog[];
+  compact?: boolean;
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{compact ? "Recent requests" : "Request Log"}</CardTitle>
+        <CardDescription>Relay status, latency, model, and token accounting.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="hidden md:block">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Time</TableHead>
+                <TableHead>Path</TableHead>
+                <TableHead>Model</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Latency</TableHead>
+                <TableHead>Tokens</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {logs.map((log) => (
+                <TableRow key={log.id}>
+                  <TableCell>{formatDate(log.createdAt)}</TableCell>
+                  <TableCell className="font-mono text-xs">{log.path}</TableCell>
+                  <TableCell>{log.model || "unknown"}</TableCell>
+                  <TableCell>{statusCodeBadge(log.statusCode)}</TableCell>
+                  <TableCell>{log.latencyMs}ms</TableCell>
+                  <TableCell>{formatNumber(log.inputTokens + log.outputTokens)}</TableCell>
+                </TableRow>
+              ))}
+              {logs.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6}>
+                    <EmptyNotice
+                      title="No relay traffic"
+                      body="Requests appear here after clients call the relay."
+                    />
+                  </TableCell>
+                </TableRow>
+              ) : null}
+            </TableBody>
+          </Table>
+        </div>
+        <div className="grid gap-3 md:hidden">
+          {logs.length === 0 ? (
+            <EmptyNotice
+              title="No relay traffic"
+              body="Requests appear here after clients call the relay."
+            />
+          ) : (
+            logs.map((log) => (
+              <div key={log.id} className="flex flex-col gap-2 rounded-md border p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="truncate font-mono text-xs">{log.path}</div>
+                    <div className="truncate text-xs text-muted-foreground">
+                      {log.model || "unknown"}
+                    </div>
+                  </div>
+                  {statusCodeBadge(log.statusCode)}
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground">
+                  <span>{formatDate(log.createdAt)}</span>
+                  <span>{log.latencyMs}ms</span>
+                  <span>{formatNumber(log.inputTokens + log.outputTokens)} tokens</span>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function SettingsView() {
+  return (
+    <Tabs defaultValue="runtime">
+      <TabsList>
+        <TabsTrigger value="runtime">Runtime</TabsTrigger>
+        <TabsTrigger value="headers">Headers</TabsTrigger>
+      </TabsList>
+      <TabsContent value="runtime">
+        <Card>
+          <CardHeader>
+            <CardTitle>Runtime</CardTitle>
+            <CardDescription>Current service assumptions exposed by the frontend.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4 md:grid-cols-2">
+            <SettingRow label="Anthropic Messages" value="/anthropic/v1/messages" />
+            <SettingRow label="Codex Responses" value="/openai/v1/responses" />
+            <SettingRow label="OpenAI Chat" value="/openai/v1/chat/completions" />
+            <SettingRow label="Admin API" value="/admin/api" />
+            <SettingRow label="Storage" value="SQLite" />
+          </CardContent>
+        </Card>
+      </TabsContent>
+      <TabsContent value="headers">
+        <Card>
+          <CardHeader>
+            <CardTitle>Forwarded headers</CardTitle>
+            <CardDescription>Headers preserved or supplied by the Rust relay.</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            {["x-api-key", "authorization: Bearer", "anthropic-version", "anthropic-beta"].map(
+              (item) => (
+                <div key={item} className="rounded-md border p-3 font-mono text-sm">
+                  {item}
+                </div>
+              ),
+            )}
+          </CardContent>
+        </Card>
+      </TabsContent>
+    </Tabs>
+  );
+}
+
+function SettingRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-md border p-3">
+      <span className="text-sm text-muted-foreground">{label}</span>
+      <span className="break-all font-mono text-sm">{value}</span>
+    </div>
+  );
+}
+
+function CreateKeySheet({
+  open,
+  form,
+  setForm,
+  onOpenChange,
+  onSubmit,
+}: {
+  open: boolean;
+  form: CreateKeyForm;
+  setForm: React.Dispatch<React.SetStateAction<CreateKeyForm>>;
+  onOpenChange: (open: boolean) => void;
+  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent className="sm:max-w-md">
+        <SheetHeader>
+          <SheetTitle>Create API key</SheetTitle>
+          <SheetDescription>Issue a client key with optional routing limits.</SheetDescription>
+        </SheetHeader>
+        <form className="flex flex-col gap-4 px-4" onSubmit={onSubmit}>
+          <Field label="Name" htmlFor="key-name">
+            <Input
+              id="key-name"
+              value={form.name}
+              onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+              required
+            />
+          </Field>
+          <Field label="Description" htmlFor="key-description">
+            <Textarea
+              id="key-description"
+              value={form.description}
+              onChange={(event) =>
+                setForm((current) => ({ ...current, description: event.target.value }))
+              }
+            />
+          </Field>
+          <Field label="Permissions" htmlFor="key-permissions">
+            <Select
+              value={form.permissions}
+              onValueChange={(value) => setForm((current) => ({ ...current, permissions: value }))}
+            >
+              <SelectTrigger id="key-permissions">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectItem value="all">All services</SelectItem>
+                  <SelectItem value="claude">Claude only</SelectItem>
+                  <SelectItem value="openai">OpenAI-compatible only</SelectItem>
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </Field>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Field label="RPM" htmlFor="key-rpm">
+              <Input
+                id="key-rpm"
+                inputMode="numeric"
+                value={form.rateLimitPerMinute}
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, rateLimitPerMinute: event.target.value }))
+                }
+              />
+            </Field>
+            <Field label="Concurrency" htmlFor="key-concurrency">
+              <Input
+                id="key-concurrency"
+                inputMode="numeric"
+                value={form.concurrencyLimit}
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, concurrencyLimit: event.target.value }))
+                }
+              />
+            </Field>
+            <Field label="Daily USD" htmlFor="key-cost">
+              <Input
+                id="key-cost"
+                inputMode="decimal"
+                value={form.dailyCostLimit}
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, dailyCostLimit: event.target.value }))
+                }
+              />
+            </Field>
+          </div>
+          <SheetFooter>
+            <Button type="submit">
+              <KeyRoundIcon data-icon="inline-start" />
+              Create key
+            </Button>
+          </SheetFooter>
+        </form>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function CreateAccountSheet({
+  open,
+  form,
+  setForm,
+  onOpenChange,
+  onSubmit,
+}: {
+  open: boolean;
+  form: CreateAccountForm;
+  setForm: React.Dispatch<React.SetStateAction<CreateAccountForm>>;
+  onOpenChange: (open: boolean) => void;
+  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent className="overflow-y-auto sm:max-w-lg">
+        <SheetHeader>
+          <SheetTitle>Add provider account</SheetTitle>
+          <SheetDescription>Register an upstream credential for relay scheduling.</SheetDescription>
+        </SheetHeader>
+        <form className="flex flex-col gap-4 px-4" onSubmit={onSubmit}>
+          <Field label="Preset" htmlFor="account-preset">
+            <Select
+              value={accountPresetValue(form)}
+              onValueChange={(value) => {
+                if (value !== "custom") {
+                  applyAccountPreset(value, setForm);
+                }
+              }}
+            >
+              <SelectTrigger id="account-preset">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  {accountPresets.map((preset) => (
+                    <SelectItem key={preset.id} value={preset.id}>
+                      {preset.label}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value="custom">Custom</SelectItem>
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label="Name" htmlFor="account-name">
+            <Input
+              id="account-name"
+              value={form.name}
+              onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+              required
+            />
+          </Field>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Provider" htmlFor="account-provider">
+              <Input
+                id="account-provider"
+                value={form.provider}
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, provider: event.target.value }))
+                }
+              />
+            </Field>
+            <Field label="Protocol" htmlFor="account-wire-api">
+              <Select
+                value={form.wireApi}
+                onValueChange={(value) => setForm((current) => ({ ...current, wireApi: value }))}
+              >
+                <SelectTrigger id="account-wire-api">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectItem value="anthropic-messages">Anthropic Messages</SelectItem>
+                    <SelectItem value="openai-responses">OpenAI Responses</SelectItem>
+                    <SelectItem value="openai-chat">OpenAI Chat</SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </Field>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Auth mode" htmlFor="account-auth-mode">
+              <Select
+                value={form.authMode}
+                onValueChange={(value) => setForm((current) => ({ ...current, authMode: value }))}
+              >
+                <SelectTrigger id="account-auth-mode">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectItem value="x-api-key">x-api-key</SelectItem>
+                    <SelectItem value="bearer">Bearer</SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Model hint" htmlFor="account-model-hint">
+              <Input
+                id="account-model-hint"
+                value={form.modelHint}
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, modelHint: event.target.value }))
+                }
+                placeholder="claude, gpt-5, deepseek, qwen, kimi, glm"
+              />
+            </Field>
+          </div>
+          <Field label="Base URL" htmlFor="account-base-url">
+            <Input
+              id="account-base-url"
+              value={form.baseUrl}
+              onChange={(event) =>
+                setForm((current) => ({ ...current, baseUrl: event.target.value }))
+              }
+              required
+            />
+          </Field>
+          <Field label="Upstream API key" htmlFor="account-api-key">
+            <Input
+              id="account-api-key"
+              type="password"
+              value={form.apiKey}
+              onChange={(event) =>
+                setForm((current) => ({ ...current, apiKey: event.target.value }))
+              }
+              required
+            />
+          </Field>
+          <div className="grid gap-3 sm:grid-cols-[1fr_120px]">
+            <SettingRow label="Upstream path" value={upstreamPathForWireApi(form.wireApi)} />
+            <Field label="Priority" htmlFor="account-priority">
+              <Input
+                id="account-priority"
+                inputMode="numeric"
+                value={form.priority}
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, priority: event.target.value }))
+                }
+              />
+            </Field>
+          </div>
+          <div className="flex items-center justify-between gap-3 rounded-md border p-3">
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="account-active">Schedulable</Label>
+              <span className="text-xs text-muted-foreground">
+                Use this account for relay traffic
+              </span>
+            </div>
+            <Switch
+              id="account-active"
+              checked={form.isActive}
+              onCheckedChange={(checked) =>
+                setForm((current) => ({ ...current, isActive: checked }))
+              }
+            />
+          </div>
+          <SheetFooter>
+            <Button type="submit">
+              <CableIcon data-icon="inline-start" />
+              Add account
+            </Button>
+          </SheetFooter>
+        </form>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function Field({
+  label,
+  htmlFor,
+  children,
+}: {
+  label: string;
+  htmlFor: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <Label htmlFor={htmlFor}>{label}</Label>
+      {children}
+    </div>
+  );
+}
+
+function LoadingState() {
+  return (
+    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      {Array.from({ length: 4 }).map((_, index) => (
+        <Card key={index}>
+          <CardHeader>
+            <Skeleton className="h-4 w-28" />
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <Skeleton className="h-8 w-20" />
+            <Skeleton className="h-3 w-32" />
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+function EmptyNotice({ title, body }: { title: string; body: string }) {
+  return (
+    <div className="flex min-h-28 flex-col items-center justify-center gap-2 rounded-md border border-dashed p-6 text-center">
+      <div className="text-sm font-medium">{title}</div>
+      <div className="text-sm text-muted-foreground">{body}</div>
+    </div>
+  );
+}
+
+function TrendChart({ values }: { values: number[] }) {
+  const peak = Math.max(...values, 0);
+  const max = Math.max(peak, 1);
+  const points = values
+    .map((value, index) => {
+      const x = (index / Math.max(values.length - 1, 1)) * 100;
+      const y = 100 - (value / max) * 78 - 10;
+      return `${x},${y}`;
+    })
+    .join(" ");
+  const total = values.reduce((sum, value) => sum + value, 0);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="h-60 rounded-lg border bg-muted/30 p-4">
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="h-full w-full">
+          <polyline points={points} fill="none" stroke="currentColor" strokeWidth="2" />
+          <polygon points={`0,100 ${points} 100,100`} className="fill-primary/10" />
+        </svg>
+      </div>
+      <div className="grid gap-3 md:grid-cols-3">
+        <ChartStat label="Window total" value={formatNumber(total)} />
+        <ChartStat label="Peak bucket" value={formatNumber(peak)} />
+        <ChartStat label="Buckets" value={String(values.length)} />
+      </div>
+    </div>
+  );
+}
+
+function ChartStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex flex-col gap-1 rounded-md border p-3">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="text-sm font-semibold">{value}</span>
+    </div>
+  );
+}
+
+function statusBadge(status: string, active: boolean) {
+  if (!active) {
+    return <Badge variant="outline">paused</Badge>;
+  }
+  if (status === "healthy") {
+    return <Badge variant="secondary">healthy</Badge>;
+  }
+  if (status === "blocked") {
+    return <Badge variant="destructive">blocked</Badge>;
+  }
+  return <Badge variant="outline">{status}</Badge>;
+}
+
+function statusCodeBadge(status: number) {
+  if (status >= 200 && status < 300) {
+    return <Badge variant="secondary">{status}</Badge>;
+  }
+  if (status === 429 || status >= 500) {
+    return <Badge variant="destructive">{status}</Badge>;
+  }
+  return <Badge variant="outline">{status}</Badge>;
+}
+
+function buildTrend(logs: readonly RequestLog[]) {
+  const buckets = new Array<number>(12).fill(0);
+  logs.forEach((_, index) => {
+    buckets[index % buckets.length] += 1;
+  });
+  return buckets.reverse();
+}
+
+function currentViewLabel(view: View) {
+  return views.find((item) => item.id === view)?.label ?? "Overview";
+}
+
+function accountPresetValue(form: CreateAccountForm) {
+  return (
+    accountPresets.find(
+      (preset) =>
+        preset.provider === form.provider &&
+        preset.baseUrl === form.baseUrl &&
+        preset.authMode === form.authMode &&
+        preset.wireApi === form.wireApi &&
+        preset.modelHint === form.modelHint,
+    )?.id ?? "custom"
+  );
+}
+
+function applyAccountPreset(
+  presetId: string,
+  setForm: React.Dispatch<React.SetStateAction<CreateAccountForm>>,
+) {
+  const preset = accountPresets.find((item) => item.id === presetId);
+  if (!preset) {
+    return;
+  }
+  setForm((current) => ({
+    ...current,
+    name: current.name || preset.name,
+    provider: preset.provider,
+    baseUrl: preset.baseUrl,
+    authMode: preset.authMode,
+    wireApi: preset.wireApi,
+    modelHint: preset.modelHint,
+  }));
+}
+
+function wireApiLabel(value: string) {
+  switch (value) {
+    case "openai-chat":
+      return "OpenAI Chat";
+    case "openai-responses":
+      return "OpenAI Responses";
+    case "anthropic-messages":
+      return "Anthropic Messages";
+    default:
+      return value;
+  }
+}
+
+function upstreamPathForWireApi(value: string) {
+  switch (value) {
+    case "openai-chat":
+      return "/chat/completions";
+    case "openai-responses":
+      return "/v1/responses";
+    default:
+      return "/v1/messages";
+  }
+}
+
+function numberFromInput(value: string) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function formatNumber(value: number) {
+  return new Intl.NumberFormat().format(value);
+}
+
+function formatDate(value: string | null | undefined) {
+  if (!value) {
+    return "never";
+  }
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
+async function copyText(value: string) {
+  await navigator.clipboard.writeText(value);
+  toast.success("Copied");
+}
+
+export default App;

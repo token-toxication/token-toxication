@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+env:
+  RUSTFLAGS: -Dwarnings
+  RUST_BACKTRACE: 1
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  rust:
+    name: Rust
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.88.0
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@just
+      - run: just fmt-check
+      - run: just clippy
+      - run: just test
+
+  frontend:
+    name: Admin UI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: voidzero-dev/setup-vp@v1
+      - uses: taiki-e/install-action@just
+      - name: Install openapi-nexus
+        run: |
+          rustup toolchain install 1.90.0 --profile minimal
+          cargo +1.90.0 install openapi-nexus --version 0.1.17 --locked
+      - run: cd apps/admin && vp install
+      - run: just sdk-generate
+      - run: git diff --exit-code -- apps/admin/src/generated/token-toxication
+      - run: cd apps/admin && vp check
+      - run: cd apps/admin && vp build

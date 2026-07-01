@@ -1,0 +1,6 @@
+[typescript-fetch]
+emit_enum_constants = true
+emit_type_guards = true
+property_naming = "camelCase"
+generate_package = false
+include_build_scripts = false

@@ -1,0 +1,57 @@
+pub mod auth;
+pub mod config;
+pub mod db;
+pub mod error;
+pub mod models;
+pub mod openapi;
+pub mod routes;
+
+use std::{path::PathBuf, sync::Arc};
+
+use axum::Router;
+use chrono::{DateTime, Utc};
+use config::Config;
+use db::Db;
+use routes::{
+    admin_routes, health, metrics, relay_messages, relay_openai_chat, relay_openai_responses,
+};
+use tower_http::{
+    cors::CorsLayer,
+    services::{ServeDir, ServeFile},
+    trace::TraceLayer,
+};
+
+#[derive(Clone)]
+pub struct AppState {
+    pub config: Arc<Config>,
+    pub db: Db,
+    pub http: aioduct::TokioClient,
+    pub started_at: DateTime<Utc>,
+}
+
+pub fn app(state: AppState, static_dir: PathBuf) -> Router {
+    let index_file = static_dir.join("index.html");
+    let spa = ServeDir::new(static_dir).fallback(ServeFile::new(index_file));
+
+    Router::new()
+        .route("/health", axum::routing::get(health))
+        .route("/metrics", axum::routing::get(metrics))
+        .route("/openapi.json", axum::routing::get(openapi::openapi_json))
+        .route(
+            "/anthropic/v1/messages",
+            axum::routing::post(relay_messages),
+        )
+        .route(
+            "/openai/v1/chat/completions",
+            axum::routing::post(relay_openai_chat),
+        )
+        .route(
+            "/openai/v1/responses",
+            axum::routing::post(relay_openai_responses),
+        )
+        .nest("/admin/api", admin_routes(state.clone()))
+        .fallback_service(spa)
+        .layer(TraceLayer::new_for_http())
+        .layer(CorsLayer::permissive())
+        .with_state(state)
+}
