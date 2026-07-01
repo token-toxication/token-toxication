@@ -1371,6 +1371,7 @@ function ClientSetupView({
     () => (typeof window === "undefined" ? "http://127.0.0.1:3000" : window.location.origin),
     [],
   );
+  const catalogModels = useMemo(() => catalogModelIds(models), [models]);
   const codexModels = useMemo(
     () => routableModelsForWireApis(models, routes, accounts, ["openai-responses"]),
     [accounts, models, routes],
@@ -1383,21 +1384,21 @@ function ClientSetupView({
     () => routableModelsForWireApis(models, routes, accounts, ["openai-chat"]),
     [accounts, models, routes],
   );
-  const [codexModel, setCodexModel] = useState(codexModels[0] ?? "gpt-5");
-  const [claudeModel, setClaudeModel] = useState(claudeModels[0] ?? "claude-sonnet-4-5");
-  const [opencodeModel, setOpencodeModel] = useState(opencodeModels[0] ?? "deepseek-v4");
+  const [codexModel, setCodexModel] = useState(catalogModels[0] ?? "gpt-5");
+  const [claudeModel, setClaudeModel] = useState(catalogModels[0] ?? "claude-sonnet-4-5");
+  const [opencodeModel, setOpencodeModel] = useState(catalogModels[0] ?? "deepseek-v4");
 
   useEffect(() => {
-    setCodexModel((current) => current || codexModels[0] || "gpt-5");
-  }, [codexModels]);
+    setCodexModel((current) => preferredCatalogModel(current, catalogModels, "gpt-5"));
+  }, [catalogModels]);
 
   useEffect(() => {
-    setClaudeModel((current) => current || claudeModels[0] || "claude-sonnet-4-5");
-  }, [claudeModels]);
+    setClaudeModel((current) => preferredCatalogModel(current, catalogModels, "claude-sonnet-4-5"));
+  }, [catalogModels]);
 
   useEffect(() => {
-    setOpencodeModel((current) => current || opencodeModels[0] || "deepseek-v4");
-  }, [opencodeModels]);
+    setOpencodeModel((current) => preferredCatalogModel(current, catalogModels, "deepseek-v4"));
+  }, [catalogModels]);
 
   const snippets = useMemo(
     () =>
@@ -1407,9 +1408,9 @@ function ClientSetupView({
         codexModel,
         claudeModel,
         opencodeModel,
-        opencodeModels,
+        opencodeModels: catalogModels,
       }),
-    [apiKey, serviceOrigin, codexModel, claudeModel, opencodeModel, opencodeModels],
+    [apiKey, serviceOrigin, codexModel, claudeModel, opencodeModel, catalogModels],
   );
   const keyLooksValid = apiKey.trim() === "" || apiKey.trim().startsWith("tokentoxication-");
 
@@ -1451,33 +1452,37 @@ function ClientSetupView({
           <div className="grid gap-3 sm:grid-cols-2">
             <SettingRow label="OpenAI base" value={snippets.openaiBaseUrl} />
             <SettingRow label="Anthropic base" value={snippets.anthropicBaseUrl} />
+            <SettingRow label="Catalog models" value={String(catalogModels.length)} />
+            <SettingRow label="Chat routed" value={String(opencodeModels.length)} />
+            <SettingRow label="Responses routed" value={String(codexModels.length)} />
+            <SettingRow label="Messages routed" value={String(claudeModels.length)} />
           </div>
           <ClientModelField
             id="setup-codex-model"
             label="Codex model"
             value={codexModel}
             onChange={setCodexModel}
-            hints={codexModels}
+            hints={catalogModels}
           />
           <ClientModelField
             id="setup-claude-model"
             label="Claude Code model"
             value={claudeModel}
             onChange={setClaudeModel}
-            hints={claudeModels}
+            hints={catalogModels}
           />
           <ClientModelField
             id="setup-opencode-model"
             label="opencode model"
             value={opencodeModel}
             onChange={setOpencodeModel}
-            hints={opencodeModels}
+            hints={catalogModels}
           />
           <Alert className="lg:col-span-2">
             <TerminalSquareIcon className="size-4" />
-            <AlertTitle>Model discovery uses the catalog</AlertTitle>
+            <AlertTitle>Client setup uses every catalog model</AlertTitle>
             <AlertDescription>
-              Setup snippets only use enabled catalog models with active provider routes.
+              Provider routes still determine which relay endpoints can serve each model.
             </AlertDescription>
           </Alert>
         </CardContent>
@@ -1545,7 +1550,7 @@ function ClientModelField({
         />
       </Field>
       {hints.length > 0 ? (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex max-h-40 flex-wrap gap-2 overflow-auto rounded-md border p-2">
           {hints.map((hint) => (
             <Button
               key={hint}
@@ -1559,9 +1564,7 @@ function ClientModelField({
           ))}
         </div>
       ) : (
-        <span className="text-xs text-muted-foreground">
-          No active provider account advertises this protocol yet.
-        </span>
+        <span className="text-xs text-muted-foreground">No catalog models yet.</span>
       )}
     </div>
   );
@@ -2432,6 +2435,17 @@ function routableModelsForWireApis(
   return uniqueSorted(
     models.filter((model) => model.enabled && routableIds.has(model.id)).map((model) => model.id),
   );
+}
+
+function catalogModelIds(models: ModelCatalogEntry[]) {
+  return uniqueSorted(models.map((model) => model.id).filter(Boolean));
+}
+
+function preferredCatalogModel(current: string, catalogModels: string[], fallback: string) {
+  if (catalogModels.length === 0) {
+    return current || fallback;
+  }
+  return current && catalogModels.includes(current) ? current : catalogModels[0];
 }
 
 function buildClientSetupSnippets({
