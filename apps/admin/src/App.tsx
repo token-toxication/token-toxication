@@ -500,27 +500,6 @@ function App() {
                   );
                 })}
               </nav>
-              <div className="mt-auto flex flex-col gap-3 rounded-lg border bg-background p-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-medium">Codex endpoint</div>
-                    <div className="text-xs text-muted-foreground">/openai/v1/responses</div>
-                  </div>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="outline"
-                        onClick={() => copyText(`${window.location.origin}/openai/v1/responses`)}
-                      >
-                        <ClipboardCopyIcon />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Copy endpoint</TooltipContent>
-                  </Tooltip>
-                </div>
-              </div>
             </div>
           </aside>
 
