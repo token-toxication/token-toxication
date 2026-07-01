@@ -22,6 +22,10 @@ use uuid::Uuid;
 use crate::{
     AppState,
     auth::{extract_api_key, generate_secret, login, logout, me, require_admin},
+    codex_subscription::{
+        CodexSubscriptionAuthorization, codex_subscription_authorization,
+        is_codex_subscription_auth,
+    },
     error::AppError,
     models::{
         AnthropicModel, AnthropicModelListResponse, ApiKeyListResponse, ApiKeyRecord,
@@ -182,7 +186,7 @@ pub async fn get_anthropic_model(
     Ok(Json(model))
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum WireApi {
     AnthropicMessages,
     OpenAiChat,
@@ -249,12 +253,58 @@ async fn relay_json_endpoint(
         .select_provider_account_for_wire(wire_api.account_value(), model.as_deref())
         .await?
         .ok_or_else(|| AppError::Forbidden("no active provider account is available".into()))?;
-    request_json["model"] = Value::String(selection.upstream_model_id.clone());
+    let public_model_id = selection.public_model_id.clone();
+    let upstream_model_id = selection.upstream_model_id.clone();
+    request_json["model"] = Value::String(upstream_model_id.clone());
     let body = serde_json::to_vec(&request_json)
         .map_err(|error| AppError::Internal(format!("serialize upstream request: {error}")))?;
     let account = selection.account;
+    let codex_auth = if is_codex_subscription_auth(&account.account.auth_mode) {
+        if wire_api != WireApi::OpenAiResponses {
+            return Err(AppError::BadRequest(
+                "Codex subscription providers only support openai-responses routes".into(),
+            ));
+        }
+        match codex_subscription_authorization(&state.db, &state.http, &account).await {
+            Ok(auth) => Some(auth),
+            Err(error) => {
+                record_upstream_failure(
+                    &state,
+                    &account.account.id,
+                    api_key_id.clone(),
+                    wire_api,
+                    (
+                        Some(public_model_id.clone()),
+                        Some(upstream_model_id.clone()),
+                    ),
+                    started,
+                    error.to_string(),
+                )
+                .await?;
+                if matches!(
+                    error.status(),
+                    StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN
+                ) {
+                    state
+                        .db
+                        .mark_provider_result(
+                            &account.account.id,
+                            "blocked",
+                            Some(&error.to_string()),
+                        )
+                        .await?;
+                }
+                return Err(error);
+            }
+        }
+    } else {
+        None
+    };
 
-    let upstream_url = upstream_url(&account.account.base_url, wire_api.upstream_path());
+    let upstream_url = codex_auth
+        .as_ref()
+        .map(|auth| auth.endpoint.clone())
+        .unwrap_or_else(|| upstream_url(&account.account.base_url, wire_api.upstream_path()));
     let request = match state.http.post(&upstream_url) {
         Ok(request) => request
             .header(
@@ -268,10 +318,7 @@ async fn relay_json_endpoint(
                 &account.account.id,
                 api_key_id.clone(),
                 wire_api,
-                (
-                    Some(public_model.clone()),
-                    Some(selection.upstream_model_id.clone()),
-                ),
+                (Some(public_model.clone()), Some(upstream_model_id.clone())),
                 started,
                 error.to_string(),
             )
@@ -280,7 +327,11 @@ async fn relay_json_endpoint(
         }
     };
     let request = apply_protocol_headers(request, wire_api, &headers);
-    let request = match apply_provider_auth(request, &account.account.auth_mode, &account.api_key) {
+    let request = match codex_auth.as_ref() {
+        Some(auth) => apply_codex_subscription_auth(request, auth),
+        None => apply_provider_auth(request, &account.account.auth_mode, &account.api_key),
+    };
+    let request = match request {
         Ok(request) => request,
         Err(error) => {
             record_upstream_failure(
@@ -288,10 +339,7 @@ async fn relay_json_endpoint(
                 &account.account.id,
                 api_key_id.clone(),
                 wire_api,
-                (
-                    Some(public_model.clone()),
-                    Some(selection.upstream_model_id.clone()),
-                ),
+                (Some(public_model.clone()), Some(upstream_model_id.clone())),
                 started,
                 error.to_string(),
             )
@@ -331,8 +379,8 @@ async fn relay_json_endpoint(
                         provider_account_id: Some(account.account.id.clone()),
                         method: "POST".to_string(),
                         path: wire_api.public_path().to_string(),
-                        model: Some(selection.public_model_id.clone()),
-                        upstream_model: Some(selection.upstream_model_id.clone()),
+                        model: Some(public_model_id.clone()),
+                        upstream_model: Some(upstream_model_id.clone()),
                         status_code: status.as_u16(),
                         latency_ms: started.elapsed().as_millis() as u64,
                         input_tokens: 0,
@@ -379,8 +427,8 @@ async fn relay_json_endpoint(
                         provider_account_id: Some(account.account.id.clone()),
                         method: "POST".to_string(),
                         path: wire_api.public_path().to_string(),
-                        model: Some(selection.public_model_id.clone()),
-                        upstream_model: Some(selection.upstream_model_id.clone()),
+                        model: Some(public_model_id.clone()),
+                        upstream_model: Some(upstream_model_id.clone()),
                         status_code: status.as_u16(),
                         latency_ms: started.elapsed().as_millis() as u64,
                         input_tokens: usage.0,
@@ -407,10 +455,7 @@ async fn relay_json_endpoint(
                 &account.account.id,
                 api_key_id,
                 wire_api,
-                (
-                    Some(selection.public_model_id),
-                    Some(selection.upstream_model_id),
-                ),
+                (Some(public_model_id), Some(upstream_model_id)),
                 started,
                 error.to_string(),
             )
@@ -752,11 +797,36 @@ where
 {
     if auth_mode == "bearer" {
         Ok(request.bearer_auth(api_key))
+    } else if auth_mode == "codex-oauth" {
+        Err(AppError::Internal(
+            "codex-oauth provider auth must be resolved before proxying".into(),
+        ))
     } else {
         let api_key = HeaderValue::from_str(api_key)
             .map_err(|error| AppError::Internal(format!("invalid provider API key: {error}")))?;
         Ok(request.header(HeaderName::from_static("x-api-key"), api_key))
     }
+}
+
+fn apply_codex_subscription_auth<'a, R, C>(
+    request: RequestBuilderSend<'a, R, C>,
+    auth: &CodexSubscriptionAuthorization,
+) -> Result<RequestBuilderSend<'a, R, C>, AppError>
+where
+    R: RuntimePoll,
+    C: ConnectorSend,
+{
+    let mut request = request.bearer_auth(&auth.access_token).header(
+        HeaderName::from_static("originator"),
+        HeaderValue::from_static("opencode"),
+    );
+    if let Some(account_id) = &auth.account_id {
+        let account_id = HeaderValue::from_str(account_id).map_err(|error| {
+            AppError::Internal(format!("invalid ChatGPT account id header: {error}"))
+        })?;
+        request = request.header(HeaderName::from_static("chatgpt-account-id"), account_id);
+    }
+    Ok(request)
 }
 
 fn upstream_url(base_url: &str, path: &str) -> String {

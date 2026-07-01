@@ -1585,6 +1585,7 @@ dependencies = [
  "aioduct",
  "anyhow",
  "axum",
+ "base64",
  "chrono",
  "clap",
  "dotenvy",

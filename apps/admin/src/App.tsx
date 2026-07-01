@@ -183,12 +183,21 @@ const accountPresets = [
     wireApi: "anthropic-messages",
   },
   {
-    id: "codex",
-    label: "Codex / OpenAI",
+    id: "openai-responses",
+    label: "OpenAI API key",
     name: "OpenAI Responses",
     provider: "openai",
     baseUrl: "https://api.openai.com",
     authMode: "bearer",
+    wireApi: "openai-responses",
+  },
+  {
+    id: "codex-subscription",
+    label: "Codex subscription",
+    name: "Codex subscription",
+    provider: "codex-subscription",
+    baseUrl: "https://chatgpt.com/backend-api/codex",
+    authMode: "codex-oauth",
     wireApi: "openai-responses",
   },
   {
@@ -1852,6 +1861,7 @@ function CreateAccountSheet({
   onOpenChange: (open: boolean) => void;
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
 }) {
+  const isCodexSubscription = isCodexSubscriptionAuth(form.authMode);
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="overflow-y-auto sm:max-w-lg">
@@ -1933,13 +1943,28 @@ function CreateAccountSheet({
                   <SelectGroup>
                     <SelectItem value="x-api-key">x-api-key</SelectItem>
                     <SelectItem value="bearer">Bearer</SelectItem>
+                    <SelectItem value="codex-oauth">Codex OAuth</SelectItem>
                   </SelectGroup>
                 </SelectContent>
               </Select>
             </Field>
             <SettingRow label="Route binding" value="Configured in Model Catalog" />
           </div>
-          <Field label="Base URL" htmlFor="account-base-url">
+          {isCodexSubscription ? (
+            <Alert>
+              <KeyRoundIcon className="size-4" />
+              <AlertTitle>Codex subscription credential</AlertTitle>
+              <AlertDescription>
+                Paste only the raw refresh token. Codex CLI stores it at ~/.codex/auth.json as
+                tokens.refresh_token; opencode stores it at ~/.local/share/opencode/auth.json as
+                openai.refresh.
+              </AlertDescription>
+            </Alert>
+          ) : null}
+          <Field
+            label={isCodexSubscription ? "Codex endpoint base" : "Base URL"}
+            htmlFor="account-base-url"
+          >
             <Input
               id="account-base-url"
               value={form.baseUrl}
@@ -1949,19 +1974,38 @@ function CreateAccountSheet({
               required
             />
           </Field>
-          <Field label="Upstream API key" htmlFor="account-api-key">
-            <Input
-              id="account-api-key"
-              type="password"
-              value={form.apiKey}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, apiKey: event.target.value }))
-              }
-              required
-            />
+          <Field
+            label={isCodexSubscription ? "Raw refresh token" : "Upstream API key"}
+            htmlFor="account-api-key"
+          >
+            {isCodexSubscription ? (
+              <Textarea
+                id="account-api-key"
+                className="min-h-28 font-mono text-xs"
+                value={form.apiKey}
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, apiKey: event.target.value }))
+                }
+                placeholder="Paste the value from tokens.refresh_token or openai.refresh"
+                required
+              />
+            ) : (
+              <Input
+                id="account-api-key"
+                type="password"
+                value={form.apiKey}
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, apiKey: event.target.value }))
+                }
+                required
+              />
+            )}
           </Field>
           <div className="grid gap-3 sm:grid-cols-[1fr_120px]">
-            <SettingRow label="Upstream path" value={upstreamPathForWireApi(form.wireApi)} />
+            <SettingRow
+              label="Upstream path"
+              value={upstreamPathForWireApi(form.wireApi, form.authMode)}
+            />
             <Field label="Priority" htmlFor="account-priority">
               <Input
                 id="account-priority"
@@ -2560,7 +2604,10 @@ function wireApiLabel(value: string) {
   }
 }
 
-function upstreamPathForWireApi(value: string) {
+function upstreamPathForWireApi(value: string, authMode?: string) {
+  if (isCodexSubscriptionAuth(authMode ?? "")) {
+    return "/backend-api/codex/responses";
+  }
   switch (value) {
     case "openai-chat":
       return "/chat/completions";
@@ -2569,6 +2616,10 @@ function upstreamPathForWireApi(value: string) {
     default:
       return "/v1/messages";
   }
+}
+
+function isCodexSubscriptionAuth(value: string) {
+  return value === "codex-oauth";
 }
 
 function numberFromInput(value: string) {

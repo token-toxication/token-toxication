@@ -88,10 +88,21 @@ route's provider account is blocked or disabled, the next request uses an
 eligible backup route. It does not retry another provider inside the same
 request.
 
-For Codex, add an OpenAI provider account with base URL
-`https://api.openai.com`, Bearer auth, and `openai-responses`. Configure Codex
-with a custom provider using base URL `http://localhost:3000/openai/v1`, wire API
-`responses`, and the generated `tokentoxication-...` key.
+For Codex with an OpenAI API key, add an OpenAI provider account with base URL
+`https://api.openai.com`, Bearer auth, and `openai-responses`. For Codex with
+ChatGPT Plus or Pro subscriptions, add one `codex-subscription` provider account
+per subscription, use `codex-oauth`, set base URL
+`https://chatgpt.com/backend-api/codex`, and paste only the raw refresh token.
+Do not paste the full auth JSON file. Codex CLI stores the token at
+`~/.codex/auth.json` under `tokens.refresh_token`; extract it with
+`jq -r '.tokens.refresh_token' ~/.codex/auth.json`. opencode stores the token at
+`~/.local/share/opencode/auth.json` under `openai.refresh`; extract it with
+`jq -r '.openai.refresh' ~/.local/share/opencode/auth.json`. The relay forwards
+those accounts to `{base_url}/responses` with refreshed ChatGPT OAuth bearer
+tokens. Configure routes normally: one subscription can be primary and other
+subscriptions can be backups. Configure Codex with a custom provider using base URL
+`http://localhost:3000/openai/v1`, wire API `responses`, and the generated
+`tokentoxication-...` key.
 
 For DeepSeek v4, add a DeepSeek provider account with base URL
 `https://api.deepseek.com`, Bearer auth, and `openai-chat`. Use

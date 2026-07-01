@@ -812,6 +812,19 @@ impl Db {
             .map(|record| record.map(|record| record.account))
     }
 
+    pub async fn update_provider_account_secret(
+        &self,
+        id: &str,
+        api_key: &str,
+    ) -> rusqlite::Result<()> {
+        let conn = self.conn.lock().await;
+        conn.execute(
+            "UPDATE provider_accounts SET api_key = ?1 WHERE id = ?2",
+            params![api_key, id],
+        )?;
+        Ok(())
+    }
+
     pub async fn delete_provider_account(&self, id: &str) -> rusqlite::Result<()> {
         let conn = self.conn.lock().await;
         conn.execute("DELETE FROM provider_accounts WHERE id = ?1", params![id])?;
@@ -1084,7 +1097,9 @@ fn normalize_provider(value: &str) -> String {
     let trimmed = value.trim().to_lowercase();
     match trimmed.as_str() {
         "" | "claude" => "anthropic".to_string(),
-        "codex" => "openai".to_string(),
+        "codex" | "chatgpt" | "chatgpt-plus" | "chatgpt-pro" | "openai-codex" => {
+            "codex-subscription".to_string()
+        }
         "deepseek-v4" | "deepseek-v4-flash" | "deepseek-v4-pro" => "deepseek".to_string(),
         "dashscope" | "aliyun" | "qwen3" => "qwen".to_string(),
         "moonshot" => "kimi".to_string(),
@@ -1096,6 +1111,7 @@ fn normalize_provider(value: &str) -> String {
 fn normalize_auth_mode(value: &str) -> String {
     match value.trim().to_lowercase().as_str() {
         "bearer" | "authorization" => "bearer".to_string(),
+        "codex" | "codex-oauth" | "chatgpt" | "chatgpt-oauth" => "codex-oauth".to_string(),
         _ => "x-api-key".to_string(),
     }
 }
@@ -1108,7 +1124,7 @@ fn normalize_wire_api(value: &str, provider: &str) -> String {
         "openai" | "openai-chat" | "chat" | "chat-completions" => "openai-chat".to_string(),
         "openai-responses" | "responses" | "codex" => "openai-responses".to_string(),
         "" => match normalize_provider(provider).as_str() {
-            "openai" => "openai-responses".to_string(),
+            "openai" | "codex-subscription" => "openai-responses".to_string(),
             "deepseek" | "glm" | "kimi" | "qwen" => "openai-chat".to_string(),
             _ => "anthropic-messages".to_string(),
         },
@@ -1124,7 +1140,7 @@ fn normalize_family(value: &str) -> String {
     match value.trim().to_lowercase().as_str() {
         "" => "other".to_string(),
         "anthropic" | "claude" => "anthropic".to_string(),
-        "openai" | "gpt" | "codex" => "openai".to_string(),
+        "openai" | "gpt" | "codex" | "codex-subscription" | "chatgpt" => "openai".to_string(),
         "z.ai" | "zai" | "zhipu" | "zhipuai" => "glm".to_string(),
         other => other.to_string(),
     }
@@ -1324,6 +1340,16 @@ mod tests {
         ] {
             assert_eq!(normalize_wire_api("", provider), "openai-chat");
         }
+    }
+
+    #[test]
+    fn codex_subscription_aliases_default_to_responses() {
+        assert_eq!(normalize_provider("codex"), "codex-subscription");
+        assert_eq!(normalize_auth_mode("chatgpt-oauth"), "codex-oauth");
+        assert_eq!(
+            normalize_wire_api("", "codex-subscription"),
+            "openai-responses"
+        );
     }
 
     #[tokio::test]
