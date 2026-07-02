@@ -10,6 +10,7 @@ export type {
   ModelCatalogEntry,
   ProviderAccount,
   ProviderModelRoute,
+  ProviderPreset,
   RequestLog,
   UpdateApiKeyRequest,
   UpdateModelCatalogEntryRequest,

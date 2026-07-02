@@ -11,9 +11,10 @@ use crate::{
         ApiKeyRecord, ApiKeyView, CreateApiKeyRequest, CreateModelCatalogEntryRequest,
         CreateProviderAccountRequest, CreateProviderModelRouteRequest, Dashboard,
         ModelCatalogEntry, ProviderAccount, ProviderAccountRecord, ProviderModelRoute, RequestLog,
-        UpdateApiKeyRequest, UpdateModelCatalogEntryRequest, UpdateProviderAccountRequest,
-        UpdateProviderModelRouteRequest, UsageSummary,
+        RequestSummary, UpdateApiKeyRequest, UpdateModelCatalogEntryRequest,
+        UpdateProviderAccountRequest, UpdateProviderModelRouteRequest, UsageSummary,
     },
+    provider_catalog::{default_wire_api_for_provider, normalize_provider_alias},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -29,8 +30,10 @@ pub struct RoutableModelCatalogEntry {
 #[derive(Debug, Clone)]
 pub struct ProviderRouteSelection {
     pub account: ProviderAccountRecord,
+    pub route_id: String,
     pub public_model_id: String,
     pub upstream_model_id: String,
+    pub strip_params: Vec<String>,
 }
 
 #[derive(Clone)]
@@ -91,6 +94,8 @@ impl Db {
                 path TEXT NOT NULL,
                 model TEXT,
                 upstream_model TEXT,
+                upstream_url TEXT,
+                request_summary TEXT,
                 status_code INTEGER NOT NULL,
                 latency_ms INTEGER NOT NULL,
                 input_tokens INTEGER NOT NULL DEFAULT 0,
@@ -123,6 +128,12 @@ impl Db {
                 wire_api TEXT NOT NULL,
                 role TEXT NOT NULL DEFAULT 'primary',
                 enabled INTEGER NOT NULL DEFAULT 1,
+                status TEXT NOT NULL DEFAULT 'healthy',
+                last_error TEXT,
+                last_status_code INTEGER,
+                cooldown_until TEXT,
+                last_used_at TEXT,
+                strip_params TEXT NOT NULL DEFAULT '[]',
                 created_at TEXT NOT NULL,
                 FOREIGN KEY(public_model_id) REFERENCES model_catalog(id) ON DELETE CASCADE,
                 FOREIGN KEY(provider_account_id) REFERENCES provider_accounts(id) ON DELETE CASCADE
@@ -139,6 +150,29 @@ impl Db {
             "TEXT NOT NULL DEFAULT 'anthropic-messages'",
         )?;
         ensure_column(&conn, "request_logs", "upstream_model", "TEXT")?;
+        ensure_column(&conn, "request_logs", "upstream_url", "TEXT")?;
+        ensure_column(&conn, "request_logs", "request_summary", "TEXT")?;
+        ensure_column(
+            &conn,
+            "provider_model_routes",
+            "status",
+            "TEXT NOT NULL DEFAULT 'healthy'",
+        )?;
+        ensure_column(&conn, "provider_model_routes", "last_error", "TEXT")?;
+        ensure_column(
+            &conn,
+            "provider_model_routes",
+            "last_status_code",
+            "INTEGER",
+        )?;
+        ensure_column(&conn, "provider_model_routes", "cooldown_until", "TEXT")?;
+        ensure_column(&conn, "provider_model_routes", "last_used_at", "TEXT")?;
+        ensure_column(
+            &conn,
+            "provider_model_routes",
+            "strip_params",
+            "TEXT NOT NULL DEFAULT '[]'",
+        )?;
         conn.execute_batch(
             r#"
             CREATE INDEX IF NOT EXISTS idx_provider_accounts_wire_api
@@ -147,6 +181,8 @@ impl Db {
                 ON model_catalog(enabled, id);
             CREATE INDEX IF NOT EXISTS idx_provider_model_routes_lookup
                 ON provider_model_routes(public_model_id, wire_api, enabled, role);
+            CREATE INDEX IF NOT EXISTS idx_provider_model_routes_health
+                ON provider_model_routes(enabled, status, cooldown_until);
             CREATE UNIQUE INDEX IF NOT EXISTS idx_provider_model_routes_primary
                 ON provider_model_routes(public_model_id, wire_api)
                 WHERE enabled = 1 AND role = 'primary';
@@ -513,7 +549,8 @@ impl Db {
         let conn = self.conn.lock().await;
         let mut stmt = conn.prepare(
             "SELECT id, public_model_id, provider_account_id, upstream_model_id, wire_api,
-                    role, enabled, created_at
+                    role, enabled, status, last_error, last_status_code, cooldown_until,
+                    last_used_at, strip_params, created_at
              FROM provider_model_routes
              ORDER BY public_model_id ASC,
                       CASE role WHEN 'primary' THEN 0 WHEN 'backup' THEN 1 ELSE 2 END,
@@ -536,14 +573,20 @@ impl Db {
             wire_api: normalize_wire_api(&input.wire_api, ""),
             role: normalize_route_role(&input.role),
             enabled: input.enabled,
+            status: "healthy".to_string(),
+            last_error: None,
+            last_status_code: None,
+            cooldown_until: None,
+            last_used_at: None,
+            strip_params: normalize_strip_params(input.strip_params),
             created_at: now,
         };
         let conn = self.conn.lock().await;
         conn.execute(
             "INSERT INTO provider_model_routes
              (id, public_model_id, provider_account_id, upstream_model_id, wire_api, role,
-              enabled, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+              enabled, status, strip_params, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![
                 &route.id,
                 &route.public_model_id,
@@ -552,6 +595,8 @@ impl Db {
                 &route.wire_api,
                 &route.role,
                 bool_to_i64(route.enabled),
+                &route.status,
+                serde_json::to_string(&route.strip_params).unwrap_or_else(|_| "[]".into()),
                 route.created_at.to_rfc3339(),
             ],
         )?;
@@ -590,14 +635,23 @@ impl Db {
                 .map(|value| normalize_route_role(&value))
                 .unwrap_or(current.role),
             enabled: input.enabled.unwrap_or(current.enabled),
+            status: current.status,
+            last_error: current.last_error,
+            last_status_code: current.last_status_code,
+            cooldown_until: current.cooldown_until,
+            last_used_at: current.last_used_at,
+            strip_params: input
+                .strip_params
+                .map(normalize_strip_params)
+                .unwrap_or(current.strip_params),
             created_at: current.created_at,
         };
         let conn = self.conn.lock().await;
         conn.execute(
             "UPDATE provider_model_routes
              SET public_model_id = ?1, provider_account_id = ?2, upstream_model_id = ?3,
-                 wire_api = ?4, role = ?5, enabled = ?6
-             WHERE id = ?7",
+                 wire_api = ?4, role = ?5, enabled = ?6, strip_params = ?7
+             WHERE id = ?8",
             params![
                 &route.public_model_id,
                 &route.provider_account_id,
@@ -605,6 +659,7 @@ impl Db {
                 &route.wire_api,
                 &route.role,
                 bool_to_i64(route.enabled),
+                serde_json::to_string(&route.strip_params).unwrap_or_else(|_| "[]".into()),
                 &route.id,
             ],
         )?;
@@ -618,7 +673,8 @@ impl Db {
         let conn = self.conn.lock().await;
         let mut stmt = conn.prepare(
             "SELECT id, public_model_id, provider_account_id, upstream_model_id, wire_api,
-                    role, enabled, created_at
+                    role, enabled, status, last_error, last_status_code, cooldown_until,
+                    last_used_at, strip_params, created_at
              FROM provider_model_routes
              WHERE id = ?1",
         )?;
@@ -640,6 +696,7 @@ impl Db {
         wire_apis: &[&str],
     ) -> rusqlite::Result<Vec<RoutableModelCatalogEntry>> {
         let conn = self.conn.lock().await;
+        let now = Utc::now().to_rfc3339();
         let mut stmt = conn.prepare(
             "SELECT m.id, m.display_name, m.family, a.provider, r.wire_api, m.created_at
              FROM model_catalog m
@@ -649,13 +706,15 @@ impl Db {
                AND r.enabled = 1
                AND a.is_active = 1
                AND a.status != 'blocked'
+               AND r.status != 'blocked'
+               AND (r.cooldown_until IS NULL OR r.cooldown_until <= ?1)
              ORDER BY m.id ASC,
                       CASE r.role WHEN 'primary' THEN 0 WHEN 'backup' THEN 1 ELSE 2 END,
                       a.priority DESC,
-                      COALESCE(a.last_used_at, '') ASC,
+                      COALESCE(r.last_used_at, a.last_used_at, '') ASC,
                       r.created_at ASC",
         )?;
-        let rows = stmt.query_map([], |row| {
+        let rows = stmt.query_map(params![now], |row| {
             Ok(RoutableModelCatalogEntry {
                 id: row.get(0)?,
                 display_name: row.get(1)?,
@@ -698,10 +757,11 @@ impl Db {
         };
         let wire_api = normalize_wire_api(wire_api, "");
         let conn = self.conn.lock().await;
+        let now = Utc::now().to_rfc3339();
         let mut stmt = conn.prepare(
             "SELECT a.id, a.name, a.provider, a.base_url, a.auth_mode, a.wire_api, a.api_key,
                     a.is_active, a.priority, a.status, a.last_error, a.created_at, a.last_used_at,
-                    r.public_model_id, r.upstream_model_id
+                    r.id, r.public_model_id, r.upstream_model_id, r.strip_params
              FROM model_catalog m
              JOIN provider_model_routes r ON r.public_model_id = m.id
              JOIN provider_accounts a ON a.id = r.provider_account_id
@@ -711,13 +771,15 @@ impl Db {
                AND r.enabled = 1
                AND a.is_active = 1
                AND a.status != 'blocked'
+               AND r.status != 'blocked'
+               AND (r.cooldown_until IS NULL OR r.cooldown_until <= ?3)
              ORDER BY CASE r.role WHEN 'primary' THEN 0 WHEN 'backup' THEN 1 ELSE 2 END,
                       a.priority DESC,
-                      COALESCE(a.last_used_at, '') ASC,
+                      COALESCE(r.last_used_at, a.last_used_at, '') ASC,
                       r.created_at ASC
              LIMIT 1",
         )?;
-        stmt.query_row(params![wire_api, model], route_selection_from_row)
+        stmt.query_row(params![wire_api, model, now], route_selection_from_row)
             .optional()
     }
 
@@ -845,13 +907,58 @@ impl Db {
         Ok(())
     }
 
+    pub async fn mark_route_success(&self, id: &str, status_code: u16) -> rusqlite::Result<()> {
+        let conn = self.conn.lock().await;
+        conn.execute(
+            "UPDATE provider_model_routes
+             SET status = 'healthy',
+                 last_error = NULL,
+                 last_status_code = ?1,
+                 cooldown_until = NULL,
+                 last_used_at = ?2
+             WHERE id = ?3",
+            params![status_code, Utc::now().to_rfc3339(), id],
+        )?;
+        Ok(())
+    }
+
+    pub async fn mark_route_failure(
+        &self,
+        id: &str,
+        status: &str,
+        last_status_code: Option<u16>,
+        error: &str,
+        cooldown_until: Option<DateTime<Utc>>,
+    ) -> rusqlite::Result<()> {
+        let conn = self.conn.lock().await;
+        conn.execute(
+            "UPDATE provider_model_routes
+             SET status = ?1,
+                 last_error = ?2,
+                 last_status_code = ?3,
+                 cooldown_until = ?4,
+                 last_used_at = ?5
+             WHERE id = ?6",
+            params![
+                status,
+                error,
+                last_status_code.map(i64::from),
+                cooldown_until.map(|value| value.to_rfc3339()),
+                Utc::now().to_rfc3339(),
+                id,
+            ],
+        )?;
+        Ok(())
+    }
+
     pub async fn insert_request_log(&self, log: RequestLog) -> rusqlite::Result<()> {
         let conn = self.conn.lock().await;
         conn.execute(
             "INSERT INTO request_logs
              (id, api_key_id, provider_account_id, method, path, model, upstream_model,
-              status_code, latency_ms, input_tokens, output_tokens, cost_usd, created_at, error)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+              upstream_url, request_summary, status_code, latency_ms, input_tokens, output_tokens,
+              cost_usd, created_at, error)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
             params![
                 log.id,
                 log.api_key_id,
@@ -860,6 +967,12 @@ impl Db {
                 log.path,
                 log.model,
                 log.upstream_model,
+                log.upstream_url,
+                log.request_summary
+                    .as_ref()
+                    .map(serde_json::to_string)
+                    .transpose()
+                    .unwrap_or_default(),
                 log.status_code,
                 log.latency_ms,
                 log.input_tokens,
@@ -876,7 +989,8 @@ impl Db {
         let conn = self.conn.lock().await;
         let mut stmt = conn.prepare(
             "SELECT id, api_key_id, provider_account_id, method, path, model, upstream_model,
-                    status_code, latency_ms, input_tokens, output_tokens, cost_usd, created_at, error
+                    upstream_url, request_summary, status_code, latency_ms, input_tokens,
+                    output_tokens, cost_usd, created_at, error
              FROM request_logs
              ORDER BY created_at DESC
              LIMIT ?1",
@@ -1005,6 +1119,7 @@ fn model_catalog_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ModelCata
 }
 
 fn provider_model_route_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ProviderModelRoute> {
+    let strip_params: String = row.get(12)?;
     Ok(ProviderModelRoute {
         id: row.get(0)?,
         public_model_id: row.get(1)?,
@@ -1013,19 +1128,29 @@ fn provider_model_route_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Pr
         wire_api: row.get(4)?,
         role: row.get(5)?,
         enabled: row.get::<_, i64>(6)? == 1,
-        created_at: parse_time(row.get::<_, String>(7)?.as_str()),
+        status: row.get(7)?,
+        last_error: row.get(8)?,
+        last_status_code: row.get::<_, Option<i64>>(9)?.map(|value| value as u16),
+        cooldown_until: parse_time_opt(row.get::<_, Option<String>>(10)?.as_deref()),
+        last_used_at: parse_time_opt(row.get::<_, Option<String>>(11)?.as_deref()),
+        strip_params: serde_json::from_str(&strip_params).unwrap_or_default(),
+        created_at: parse_time(row.get::<_, String>(13)?.as_str()),
     })
 }
 
 fn route_selection_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ProviderRouteSelection> {
+    let strip_params: String = row.get(16)?;
     Ok(ProviderRouteSelection {
         account: account_from_row(row)?,
-        public_model_id: row.get(13)?,
-        upstream_model_id: row.get(14)?,
+        route_id: row.get(13)?,
+        public_model_id: row.get(14)?,
+        upstream_model_id: row.get(15)?,
+        strip_params: serde_json::from_str(&strip_params).unwrap_or_default(),
     })
 }
 
 fn request_log_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<RequestLog> {
+    let request_summary: Option<String> = row.get(8)?;
     Ok(RequestLog {
         id: row.get(0)?,
         api_key_id: row.get(1)?,
@@ -1034,13 +1159,17 @@ fn request_log_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<RequestLog>
         path: row.get(4)?,
         model: row.get(5)?,
         upstream_model: row.get(6)?,
-        status_code: row.get::<_, i64>(7)? as u16,
-        latency_ms: row.get::<_, i64>(8)? as u64,
-        input_tokens: row.get::<_, i64>(9)? as u64,
-        output_tokens: row.get::<_, i64>(10)? as u64,
-        cost_usd: row.get(11)?,
-        created_at: parse_time(row.get::<_, String>(12)?.as_str()),
-        error: row.get(13)?,
+        upstream_url: row.get(7)?,
+        request_summary: request_summary
+            .as_deref()
+            .and_then(|value| serde_json::from_str::<RequestSummary>(value).ok()),
+        status_code: row.get::<_, i64>(9)? as u16,
+        latency_ms: row.get::<_, i64>(10)? as u64,
+        input_tokens: row.get::<_, i64>(11)? as u64,
+        output_tokens: row.get::<_, i64>(12)? as u64,
+        cost_usd: row.get(13)?,
+        created_at: parse_time(row.get::<_, String>(14)?.as_str()),
+        error: row.get(15)?,
     })
 }
 
@@ -1094,33 +1223,7 @@ fn bool_to_i64(value: bool) -> i64 {
 }
 
 fn normalize_provider(value: &str) -> String {
-    let key = value
-        .trim()
-        .to_lowercase()
-        .replace([' ', '_'], "-")
-        .replace('.', "");
-    match key.as_str() {
-        "" | "claude" => "anthropic".to_string(),
-        "codex" | "chatgpt" | "chatgpt-plus" | "chatgpt-pro" | "openai-codex" => {
-            "codex-subscription".to_string()
-        }
-        "deepseek-v4" | "deepseek-v4-flash" | "deepseek-v4-pro" => "deepseek".to_string(),
-        "dashscope" | "aliyun" | "qwen3" => "qwen".to_string(),
-        "kimi" => "kimi-for-coding".to_string(),
-        "moonshot" | "moonshot-ai" => "moonshotai".to_string(),
-        "moonshot-cn" | "moonshot-ai-cn" | "kimi-cn" => "moonshotai-cn".to_string(),
-        "minimax-token-plan" | "minimax-plan" => "minimax-coding-plan".to_string(),
-        "minimax-cn-token-plan" | "minimax-cn-plan" => "minimax-cn-coding-plan".to_string(),
-        "z-ai" | "zai" => "zai".to_string(),
-        "z-ai-coding-plan" | "zai-coding-plan" => "zai-coding-plan".to_string(),
-        "zhipu" | "zhipu-ai" | "zhipuai" | "glm" | "bigmodel" => "zhipuai".to_string(),
-        "zhipu-coding-plan"
-        | "zhipu-ai-coding-plan"
-        | "zhipuai-coding-plan"
-        | "glm-coding-plan"
-        | "bigmodel-coding-plan" => "zhipuai-coding-plan".to_string(),
-        _ => key,
-    }
+    normalize_provider_alias(value)
 }
 
 fn normalize_auth_mode(value: &str) -> String {
@@ -1138,24 +1241,9 @@ fn normalize_wire_api(value: &str, provider: &str) -> String {
         }
         "openai" | "openai-chat" | "chat" | "chat-completions" => "openai-chat".to_string(),
         "openai-responses" | "responses" | "codex" => "openai-responses".to_string(),
-        "" => match normalize_provider(provider).as_str() {
-            "anthropic"
-            | "minimax"
-            | "minimax-coding-plan"
-            | "minimax-cn"
-            | "minimax-cn-coding-plan" => "anthropic-messages".to_string(),
-            "openai" | "codex-subscription" => "openai-responses".to_string(),
-            "deepseek"
-            | "kimi-for-coding"
-            | "moonshotai"
-            | "moonshotai-cn"
-            | "qwen"
-            | "zai"
-            | "zai-coding-plan"
-            | "zhipuai"
-            | "zhipuai-coding-plan" => "openai-chat".to_string(),
-            _ => "anthropic-messages".to_string(),
-        },
+        "" => default_wire_api_for_provider(provider)
+            .unwrap_or("anthropic-messages")
+            .to_string(),
         _ => "anthropic-messages".to_string(),
     }
 }
@@ -1179,6 +1267,18 @@ fn normalize_route_role(value: &str) -> String {
         "backup" | "secondary" | "fallback" => "backup".to_string(),
         _ => "primary".to_string(),
     }
+}
+
+fn normalize_strip_params(values: Vec<String>) -> Vec<String> {
+    let mut params = Vec::new();
+    for value in values {
+        let value = value.trim();
+        if value.is_empty() || params.iter().any(|existing| existing == value) {
+            continue;
+        }
+        params.push(value.to_string());
+    }
+    params
 }
 
 fn default_display_name(value: String, fallback: &str) -> String {
@@ -1241,6 +1341,7 @@ mod tests {
             wire_api: "openai-chat".to_string(),
             role: "backup".to_string(),
             enabled: true,
+            strip_params: Vec::new(),
         })
         .await
         .expect("create backup route");
@@ -1251,6 +1352,7 @@ mod tests {
             wire_api: "openai-chat".to_string(),
             role: "primary".to_string(),
             enabled: true,
+            strip_params: Vec::new(),
         })
         .await
         .expect("create primary route");
@@ -1325,6 +1427,7 @@ mod tests {
             wire_api: "openai-chat".to_string(),
             role: "primary".to_string(),
             enabled: true,
+            strip_params: Vec::new(),
         })
         .await
         .expect("create primary route");
@@ -1335,6 +1438,7 @@ mod tests {
             wire_api: "openai-chat".to_string(),
             role: "backup".to_string(),
             enabled: true,
+            strip_params: Vec::new(),
         })
         .await
         .expect("create backup route");
@@ -1351,6 +1455,100 @@ mod tests {
 
         assert_eq!(selected.account.account.name, "Backup");
         assert_eq!(selected.upstream_model_id, "deepseek-v4-pro-backup");
+
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[tokio::test]
+    async fn backup_route_is_selected_after_primary_route_cools_down() {
+        let path =
+            std::env::temp_dir().join(format!("token-toxication-{}.sqlite3", Uuid::new_v4()));
+        let db = Db::open(&path).await.expect("open test database");
+
+        let primary = db
+            .create_provider_account(CreateProviderAccountRequest {
+                name: "Primary".to_string(),
+                provider: "deepseek".to_string(),
+                base_url: "https://primary.example.com/".to_string(),
+                auth_mode: "bearer".to_string(),
+                wire_api: "openai-chat".to_string(),
+                api_key: "primary-key".to_string(),
+                is_active: true,
+                priority: 100,
+            })
+            .await
+            .expect("create primary account");
+        let backup = db
+            .create_provider_account(CreateProviderAccountRequest {
+                name: "Backup".to_string(),
+                provider: "deepseek".to_string(),
+                base_url: "https://backup.example.com/".to_string(),
+                auth_mode: "bearer".to_string(),
+                wire_api: "openai-chat".to_string(),
+                api_key: "backup-key".to_string(),
+                is_active: true,
+                priority: 0,
+            })
+            .await
+            .expect("create backup account");
+        db.create_model_catalog_entry(CreateModelCatalogEntryRequest {
+            id: "deepseek-v4-flash".to_string(),
+            display_name: String::new(),
+            family: "deepseek".to_string(),
+            enabled: true,
+        })
+        .await
+        .expect("create catalog model");
+        let primary_route = db
+            .create_provider_model_route(CreateProviderModelRouteRequest {
+                public_model_id: "deepseek-v4-flash".to_string(),
+                provider_account_id: primary.id.clone(),
+                upstream_model_id: "deepseek-v4-flash".to_string(),
+                wire_api: "openai-chat".to_string(),
+                role: "primary".to_string(),
+                enabled: true,
+                strip_params: vec!["temperature".to_string()],
+            })
+            .await
+            .expect("create primary route");
+        db.create_provider_model_route(CreateProviderModelRouteRequest {
+            public_model_id: "deepseek-v4-flash".to_string(),
+            provider_account_id: backup.id,
+            upstream_model_id: "deepseek-v4-flash-backup".to_string(),
+            wire_api: "openai-chat".to_string(),
+            role: "backup".to_string(),
+            enabled: true,
+            strip_params: Vec::new(),
+        })
+        .await
+        .expect("create backup route");
+
+        let selected = db
+            .select_provider_account_for_wire("openai-chat", Some("deepseek-v4-flash"))
+            .await
+            .expect("select primary")
+            .expect("primary selected");
+        assert_eq!(selected.route_id, primary_route.id);
+        assert_eq!(selected.strip_params, vec!["temperature"]);
+
+        db.mark_route_failure(
+            &primary_route.id,
+            "cooling_down",
+            Some(429),
+            "upstream returned 429",
+            Some(Utc::now() + chrono::Duration::seconds(60)),
+        )
+        .await
+        .expect("mark route cooling down");
+
+        let selected = db
+            .select_provider_account_for_wire("openai-chat", Some("deepseek-v4-flash"))
+            .await
+            .expect("select backup")
+            .expect("backup selected");
+
+        assert_eq!(selected.account.account.name, "Backup");
+        assert_eq!(selected.upstream_model_id, "deepseek-v4-flash-backup");
 
         let _ = std::fs::remove_file(path);
     }
@@ -1517,6 +1715,7 @@ mod tests {
             wire_api: "openai-chat".to_string(),
             role: "primary".to_string(),
             enabled: true,
+            strip_params: Vec::new(),
         })
         .await
         .expect("create primary route");
@@ -1527,6 +1726,7 @@ mod tests {
             wire_api: "openai-responses".to_string(),
             role: "backup".to_string(),
             enabled: true,
+            strip_params: Vec::new(),
         })
         .await
         .expect("create duplicate route");
@@ -1537,6 +1737,7 @@ mod tests {
             wire_api: "openai-responses".to_string(),
             role: "primary".to_string(),
             enabled: true,
+            strip_params: Vec::new(),
         })
         .await
         .expect("create inactive route");

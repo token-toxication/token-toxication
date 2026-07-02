@@ -8,7 +8,8 @@ use crate::models::{
     ErrorResponse, HealthResponse, LoginRequest, LoginResponse, MetricsResponse, ModelCatalogEntry,
     ModelCatalogEntryResponse, ModelCatalogListResponse, OpenAiModel, OpenAiModelListResponse,
     ProviderAccount, ProviderAccountListResponse, ProviderAccountResponse, ProviderModelRoute,
-    ProviderModelRouteListResponse, ProviderModelRouteResponse, RequestLog, RequestLogListResponse,
+    ProviderModelRouteListResponse, ProviderModelRouteResponse, ProviderPreset,
+    ProviderPresetListResponse, RequestLog, RequestLogListResponse, RequestSummary,
     UpdateApiKeyRequest, UpdateModelCatalogEntryRequest, UpdateProviderAccountRequest,
     UpdateProviderModelRouteRequest, UsageSummary,
 };
@@ -33,6 +34,7 @@ use crate::models::{
         update_api_key,
         delete_api_key,
         list_provider_accounts,
+        list_provider_presets,
         create_provider_account,
         update_provider_account,
         delete_provider_account,
@@ -82,8 +84,11 @@ use crate::models::{
         ProviderModelRoute,
         ProviderModelRouteListResponse,
         ProviderModelRouteResponse,
+        ProviderPreset,
+        ProviderPresetListResponse,
         RequestLog,
         RequestLogListResponse,
+        RequestSummary,
         UpdateApiKeyRequest,
         UpdateModelCatalogEntryRequest,
         UpdateProviderAccountRequest,
@@ -252,6 +257,17 @@ pub fn update_provider_account() {}
     ),
 )]
 pub fn delete_provider_account() {}
+
+#[utoipa::path(
+    get,
+    path = "/admin/api/provider-presets",
+    tag = "Admin",
+    responses(
+        (status = 200, description = "Provider account presets", body = ProviderPresetListResponse),
+        (status = 401, description = "Missing or invalid session", body = ErrorResponse),
+    ),
+)]
+pub fn list_provider_presets() {}
 
 #[utoipa::path(
     get,

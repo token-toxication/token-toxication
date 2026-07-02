@@ -5,7 +5,9 @@ pub mod db;
 pub mod error;
 pub mod models;
 pub mod openapi;
+pub mod provider_catalog;
 pub mod routes;
+pub mod routing;
 
 use std::{path::PathBuf, sync::Arc};
 

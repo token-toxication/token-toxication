@@ -126,6 +126,8 @@ pub struct RequestLog {
     pub path: String,
     pub model: Option<String>,
     pub upstream_model: Option<String>,
+    pub upstream_url: Option<String>,
+    pub request_summary: Option<RequestSummary>,
     pub status_code: u16,
     pub latency_ms: u64,
     pub input_tokens: u64,
@@ -204,6 +206,28 @@ pub struct ProviderAccountResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
+pub struct ProviderPreset {
+    pub id: String,
+    pub label: String,
+    pub name: String,
+    pub provider: String,
+    pub base_url: String,
+    pub auth_mode: String,
+    pub wire_api: String,
+    pub credential_label: String,
+    pub credential_placeholder: String,
+    pub credential_help: String,
+    pub aliases: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderPresetListResponse {
+    pub data: Vec<ProviderPreset>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct ModelCatalogEntry {
     pub id: String,
     pub display_name: String,
@@ -254,6 +278,12 @@ pub struct ProviderModelRoute {
     pub wire_api: String,
     pub role: String,
     pub enabled: bool,
+    pub status: String,
+    pub last_error: Option<String>,
+    pub last_status_code: Option<u16>,
+    pub cooldown_until: Option<DateTime<Utc>>,
+    pub last_used_at: Option<DateTime<Utc>>,
+    pub strip_params: Vec<String>,
     pub created_at: DateTime<Utc>,
 }
 
@@ -268,6 +298,8 @@ pub struct CreateProviderModelRouteRequest {
     pub role: String,
     #[serde(default = "default_active")]
     pub enabled: bool,
+    #[serde(default)]
+    pub strip_params: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -279,6 +311,7 @@ pub struct UpdateProviderModelRouteRequest {
     pub wire_api: Option<String>,
     pub role: Option<String>,
     pub enabled: Option<bool>,
+    pub strip_params: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -297,6 +330,15 @@ pub struct ProviderModelRouteResponse {
 #[serde(rename_all = "camelCase")]
 pub struct RequestLogListResponse {
     pub data: Vec<RequestLog>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RequestSummary {
+    pub top_level_keys: Vec<String>,
+    pub body_bytes: u64,
+    pub stream: bool,
+    pub stripped_params: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

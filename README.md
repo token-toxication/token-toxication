@@ -75,6 +75,11 @@ auth mode, wire protocol, priority, and health state. Model names live in the
 model catalog, and provider model routes bind each public model name to a
 provider account plus exact upstream model name.
 
+Provider presets are served by the backend at `/admin/api/provider-presets` and
+are loaded by the admin UI. The same backend catalog also normalizes provider
+aliases such as Kimi, Moonshot, Z.AI, Zhipu, MiniMax token-plan, DeepSeek v4,
+and Qwen/DashScope names.
+
 For OpenAI-compatible chat providers such as DeepSeek, Qwen, Kimi, Moonshot AI,
 Z.AI, and Zhipu AI, create provider accounts with `openai-chat`, add catalog
 models such as `deepseek-v4-pro`, `glm-5.2`, or `k2p6`, then create primary and
@@ -89,10 +94,18 @@ opencode. Add them with `anthropic-messages` and base URLs such as
 
 Provider model routes are exact and case-preserving. If a client sends
 `MiniMax-M3`, Token Toxication looks up that exact catalog model and rewrites the
-forwarded JSON body to the selected route's `upstreamModelId`. If the primary
-route's provider account is blocked or disabled, the next request uses an
-eligible backup route. It does not retry another provider inside the same
-request.
+forwarded JSON body to the selected route's `upstreamModelId`. Route-level
+`stripParams` remove configured top-level request keys, such as `temperature` or
+`top_p`, after the model rewrite and before proxying. Nested prompt or message
+content is not inspected or persisted for this policy.
+
+Route health is tracked separately from provider account health. A 401 or 403
+blocks the provider account. A 429 cools only the selected route for 60 seconds
+by default; MiniMax `x-model-quota-remaining` values containing `=0` cool that
+selected route for one hour. A 5xx or network failure cools the selected route
+for 30 seconds. If the primary route is disabled, blocked, or still cooling
+down, the next request uses an eligible backup route. It does not retry another
+provider inside the same request.
 
 For Codex with an OpenAI API key, add an OpenAI provider account with base URL
 `https://api.openai.com`, Bearer auth, and `openai-responses`. For Codex with
@@ -119,6 +132,11 @@ Provider presets mirror opencode IDs where available: `minimax`,
 `minimax-coding-plan`, `kimi-for-coding`, `moonshotai`, `zai`,
 `zai-coding-plan`, `zhipuai`, and `zhipuai-coding-plan`. China-region variants
 are also available for MiniMax and Moonshot.
+
+Request logs store sanitized upstream metadata only: the upstream origin and
+path without query parameters, top-level request keys, body byte size, stream
+flag, and stripped param names. They do not store prompt/message/input content,
+authorization headers, API keys, or raw upstream bodies.
 
 ## Configuration
 

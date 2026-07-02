@@ -25,6 +25,7 @@ import type {
   ModelCatalogEntry,
   ProviderAccount,
   ProviderModelRoute,
+  ProviderPreset,
   RequestLog,
 } from "./types";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -120,6 +121,12 @@ type ProviderRouteForm = {
   wireApi: string;
   role: string;
   enabled: boolean;
+  stripParams: string;
+};
+
+type ClientModelOption = {
+  id: string;
+  displayName: string;
 };
 
 const views: Array<{
@@ -170,150 +177,8 @@ const emptyRouteForm: ProviderRouteForm = {
   wireApi: "openai-chat",
   role: "primary",
   enabled: true,
+  stripParams: "",
 };
-
-const accountPresets = [
-  {
-    id: "anthropic",
-    label: "Anthropic",
-    name: "Anthropic primary",
-    provider: "anthropic",
-    baseUrl: "https://api.anthropic.com",
-    authMode: "x-api-key",
-    wireApi: "anthropic-messages",
-  },
-  {
-    id: "openai-responses",
-    label: "OpenAI API key",
-    name: "OpenAI Responses",
-    provider: "openai",
-    baseUrl: "https://api.openai.com",
-    authMode: "bearer",
-    wireApi: "openai-responses",
-  },
-  {
-    id: "codex-subscription",
-    label: "Codex subscription",
-    name: "Codex subscription",
-    provider: "codex-subscription",
-    baseUrl: "https://chatgpt.com/backend-api/codex",
-    authMode: "codex-oauth",
-    wireApi: "openai-responses",
-  },
-  {
-    id: "deepseek-v4",
-    label: "DeepSeek v4",
-    name: "DeepSeek v4",
-    provider: "deepseek",
-    baseUrl: "https://api.deepseek.com",
-    authMode: "bearer",
-    wireApi: "openai-chat",
-  },
-  {
-    id: "minimax",
-    label: "MiniMax",
-    name: "MiniMax",
-    provider: "minimax",
-    baseUrl: "https://api.minimax.io/anthropic/v1",
-    authMode: "x-api-key",
-    wireApi: "anthropic-messages",
-  },
-  {
-    id: "minimax-coding-plan",
-    label: "MiniMax Token Plan",
-    name: "MiniMax Token Plan",
-    provider: "minimax-coding-plan",
-    baseUrl: "https://api.minimax.io/anthropic/v1",
-    authMode: "x-api-key",
-    wireApi: "anthropic-messages",
-  },
-  {
-    id: "minimax-cn",
-    label: "MiniMax China",
-    name: "MiniMax China",
-    provider: "minimax-cn",
-    baseUrl: "https://api.minimaxi.com/anthropic/v1",
-    authMode: "x-api-key",
-    wireApi: "anthropic-messages",
-  },
-  {
-    id: "minimax-cn-coding-plan",
-    label: "MiniMax China Token Plan",
-    name: "MiniMax China Token Plan",
-    provider: "minimax-cn-coding-plan",
-    baseUrl: "https://api.minimaxi.com/anthropic/v1",
-    authMode: "x-api-key",
-    wireApi: "anthropic-messages",
-  },
-  {
-    id: "kimi-for-coding",
-    label: "Kimi",
-    name: "Kimi",
-    provider: "kimi-for-coding",
-    baseUrl: "https://api.kimi.com/coding/v1",
-    authMode: "bearer",
-    wireApi: "openai-chat",
-  },
-  {
-    id: "moonshotai",
-    label: "Moonshot AI",
-    name: "Moonshot AI",
-    provider: "moonshotai",
-    baseUrl: "https://api.moonshot.ai/v1",
-    authMode: "bearer",
-    wireApi: "openai-chat",
-  },
-  {
-    id: "moonshotai-cn",
-    label: "Moonshot AI China",
-    name: "Moonshot AI China",
-    provider: "moonshotai-cn",
-    baseUrl: "https://api.moonshot.cn/v1",
-    authMode: "bearer",
-    wireApi: "openai-chat",
-  },
-  {
-    id: "zai",
-    label: "Z.AI",
-    name: "Z.AI",
-    provider: "zai",
-    baseUrl: "https://api.z.ai/api/paas/v4",
-    authMode: "bearer",
-    wireApi: "openai-chat",
-  },
-  {
-    id: "zai-coding-plan",
-    label: "Z.AI Coding Plan",
-    name: "Z.AI Coding Plan",
-    provider: "zai-coding-plan",
-    baseUrl: "https://api.z.ai/api/coding/paas/v4",
-    authMode: "bearer",
-    wireApi: "openai-chat",
-  },
-  {
-    id: "zhipuai",
-    label: "Zhipu AI",
-    name: "Zhipu AI",
-    provider: "zhipuai",
-    baseUrl: "https://open.bigmodel.cn/api/paas/v4",
-    authMode: "bearer",
-    wireApi: "openai-chat",
-  },
-  {
-    id: "zhipuai-coding-plan",
-    label: "Zhipu AI Coding Plan",
-    name: "Zhipu AI Coding Plan",
-    provider: "zhipuai-coding-plan",
-    baseUrl: "https://open.bigmodel.cn/api/coding/paas/v4",
-    authMode: "bearer",
-    wireApi: "openai-chat",
-  },
-] satisfies Array<
-  Pick<CreateAccountForm, "name" | "provider" | "baseUrl" | "authMode" | "wireApi"> & {
-    id: string;
-    label: string;
-  }
->;
 
 function App() {
   const [token, setToken] = useState(() => getStoredToken());
@@ -323,6 +188,7 @@ function App() {
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
   const [accounts, setAccounts] = useState<ProviderAccount[]>([]);
+  const [providerPresets, setProviderPresets] = useState<ProviderPreset[]>([]);
   const [modelCatalog, setModelCatalog] = useState<ModelCatalogEntry[]>([]);
   const [modelRoutes, setModelRoutes] = useState<ProviderModelRoute[]>([]);
   const [logs, setLogs] = useState<RequestLog[]>([]);
@@ -344,18 +210,27 @@ function App() {
     }
     setIsLoading(true);
     try {
-      const [nextDashboard, nextKeys, nextAccounts, nextCatalog, nextRoutes, nextLogs] =
-        await Promise.all([
-          api.dashboard(),
-          api.apiKeys(),
-          api.providerAccounts(),
-          api.modelCatalog(),
-          api.providerModelRoutes(),
-          api.requestLogs(50),
-        ]);
+      const [
+        nextDashboard,
+        nextKeys,
+        nextAccounts,
+        nextPresets,
+        nextCatalog,
+        nextRoutes,
+        nextLogs,
+      ] = await Promise.all([
+        api.dashboard(),
+        api.apiKeys(),
+        api.providerAccounts(),
+        api.providerPresets(),
+        api.modelCatalog(),
+        api.providerModelRoutes(),
+        api.requestLogs(50),
+      ]);
       setDashboard(nextDashboard);
       setApiKeys(nextKeys);
       setAccounts(nextAccounts);
+      setProviderPresets(nextPresets);
       setModelCatalog(nextCatalog);
       setModelRoutes(nextRoutes);
       setLogs(nextLogs);
@@ -462,6 +337,7 @@ function App() {
       wireApi: createRouteForm.wireApi,
       role: createRouteForm.role,
       enabled: createRouteForm.enabled,
+      stripParams: commaSeparatedValues(createRouteForm.stripParams),
     });
     setCreateRouteForm(emptyRouteForm);
     setIsRouteSheetOpen(false);
@@ -717,6 +593,7 @@ function App() {
         open={isAccountSheetOpen}
         form={createAccountForm}
         setForm={setCreateAccountForm}
+        presets={providerPresets}
         onOpenChange={setIsAccountSheetOpen}
         onSubmit={handleCreateAccount}
       />
@@ -1386,6 +1263,7 @@ function ModelCatalogView({
                 <TableHead>Provider Account</TableHead>
                 <TableHead>Protocol</TableHead>
                 <TableHead>Role</TableHead>
+                <TableHead>Policy</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -1398,8 +1276,18 @@ function ModelCatalogView({
                   <TableCell>{accountName(accounts, route.providerAccountId)}</TableCell>
                   <TableCell>{wireApiLabel(route.wireApi)}</TableCell>
                   <TableCell>{routeRoleBadge(route.role)}</TableCell>
+                  <TableCell className="max-w-[220px] text-xs text-muted-foreground">
+                    {formatRoutePolicy(route)}
+                  </TableCell>
                   <TableCell>
-                    {route.enabled ? statusBadge("healthy", true) : statusBadge("paused", false)}
+                    <div className="flex flex-col gap-1">
+                      {statusBadge(route.status, route.enabled)}
+                      {route.cooldownUntil ? (
+                        <span className="text-xs text-muted-foreground">
+                          until {formatDate(route.cooldownUntil)}
+                        </span>
+                      ) : null}
+                    </div>
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
@@ -1425,7 +1313,7 @@ function ModelCatalogView({
               ))}
               {routes.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7}>
+                  <TableCell colSpan={8}>
                     <EmptyNotice
                       title="No provider routes"
                       body="Add a route to make a catalog model reachable."
@@ -1459,6 +1347,7 @@ function ClientSetupView({
     [],
   );
   const catalogModels = useMemo(() => catalogModelIds(models), [models]);
+  const catalogModelOptions = useMemo(() => enabledCatalogModelOptions(models), [models]);
   const codexModels = useMemo(
     () => routableModelsForWireApis(models, routes, accounts, ["openai-responses"]),
     [accounts, models, routes],
@@ -1495,9 +1384,9 @@ function ClientSetupView({
         codexModel,
         claudeModel,
         opencodeModel,
-        opencodeModels: catalogModels,
+        opencodeModels: catalogModelOptions,
       }),
-    [apiKey, serviceOrigin, codexModel, claudeModel, opencodeModel, catalogModels],
+    [apiKey, serviceOrigin, codexModel, claudeModel, opencodeModel, catalogModelOptions],
   );
   const keyLooksValid = apiKey.trim() === "" || apiKey.trim().startsWith("tokentoxication-");
 
@@ -1725,7 +1614,9 @@ function RequestLogsView({
     <Card>
       <CardHeader>
         <CardTitle>{compact ? "Recent requests" : "Request Log"}</CardTitle>
-        <CardDescription>Relay status, latency, model, and token accounting.</CardDescription>
+        <CardDescription>
+          Relay status, latency, model, sanitized routing metadata, and token accounting.
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="hidden md:block">
@@ -1735,6 +1626,7 @@ function RequestLogsView({
                 <TableHead>Time</TableHead>
                 <TableHead>Path</TableHead>
                 <TableHead>Model</TableHead>
+                <TableHead>Request</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Latency</TableHead>
                 <TableHead>Tokens</TableHead>
@@ -1744,8 +1636,20 @@ function RequestLogsView({
               {logs.map((log) => (
                 <TableRow key={log.id}>
                   <TableCell>{formatDate(log.createdAt)}</TableCell>
-                  <TableCell className="font-mono text-xs">{log.path}</TableCell>
+                  <TableCell>
+                    <div className="flex max-w-[280px] flex-col gap-1">
+                      <span className="truncate font-mono text-xs">{log.path}</span>
+                      {log.upstreamUrl ? (
+                        <span className="truncate font-mono text-xs text-muted-foreground">
+                          {log.upstreamUrl}
+                        </span>
+                      ) : null}
+                    </div>
+                  </TableCell>
                   <TableCell>{formatLogModel(log)}</TableCell>
+                  <TableCell className="max-w-[320px] text-xs text-muted-foreground">
+                    {formatRequestSummary(log)}
+                  </TableCell>
                   <TableCell>{statusCodeBadge(log.statusCode)}</TableCell>
                   <TableCell>{log.latencyMs}ms</TableCell>
                   <TableCell>{formatNumber(log.inputTokens + log.outputTokens)}</TableCell>
@@ -1753,7 +1657,7 @@ function RequestLogsView({
               ))}
               {logs.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6}>
+                  <TableCell colSpan={7}>
                     <EmptyNotice
                       title="No relay traffic"
                       body="Requests appear here after clients call the relay."
@@ -1779,6 +1683,11 @@ function RequestLogsView({
                     <div className="truncate text-xs text-muted-foreground">
                       {formatLogModel(log)}
                     </div>
+                    {log.upstreamUrl ? (
+                      <div className="truncate font-mono text-xs text-muted-foreground">
+                        {log.upstreamUrl}
+                      </div>
+                    ) : null}
                   </div>
                   {statusCodeBadge(log.statusCode)}
                 </div>
@@ -1787,6 +1696,7 @@ function RequestLogsView({
                   <span>{log.latencyMs}ms</span>
                   <span>{formatNumber(log.inputTokens + log.outputTokens)} tokens</span>
                 </div>
+                <div className="text-xs text-muted-foreground">{formatRequestSummary(log)}</div>
               </div>
             ))
           )}
@@ -1951,16 +1861,27 @@ function CreateAccountSheet({
   open,
   form,
   setForm,
+  presets,
   onOpenChange,
   onSubmit,
 }: {
   open: boolean;
   form: CreateAccountForm;
   setForm: React.Dispatch<React.SetStateAction<CreateAccountForm>>;
+  presets: ProviderPreset[];
   onOpenChange: (open: boolean) => void;
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
 }) {
   const isCodexSubscription = isCodexSubscriptionAuth(form.authMode);
+  const selectedPreset = providerPresetForForm(form, presets);
+  const credentialLabel =
+    selectedPreset?.credentialLabel ??
+    (isCodexSubscription ? "Raw refresh token" : "Upstream API key");
+  const credentialPlaceholder =
+    selectedPreset?.credentialPlaceholder ??
+    (isCodexSubscription
+      ? "Paste the value from tokens.refresh_token or openai.refresh"
+      : "Upstream credential");
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="overflow-y-auto sm:max-w-lg">
@@ -1971,10 +1892,10 @@ function CreateAccountSheet({
         <form className="flex flex-col gap-4 px-4" onSubmit={onSubmit}>
           <Field label="Preset" htmlFor="account-preset">
             <Select
-              value={accountPresetValue(form)}
+              value={accountPresetValue(form, presets)}
               onValueChange={(value) => {
                 if (value !== "custom") {
-                  applyAccountPreset(value, setForm);
+                  applyAccountPreset(value, presets, setForm);
                 }
               }}
             >
@@ -1983,7 +1904,7 @@ function CreateAccountSheet({
               </SelectTrigger>
               <SelectContent>
                 <SelectGroup>
-                  {accountPresets.map((preset) => (
+                  {presets.map((preset) => (
                     <SelectItem key={preset.id} value={preset.id}>
                       {preset.label}
                     </SelectItem>
@@ -2049,15 +1970,11 @@ function CreateAccountSheet({
             </Field>
             <SettingRow label="Route binding" value="Configured in Model Catalog" />
           </div>
-          {isCodexSubscription ? (
+          {selectedPreset?.credentialHelp ? (
             <Alert>
               <KeyRoundIcon className="size-4" />
-              <AlertTitle>Codex subscription credential</AlertTitle>
-              <AlertDescription>
-                Paste only the raw refresh token. Codex CLI stores it at ~/.codex/auth.json as
-                tokens.refresh_token; opencode stores it at ~/.local/share/opencode/auth.json as
-                openai.refresh.
-              </AlertDescription>
+              <AlertTitle>{selectedPreset.label} credential</AlertTitle>
+              <AlertDescription>{selectedPreset.credentialHelp}</AlertDescription>
             </Alert>
           ) : null}
           <Field
@@ -2073,10 +1990,7 @@ function CreateAccountSheet({
               required
             />
           </Field>
-          <Field
-            label={isCodexSubscription ? "Raw refresh token" : "Upstream API key"}
-            htmlFor="account-api-key"
-          >
+          <Field label={credentialLabel} htmlFor="account-api-key">
             {isCodexSubscription ? (
               <Textarea
                 id="account-api-key"
@@ -2085,7 +1999,7 @@ function CreateAccountSheet({
                 onChange={(event) =>
                   setForm((current) => ({ ...current, apiKey: event.target.value }))
                 }
-                placeholder="Paste the value from tokens.refresh_token or openai.refresh"
+                placeholder={credentialPlaceholder}
                 required
               />
             ) : (
@@ -2096,6 +2010,7 @@ function CreateAccountSheet({
                 onChange={(event) =>
                   setForm((current) => ({ ...current, apiKey: event.target.value }))
                 }
+                placeholder={credentialPlaceholder}
                 required
               />
             )}
@@ -2346,6 +2261,16 @@ function CreateRouteSheet({
               </Select>
             </Field>
           </div>
+          <Field label="Strip request params" htmlFor="route-strip-params">
+            <Input
+              id="route-strip-params"
+              value={form.stripParams}
+              onChange={(event) =>
+                setForm((current) => ({ ...current, stripParams: event.target.value }))
+              }
+              placeholder="temperature, top_p"
+            />
+          </Field>
           <div className="flex items-center justify-between gap-3 rounded-md border p-3">
             <div className="flex flex-col gap-1">
               <Label htmlFor="route-enabled">Enabled</Label>
@@ -2491,6 +2416,22 @@ function uniqueSorted(values: string[]) {
   return Array.from(new Set(values)).sort((left, right) => left.localeCompare(right));
 }
 
+function commaSeparatedValues(value: string) {
+  return uniqueSorted(
+    value
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean),
+  );
+}
+
+function formatRoutePolicy(route: ProviderModelRoute) {
+  if (route.stripParams.length === 0) {
+    return "No stripped params";
+  }
+  return `strip ${route.stripParams.join(", ")}`;
+}
+
 function statusCodeBadge(status: number) {
   if (status >= 200 && status < 300) {
     return <Badge variant="secondary">{status}</Badge>;
@@ -2509,6 +2450,18 @@ function formatLogModel(log: RequestLog) {
   return `${publicModel} -> ${log.upstreamModel}`;
 }
 
+function formatRequestSummary(log: RequestLog) {
+  const summary = log.requestSummary;
+  if (!summary) {
+    return "No request summary";
+  }
+  const stream = summary.stream ? "stream" : "non-stream";
+  const keys = summary.topLevelKeys.length > 0 ? summary.topLevelKeys.join(", ") : "no keys";
+  const stripped =
+    summary.strippedParams.length > 0 ? ` · stripped ${summary.strippedParams.join(", ")}` : "";
+  return `${formatNumber(summary.bodyBytes)} bytes · ${stream} · keys ${keys}${stripped}`;
+}
+
 function buildTrend(logs: readonly RequestLog[]) {
   const buckets = new Array<number>(12).fill(0);
   logs.forEach((_, index) => {
@@ -2521,23 +2474,26 @@ function currentViewLabel(view: View) {
   return views.find((item) => item.id === view)?.label ?? "Overview";
 }
 
-function accountPresetValue(form: CreateAccountForm) {
-  return (
-    accountPresets.find(
-      (preset) =>
-        preset.provider === form.provider &&
-        preset.baseUrl === form.baseUrl &&
-        preset.authMode === form.authMode &&
-        preset.wireApi === form.wireApi,
-    )?.id ?? "custom"
+function providerPresetForForm(form: CreateAccountForm, presets: ProviderPreset[]) {
+  return presets.find(
+    (preset) =>
+      preset.provider === form.provider &&
+      preset.baseUrl === form.baseUrl &&
+      preset.authMode === form.authMode &&
+      preset.wireApi === form.wireApi,
   );
+}
+
+function accountPresetValue(form: CreateAccountForm, presets: ProviderPreset[]) {
+  return providerPresetForForm(form, presets)?.id ?? "custom";
 }
 
 function applyAccountPreset(
   presetId: string,
+  presets: ProviderPreset[],
   setForm: React.Dispatch<React.SetStateAction<CreateAccountForm>>,
 ) {
-  const preset = accountPresets.find((item) => item.id === presetId);
+  const preset = presets.find((item) => item.id === presetId);
   if (!preset) {
     return;
   }
@@ -2567,7 +2523,7 @@ function routableModelsForWireApis(
     routes
       .filter(
         (route) =>
-          route.enabled &&
+          routeIsEligible(route) &&
           acceptedWireApis.has(route.wireApi) &&
           activeAccounts.has(route.providerAccountId),
       )
@@ -2578,8 +2534,41 @@ function routableModelsForWireApis(
   );
 }
 
+function routeIsEligible(route: ProviderModelRoute) {
+  return (
+    route.enabled &&
+    route.status !== "blocked" &&
+    (!route.cooldownUntil || new Date(route.cooldownUntil).getTime() <= Date.now())
+  );
+}
+
 function catalogModelIds(models: ModelCatalogEntry[]) {
-  return uniqueSorted(models.map((model) => model.id).filter(Boolean));
+  return uniqueSorted(models.filter((model) => model.enabled).map((model) => model.id));
+}
+
+function enabledCatalogModelOptions(models: ModelCatalogEntry[]): ClientModelOption[] {
+  return models
+    .filter((model) => model.enabled && model.id)
+    .map((model) => ({
+      id: model.id,
+      displayName: model.displayName || model.id,
+    }))
+    .sort((left, right) => left.id.localeCompare(right.id));
+}
+
+function uniqueModelOptions(models: ClientModelOption[]) {
+  const byId = new Map<string, ClientModelOption>();
+  models.forEach((model) => {
+    const id = model.id.trim();
+    if (!id || byId.has(id)) {
+      return;
+    }
+    byId.set(id, {
+      id,
+      displayName: model.displayName.trim() || id,
+    });
+  });
+  return Array.from(byId.values()).sort((left, right) => left.id.localeCompare(right.id));
 }
 
 function preferredCatalogModel(current: string, catalogModels: string[], fallback: string) {
@@ -2602,7 +2591,7 @@ function buildClientSetupSnippets({
   codexModel: string;
   claudeModel: string;
   opencodeModel: string;
-  opencodeModels: string[];
+  opencodeModels: ClientModelOption[];
 }) {
   const origin = serviceOrigin.replace(/\/+$/, "");
   const relayApiKey = apiKey.trim() || "tokentoxication-REPLACE_ME";
@@ -2611,9 +2600,14 @@ function buildClientSetupSnippets({
   const codexModelName = codexModel.trim() || "gpt-5";
   const claudeModelName = claudeModel.trim() || "claude-sonnet-4-5";
   const opencodeModelName = opencodeModel.trim() || "deepseek-v4";
-  const opencodeModelNames = uniqueSorted([
-    opencodeModelName,
-    ...opencodeModels.map((model) => model.trim()).filter(Boolean),
+  const opencodeModelEntries = uniqueModelOptions([
+    {
+      id: opencodeModelName,
+      displayName:
+        opencodeModels.find((model) => model.id === opencodeModelName)?.displayName ||
+        opencodeModelName,
+    },
+    ...opencodeModels,
   ]);
   const opencodeProvider = "token-toxication";
   const opencodeConfig = JSON.stringify(
@@ -2628,10 +2622,10 @@ function buildClientSetupSnippets({
             apiKey: "{env:TOKEN_TOXICATION_API_KEY}",
           },
           models: Object.fromEntries(
-            opencodeModelNames.map((model) => [
-              model,
+            opencodeModelEntries.map((model) => [
+              model.id,
               {
-                name: model,
+                name: model.displayName,
               },
             ]),
           ),
