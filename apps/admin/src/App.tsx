@@ -136,6 +136,12 @@ type ClientModelOption = {
   displayName: string;
 };
 
+type OpencodeWireApi = "openai-chat" | "openai-responses";
+
+type OpencodeModelOption = ClientModelOption & {
+  wireApi: OpencodeWireApi;
+};
+
 type CodexQuotaRow = {
   limitId: string;
   displayName: string;
@@ -1959,9 +1965,12 @@ function ClientSetupView({
     [],
   );
   const catalogModels = useMemo(() => catalogModelIds(models), [models]);
-  const catalogModelOptions = useMemo(() => enabledCatalogModelOptions(models), [models]);
   const codexModels = useMemo(
     () => routableModelsForWireApis(models, routes, accounts, ["openai-responses"]),
+    [accounts, models, routes],
+  );
+  const chatModels = useMemo(
+    () => routableModelsForWireApis(models, routes, accounts, ["openai-chat"]),
     [accounts, models, routes],
   );
   const claudeModels = useMemo(
@@ -1969,12 +1978,16 @@ function ClientSetupView({
     [accounts, models, routes],
   );
   const opencodeModels = useMemo(
-    () => routableModelsForWireApis(models, routes, accounts, ["openai-chat"]),
+    () => opencodeModelOptions(models, routes, accounts),
     [accounts, models, routes],
   );
+  const opencodeModelIds = useMemo(() => opencodeModels.map((model) => model.id), [opencodeModels]);
   const [codexModel, setCodexModel] = useState("");
   const [claudeModel, setClaudeModel] = useState("");
   const [opencodeModel, setOpencodeModel] = useState("");
+  const selectedOpencodeModel = opencodeModelIds.includes(opencodeModel)
+    ? opencodeModel
+    : (opencodeModelIds[0] ?? "");
 
   useEffect(() => {
     setCodexModel((current) => preferredCatalogModel(current, catalogModels, "gpt-5"));
@@ -1984,9 +1997,9 @@ function ClientSetupView({
     setClaudeModel((current) => preferredCatalogModel(current, catalogModels, "claude-sonnet-4-5"));
   }, [catalogModels]);
 
-  useEffect(() => {
-    setOpencodeModel((current) => preferredCatalogModel(current, catalogModels, "deepseek-v4"));
-  }, [catalogModels]);
+  const opencodeWireApi = opencodeModels.find(
+    (model) => model.id === selectedOpencodeModel,
+  )?.wireApi;
 
   const snippets = useMemo(
     () =>
@@ -1995,10 +2008,10 @@ function ClientSetupView({
         serviceOrigin,
         codexModel,
         claudeModel,
-        opencodeModel,
-        opencodeModels: catalogModelOptions,
+        opencodeModel: selectedOpencodeModel,
+        opencodeModels,
       }),
-    [apiKey, serviceOrigin, codexModel, claudeModel, opencodeModel, catalogModelOptions],
+    [apiKey, serviceOrigin, codexModel, claudeModel, selectedOpencodeModel, opencodeModels],
   );
   const keyLooksValid = apiKey.trim() === "" || apiKey.trim().startsWith("tokentoxication-");
 
@@ -2042,7 +2055,7 @@ function ClientSetupView({
             <SettingRow label="Anthropic base" value={snippets.anthropicBaseUrl} />
             <div className="grid gap-3 sm:grid-cols-2">
               <SettingRow label="Catalog models" value={String(catalogModels.length)} />
-              <SettingRow label="Chat routed" value={String(opencodeModels.length)} />
+              <SettingRow label="Chat routed" value={String(chatModels.length)} />
               <SettingRow label="Responses routed" value={String(codexModels.length)} />
               <SettingRow label="Messages routed" value={String(claudeModels.length)} />
             </div>
@@ -2079,11 +2092,11 @@ function ClientSetupView({
               <ClientModelField
                 id="setup-opencode-model"
                 label="opencode"
-                value={opencodeModel}
+                value={selectedOpencodeModel}
                 onChange={setOpencodeModel}
-                options={catalogModels}
-                routedOptions={opencodeModels}
-                routeLabel="Chat"
+                options={opencodeModelIds}
+                routedOptions={opencodeModelIds}
+                routeLabel="Chat or Responses"
               />
             </div>
           )}
@@ -2116,13 +2129,24 @@ function ClientSetupView({
             />
           </TabsContent>
           <TabsContent value="opencode">
-            <ClientSnippetCard
-              title="opencode project config"
-              description="Creates an OpenAI-compatible provider backed by the chat namespace."
-              endpoint="/openai/v1/chat/completions"
-              model={opencodeModel}
-              snippet={snippets.opencode}
-            />
+            {opencodeModels.length > 0 ? (
+              <ClientSnippetCard
+                title="opencode project config"
+                description="Binds each model to the AI SDK matching its configured OpenAI route."
+                endpoint={
+                  opencodeWireApi === "openai-responses"
+                    ? "/openai/v1/responses"
+                    : "/openai/v1/chat/completions"
+                }
+                model={selectedOpencodeModel}
+                snippet={snippets.opencode}
+              />
+            ) : (
+              <EmptyNotice
+                title="No opencode routes"
+                body="Add an eligible OpenAI Chat or Responses route to generate an opencode config."
+              />
+            )}
           </TabsContent>
         </Tabs>
       ) : null}
@@ -3324,19 +3348,22 @@ function enabledCatalogModelOptions(models: ModelCatalogEntry[]): ClientModelOpt
     .sort((left, right) => left.id.localeCompare(right.id));
 }
 
-function uniqueModelOptions(models: ClientModelOption[]) {
-  const byId = new Map<string, ClientModelOption>();
-  models.forEach((model) => {
-    const id = model.id.trim();
-    if (!id || byId.has(id)) {
-      return;
-    }
-    byId.set(id, {
-      id,
-      displayName: model.displayName.trim() || id,
-    });
-  });
-  return Array.from(byId.values()).sort((left, right) => left.id.localeCompare(right.id));
+function opencodeModelOptions(
+  models: ModelCatalogEntry[],
+  routes: ProviderModelRoute[],
+  accounts: ProviderAccount[],
+): OpencodeModelOption[] {
+  const chatModels = new Set(routableModelsForWireApis(models, routes, accounts, ["openai-chat"]));
+  const responseModels = new Set(
+    routableModelsForWireApis(models, routes, accounts, ["openai-responses"]),
+  );
+
+  return enabledCatalogModelOptions(models)
+    .filter((model) => chatModels.has(model.id) || responseModels.has(model.id))
+    .map((model) => ({
+      ...model,
+      wireApi: responseModels.has(model.id) ? "openai-responses" : "openai-chat",
+    }));
 }
 
 function preferredCatalogModel(current: string, catalogModels: string[], fallback: string) {
@@ -3359,7 +3386,7 @@ function buildClientSetupSnippets({
   codexModel: string;
   claudeModel: string;
   opencodeModel: string;
-  opencodeModels: ClientModelOption[];
+  opencodeModels: OpencodeModelOption[];
 }) {
   const origin = serviceOrigin.replace(/\/+$/, "");
   const relayApiKey = apiKey.trim() || "tokentoxication-REPLACE_ME";
@@ -3367,40 +3394,40 @@ function buildClientSetupSnippets({
   const anthropicBaseUrl = `${origin}/anthropic`;
   const codexModelName = codexModel.trim() || "gpt-5";
   const claudeModelName = claudeModel.trim() || "claude-sonnet-4-5";
-  const opencodeModelName = opencodeModel.trim() || "deepseek-v4";
-  const opencodeModelEntries = uniqueModelOptions([
-    {
-      id: opencodeModelName,
-      displayName:
-        opencodeModels.find((model) => model.id === opencodeModelName)?.displayName ||
-        opencodeModelName,
-    },
-    ...opencodeModels,
-  ]);
+  const opencodeModelName = opencodeModel.trim() || opencodeModels[0]?.id || "";
   const opencodeProvider = "token-toxication";
   const opencodeConfig = JSON.stringify(
     {
       $schema: "https://opencode.ai/config.json",
       provider: {
         [opencodeProvider]: {
-          npm: "@ai-sdk/openai-compatible",
           name: "Token Toxication",
           options: {
             baseURL: openaiBaseUrl,
             apiKey: "{env:TOKEN_TOXICATION_API_KEY}",
           },
           models: Object.fromEntries(
-            opencodeModelEntries.map((model) => [
+            opencodeModels.map((model) => [
               model.id,
               {
                 name: model.displayName,
+                provider: {
+                  npm:
+                    model.wireApi === "openai-responses"
+                      ? "@ai-sdk/openai"
+                      : "@ai-sdk/openai-compatible",
+                },
               },
             ]),
           ),
         },
       },
-      model: `${opencodeProvider}/${opencodeModelName}`,
-      small_model: `${opencodeProvider}/${opencodeModelName}`,
+      ...(opencodeModelName
+        ? {
+            model: `${opencodeProvider}/${opencodeModelName}`,
+            small_model: `${opencodeProvider}/${opencodeModelName}`,
+          }
+        : {}),
     },
     null,
     2,
