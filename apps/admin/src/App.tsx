@@ -3148,10 +3148,24 @@ function TrendChart({ values }: { values: number[] }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="h-60 rounded-lg border bg-muted/30 p-4">
-        <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="h-full w-full">
-          <polyline points={points} fill="none" stroke="currentColor" strokeWidth="2" />
-          <polygon points={`0,100 ${points} 100,100`} className="fill-primary/10" />
+      <div className="h-48 overflow-hidden rounded-lg border bg-muted/20 p-4">
+        <svg
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+          className="h-full w-full text-foreground/70"
+          role="img"
+          aria-label="Recent request volume"
+        >
+          <polygon points={`0,100 ${points} 100,100`} className="fill-primary/5" />
+          <polyline
+            points={points}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            vectorEffect="non-scaling-stroke"
+          />
         </svg>
       </div>
       <div className="grid gap-3 md:grid-cols-3">
