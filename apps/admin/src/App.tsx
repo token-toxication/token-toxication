@@ -10,6 +10,7 @@ import {
   LayoutDashboardIcon,
   LogInIcon,
   LogOutIcon,
+  PencilIcon,
   PlusIcon,
   RefreshCcwIcon,
   RouteIcon,
@@ -193,6 +194,19 @@ const emptyAccountForm: CreateAccountForm = {
   priority: "0",
 };
 
+function accountFormFromAccount(account: ProviderAccount): CreateAccountForm {
+  return {
+    name: account.name,
+    provider: account.provider,
+    baseUrl: account.baseUrl,
+    authMode: account.authMode,
+    wireApi: account.wireApi,
+    apiKey: "",
+    isActive: account.isActive,
+    priority: String(account.priority),
+  };
+}
+
 const emptyModelForm: ModelCatalogForm = {
   id: "",
   displayName: "",
@@ -225,6 +239,7 @@ function App() {
   const [isLoading, setIsLoading] = useState(Boolean(token));
   const [isKeySheetOpen, setIsKeySheetOpen] = useState(false);
   const [isAccountSheetOpen, setIsAccountSheetOpen] = useState(false);
+  const [editingAccount, setEditingAccount] = useState<ProviderAccount | null>(null);
   const [isModelSheetOpen, setIsModelSheetOpen] = useState(false);
   const [isRouteSheetOpen, setIsRouteSheetOpen] = useState(false);
   const [createKeyForm, setCreateKeyForm] = useState<CreateKeyForm>(emptyKeyForm);
@@ -297,6 +312,7 @@ function App() {
         return;
       }
       if (event.data.success) {
+        setEditingAccount(null);
         setCreateAccountForm(emptyAccountForm);
         setIsAccountSheetOpen(false);
         toast.success("Antigravity account connected");
@@ -357,28 +373,67 @@ function App() {
     await refresh();
   }
 
-  async function handleCreateAccount(event: React.FormEvent<HTMLFormElement>) {
+  function openCreateAccount() {
+    setEditingAccount(null);
+    setCreateAccountForm(emptyAccountForm);
+    setIsAccountSheetOpen(true);
+  }
+
+  function openEditAccount(account: ProviderAccount) {
+    setEditingAccount(account);
+    setCreateAccountForm(accountFormFromAccount(account));
+    setIsAccountSheetOpen(true);
+  }
+
+  function closeAccountSheet() {
+    setEditingAccount(null);
+    setCreateAccountForm(emptyAccountForm);
+    setIsAccountSheetOpen(false);
+  }
+
+  function handleAccountSheetOpenChange(open: boolean) {
+    if (open) {
+      setIsAccountSheetOpen(true);
+    } else {
+      closeAccountSheet();
+    }
+  }
+
+  async function handleSaveAccount(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (isAntigravityAccountAuth(createAccountForm.authMode)) {
+    if (!editingAccount && isAntigravityAccountAuth(createAccountForm.authMode)) {
       await launchAntigravityOAuth({
         name: createAccountForm.name,
         priority: numberFromInput(createAccountForm.priority),
       });
       return;
     }
-    await api.createProviderAccount({
-      name: createAccountForm.name,
-      provider: createAccountForm.provider,
-      baseUrl: createAccountForm.baseUrl,
-      authMode: createAccountForm.authMode,
-      wireApi: createAccountForm.wireApi,
-      apiKey: createAccountForm.apiKey,
-      isActive: createAccountForm.isActive,
-      priority: numberFromInput(createAccountForm.priority),
-    });
-    setCreateAccountForm(emptyAccountForm);
-    setIsAccountSheetOpen(false);
-    toast.success("Provider account created");
+    if (editingAccount) {
+      await api.updateProviderAccount(editingAccount.id, {
+        name: createAccountForm.name,
+        provider: createAccountForm.provider,
+        baseUrl: createAccountForm.baseUrl,
+        authMode: createAccountForm.authMode,
+        wireApi: createAccountForm.wireApi,
+        apiKey: createAccountForm.apiKey.trim() || undefined,
+        isActive: createAccountForm.isActive,
+        priority: numberFromInput(createAccountForm.priority),
+      });
+      toast.success("Provider account updated");
+    } else {
+      await api.createProviderAccount({
+        name: createAccountForm.name,
+        provider: createAccountForm.provider,
+        baseUrl: createAccountForm.baseUrl,
+        authMode: createAccountForm.authMode,
+        wireApi: createAccountForm.wireApi,
+        apiKey: createAccountForm.apiKey,
+        isActive: createAccountForm.isActive,
+        priority: numberFromInput(createAccountForm.priority),
+      });
+      toast.success("Provider account created");
+    }
+    closeAccountSheet();
     await refresh();
   }
 
@@ -544,6 +599,25 @@ function App() {
     await refresh();
   }
 
+  async function deleteAccount(account: ProviderAccount) {
+    const dependentRoutes = routeCountForAccount(modelRoutes, account.id);
+    const routeWarning =
+      dependentRoutes === 0
+        ? ""
+        : ` This will also delete ${dependentRoutes} provider route${dependentRoutes === 1 ? "" : "s"}.`;
+    if (
+      !window.confirm(
+        `Delete provider account "${account.name}"? This cannot be undone.${routeWarning}`,
+      )
+    ) {
+      return;
+    }
+
+    await api.deleteProviderAccount(account.id);
+    toast.success("Provider account deleted");
+    await refresh();
+  }
+
   if (!token) {
     return (
       <TooltipProvider>
@@ -678,7 +752,7 @@ function App() {
                     <Overview
                       dashboard={dashboard}
                       onCreateKey={() => setIsKeySheetOpen(true)}
-                      onCreateAccount={() => setIsAccountSheetOpen(true)}
+                      onCreateAccount={openCreateAccount}
                     />
                   ) : null}
                   {view === "keys" ? (
@@ -693,8 +767,10 @@ function App() {
                     <AccountsView
                       accounts={accounts}
                       routes={modelRoutes}
-                      onCreate={() => setIsAccountSheetOpen(true)}
+                      onCreate={openCreateAccount}
                       onToggle={toggleAccount}
+                      onDelete={deleteAccount}
+                      onEdit={openEditAccount}
                       onInspectCodex={inspectCodexAccount}
                       onInspectGemini={inspectGeminiAccount}
                       onReconnectAntigravity={reconnectAntigravityAccount}
@@ -743,8 +819,9 @@ function App() {
         form={createAccountForm}
         setForm={setCreateAccountForm}
         presets={providerPresets}
-        onOpenChange={setIsAccountSheetOpen}
-        onSubmit={handleCreateAccount}
+        editing={Boolean(editingAccount)}
+        onOpenChange={handleAccountSheetOpenChange}
+        onSubmit={handleSaveAccount}
       />
       <CreateModelSheet
         open={isModelSheetOpen}
@@ -1099,6 +1176,8 @@ function AccountsView({
   routes,
   onCreate,
   onToggle,
+  onDelete,
+  onEdit,
   onInspectCodex,
   onInspectGemini,
   onReconnectAntigravity,
@@ -1107,6 +1186,8 @@ function AccountsView({
   routes: ProviderModelRoute[];
   onCreate: () => void;
   onToggle: (account: ProviderAccount) => void;
+  onDelete: (account: ProviderAccount) => void;
+  onEdit: (account: ProviderAccount) => void;
   onInspectCodex: (account: ProviderAccount) => void;
   onInspectGemini: (account: ProviderAccount) => void;
   onReconnectAntigravity: (account: ProviderAccount) => void;
@@ -1204,6 +1285,24 @@ function AccountsView({
                       >
                         {account.isActive ? "Enabled" : "Disabled"}
                       </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon-sm"
+                        aria-label={`Edit provider account ${account.name}`}
+                        onClick={() => onEdit(account)}
+                      >
+                        <PencilIcon />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="icon-sm"
+                        aria-label={`Delete provider account ${account.name}`}
+                        onClick={() => onDelete(account)}
+                      >
+                        <Trash2Icon />
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -1286,6 +1385,24 @@ function AccountsView({
                       onClick={() => onToggle(account)}
                     >
                       {account.isActive ? "Enabled" : "Disabled"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon-sm"
+                      aria-label={`Edit provider account ${account.name}`}
+                      onClick={() => onEdit(account)}
+                    >
+                      <PencilIcon />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="icon-sm"
+                      aria-label={`Delete provider account ${account.name}`}
+                      onClick={() => onDelete(account)}
+                    >
+                      <Trash2Icon />
                     </Button>
                   </div>
                 </div>
@@ -2699,6 +2816,7 @@ function CreateAccountSheet({
   form,
   setForm,
   presets,
+  editing,
   onOpenChange,
   onSubmit,
 }: {
@@ -2706,6 +2824,7 @@ function CreateAccountSheet({
   form: CreateAccountForm;
   setForm: React.Dispatch<React.SetStateAction<CreateAccountForm>>;
   presets: ProviderPreset[];
+  editing: boolean;
   onOpenChange: (open: boolean) => void;
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
 }) {
@@ -2725,8 +2844,12 @@ function CreateAccountSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="overflow-y-auto sm:max-w-lg">
         <SheetHeader>
-          <SheetTitle>Add provider account</SheetTitle>
-          <SheetDescription>Register an upstream credential for relay scheduling.</SheetDescription>
+          <SheetTitle>{editing ? "Edit provider account" : "Add provider account"}</SheetTitle>
+          <SheetDescription>
+            {editing
+              ? "Update routing details or replace the upstream credential."
+              : "Register an upstream credential for relay scheduling."}
+          </SheetDescription>
         </SheetHeader>
         <form className="flex flex-col gap-4 px-4" onSubmit={onSubmit}>
           <Field label="Preset" htmlFor="account-preset">
@@ -2849,7 +2972,7 @@ function CreateAccountSheet({
                     setForm((current) => ({ ...current, apiKey: event.target.value }))
                   }
                   placeholder={credentialPlaceholder}
-                  required
+                  required={!editing}
                 />
               ) : (
                 <Input
@@ -2860,10 +2983,15 @@ function CreateAccountSheet({
                     setForm((current) => ({ ...current, apiKey: event.target.value }))
                   }
                   placeholder={credentialPlaceholder}
-                  required
+                  required={!editing}
                 />
               )}
             </Field>
+          ) : null}
+          {editing && !isAntigravityAccount ? (
+            <p className="text-xs text-muted-foreground">
+              Leave the credential blank to keep the current value.
+            </p>
           ) : null}
           <div className="grid gap-3 sm:grid-cols-[1fr_120px]">
             <SettingRow
@@ -2903,7 +3031,11 @@ function CreateAccountSheet({
               ) : (
                 <CableIcon data-icon="inline-start" />
               )}
-              {isAntigravityAccount ? "Sign in with Antigravity" : "Add account"}
+              {isAntigravityAccount && !editing
+                ? "Sign in with Antigravity"
+                : editing
+                  ? "Save changes"
+                  : "Add account"}
             </Button>
           </SheetFooter>
         </form>
