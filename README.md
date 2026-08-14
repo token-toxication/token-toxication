@@ -19,7 +19,7 @@ The application ships as a Rust server with an embedded React admin interface an
 | Usage analytics | Provider-reported input, cached-input, and output token accounting |
 | Privacy-conscious logs | Operational metadata without prompts, messages, credentials, or raw upstream bodies |
 | Self-hosted administration | API-key management, provider setup, route configuration, quotas, and request logs |
-| Client setup | Generated configurations for Codex, Claude Code, opencode, and Pi |
+| Client setup | Generated configurations for Codex, Claude Code, opencode, Pi, and DeepSeek Harness |
 | Production TLS | Plain HTTP, certificate files, or managed ACME HTTP-01 certificates |
 
 ## Contents
@@ -72,9 +72,11 @@ The model becomes discoverable after the catalog entry, route, and provider acco
 
 ### Connect a client
 
-The **Client Setup** page generates copy-ready configuration for Codex, Claude Code, opencode, and Pi from eligible routes.
+The **Client Setup** page generates copy-ready configuration for Codex, Claude Code, opencode, Pi, and DeepSeek Harness from eligible routes.
 
 Codex and Pi use Responses routes, Claude Code uses Anthropic Messages routes, and opencode selects the AI SDK that matches each configured OpenAI route. Pi setup writes a complete `~/.pi/agent/models.json` file, so back up any existing Pi configuration first. It references the relay key through `TOKEN_TOXICATION_API_KEY`; do not commit a literal key in that file.
+
+The DeepSeek Harness tab merges `llm-pi-ai` provider routes into `$DSH_HOME/settings.yaml` — one route per protocol (Chat, Responses, and Anthropic Messages) — and sets the harness default model. DeepSeek-family Chat models declare `thinkingFormat: deepseek` reasoning dispatch, and every route references the relay key through `TOKEN_TOXICATION_API_KEY`.
 
 ## Relay API
 

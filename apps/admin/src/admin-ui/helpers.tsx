@@ -13,7 +13,12 @@ import type {
   RequestLog,
   RoutableModelCatalogEntry,
 } from "../types";
-import type { ClientModelOption, CreateAccountForm, OpencodeModelOption } from "./types";
+import type {
+  ClientModelOption,
+  CreateAccountForm,
+  DshModelOption,
+  OpencodeModelOption,
+} from "./types";
 
 export function statusBadge(status: string, active: boolean) {
   if (!active) {
@@ -161,6 +166,30 @@ export function opencodeModelOptions(
       ...model,
       wireApi: responseModels.has(model.id) ? "openai-responses" : "openai-chat",
     }));
+}
+
+export function dshModelOptions(
+  models: ModelCatalogEntry[],
+  routableModels: RoutableModelCatalogEntry[],
+): DshModelOption[] {
+  const chat = new Set(routableModelIdsForWireApi(routableModels, "openai-chat"));
+  const responses = new Set(routableModelIdsForWireApi(routableModels, "openai-responses"));
+  const anthropic = new Set(routableModelIdsForWireApi(routableModels, "anthropic-messages"));
+
+  return models
+    .filter((model) => model.enabled && model.id)
+    .filter((model) => chat.has(model.id) || responses.has(model.id) || anthropic.has(model.id))
+    .map((model) => ({
+      id: model.id,
+      displayName: model.displayName || model.id,
+      family: model.family,
+      protocols: {
+        chat: chat.has(model.id),
+        responses: responses.has(model.id),
+        anthropic: anthropic.has(model.id),
+      },
+    }))
+    .sort((left, right) => left.id.localeCompare(right.id));
 }
 
 export function preferredCatalogModel(current: string, catalogModels: string[], fallback: string) {
