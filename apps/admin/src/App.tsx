@@ -15,6 +15,7 @@ import {
   TerminalSquareIcon,
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -161,7 +162,10 @@ function App() {
   if (!token) {
     return (
       <TooltipProvider>
-        <main className="min-h-svh bg-background text-foreground">
+        <main className="relative min-h-svh bg-background text-foreground">
+          <div className="absolute top-4 right-4">
+            <ThemeToggle />
+          </div>
           <div className="mx-auto flex min-h-svh w-full max-w-md flex-col justify-center gap-6 px-6">
             <div className="flex flex-col gap-2">
               <div className="flex size-11 items-center justify-center rounded-lg bg-primary text-primary-foreground">
@@ -266,6 +270,7 @@ function App() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  <ThemeToggle />
                   <Button type="button" variant="outline" onClick={refresh}>
                     <RefreshCcwIcon data-icon="inline-start" />
                     Refresh
