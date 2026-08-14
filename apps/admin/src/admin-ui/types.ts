@@ -48,6 +48,13 @@ export type OpencodeModelOption = ClientModelOption & {
   wireApi: OpencodeWireApi;
 };
 
+export type DshProtocol = "chat" | "responses" | "anthropic";
+
+export type DshModelOption = ClientModelOption & {
+  family: string;
+  protocols: Record<DshProtocol, boolean>;
+};
+
 export type CodexQuotaRow = {
   limitId: string;
   displayName: string;

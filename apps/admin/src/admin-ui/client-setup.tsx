@@ -4,6 +4,7 @@ import { ClipboardCopyIcon, DatabaseIcon, KeyRoundIcon } from "lucide-react";
 import {
   catalogModelIds,
   copyText,
+  dshModelOptions,
   enabledCatalogModelOptions,
   opencodeModelOptions,
   preferredCatalogModel,
@@ -12,7 +13,7 @@ import {
   tomlString,
 } from "./helpers";
 import { EmptyNotice, Field, SettingRow } from "./shared";
-import type { ClientModelOption, OpencodeModelOption } from "./types";
+import type { ClientModelOption, DshModelOption, DshProtocol, OpencodeModelOption } from "./types";
 import type { ModelCatalogEntry, RoutableModelCatalogEntry } from "../types";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -36,6 +37,77 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
+const dshProviderIds: Record<DshProtocol, string> = {
+  chat: "token-toxication-chat",
+  responses: "token-toxication-responses",
+  anthropic: "token-toxication-anthropic",
+};
+
+const dshWireApis: Record<DshProtocol, string> = {
+  chat: "openai-completions",
+  responses: "openai-responses",
+  anthropic: "anthropic-messages",
+};
+
+function dshUsesDeepSeekReasoning(model: DshModelOption, protocol: DshProtocol) {
+  return protocol === "chat" && model.family === "deepseek";
+}
+
+export function dshModelEntryYaml(model: DshModelOption, protocol: DshProtocol) {
+  const entryIndent = "          ";
+  const lines = [`- id: ${JSON.stringify(model.id)}`];
+  if (model.displayName && model.displayName !== model.id) {
+    lines.push(`${entryIndent}name: ${JSON.stringify(model.displayName)}`);
+  }
+  if (dshUsesDeepSeekReasoning(model, protocol)) {
+    lines.push(`${entryIndent}reasoningEfforts:`);
+    lines.push(`${entryIndent}  off:`);
+    lines.push(`${entryIndent}  high: high`);
+    lines.push(`${entryIndent}  max: max`);
+    lines.push(`${entryIndent}compat:`);
+    lines.push(`${entryIndent}  thinkingFormat: deepseek`);
+  }
+  return lines.join("\n");
+}
+
+export function dshProviderYaml(
+  protocol: DshProtocol,
+  models: DshModelOption[],
+  openaiBaseUrl: string,
+  anthropicBaseUrl: string,
+) {
+  if (models.length === 0) {
+    return "";
+  }
+  const baseUrl = protocol === "anthropic" ? anthropicBaseUrl : openaiBaseUrl;
+  return [
+    `    ${dshProviderIds[protocol]}:`,
+    '      displayName: "Token Toxication"',
+    "      apiKeyEnv: TOKEN_TOXICATION_API_KEY",
+    `      api: ${dshWireApis[protocol]}`,
+    `      baseURL: ${baseUrl}`,
+    "      models:",
+    ...models.map((model) => `        ${dshModelEntryYaml(model, protocol)}`),
+  ].join("\n");
+}
+
+export function dshDefaultModelYaml(model: DshModelOption) {
+  const protocol: DshProtocol = model.protocols.chat
+    ? "chat"
+    : model.protocols.responses
+      ? "responses"
+      : "anthropic";
+  const lines = [
+    "agent-default-model:",
+    `  provider: ${dshProviderIds[protocol]}`,
+    `  model: ${JSON.stringify(model.id)}`,
+  ];
+  if (dshUsesDeepSeekReasoning(model, protocol)) {
+    lines.push("  reasoningEffort: max");
+  }
+  return lines.join("\n");
+}
 
 export function ClientSetupView({
   models,
@@ -74,12 +146,19 @@ export function ClientSetupView({
     return enabledCatalogModelOptions(models).filter((model) => responseModels.has(model.id));
   }, [codexModels, models]);
   const opencodeModelIds = useMemo(() => opencodeModels.map((model) => model.id), [opencodeModels]);
+  const dshModels = useMemo(
+    () => dshModelOptions(models, routableModels),
+    [models, routableModels],
+  );
+  const dshModelIds = useMemo(() => dshModels.map((model) => model.id), [dshModels]);
   const [codexModel, setCodexModel] = useState("");
   const [claudeModel, setClaudeModel] = useState("");
   const [opencodeModel, setOpencodeModel] = useState("");
+  const [dshModel, setDshModel] = useState("");
   const selectedOpencodeModel = opencodeModelIds.includes(opencodeModel)
     ? opencodeModel
     : (opencodeModelIds[0] ?? "");
+  const selectedDshModel = dshModelIds.includes(dshModel) ? dshModel : (dshModelIds[0] ?? "");
 
   useEffect(() => {
     setCodexModel((current) => preferredCatalogModel(current, catalogModels, "gpt-5"));
@@ -103,6 +182,8 @@ export function ClientSetupView({
         opencodeModel: selectedOpencodeModel,
         opencodeModels,
         piModels,
+        dshModel: selectedDshModel,
+        dshModels,
       }),
     [
       apiKey,
@@ -112,6 +193,8 @@ export function ClientSetupView({
       selectedOpencodeModel,
       opencodeModels,
       piModels,
+      selectedDshModel,
+      dshModels,
     ],
   );
   const keyLooksValid = apiKey.trim() === "" || apiKey.trim().startsWith("tokentoxication-");
@@ -171,7 +254,7 @@ export function ClientSetupView({
               </AlertDescription>
             </Alert>
           ) : (
-            <div className="grid gap-4 lg:col-span-2 lg:grid-cols-3">
+            <div className="grid gap-4 lg:col-span-2 lg:grid-cols-2 xl:grid-cols-4">
               <ClientModelField
                 id="setup-codex-model"
                 label="Codex"
@@ -199,6 +282,15 @@ export function ClientSetupView({
                 routedOptions={opencodeModelIds}
                 routeLabel="Chat or Responses"
               />
+              <ClientModelField
+                id="setup-dsh-model"
+                label="DeepSeek Harness"
+                value={selectedDshModel}
+                onChange={setDshModel}
+                options={dshModelIds}
+                routedOptions={dshModelIds}
+                routeLabel="Chat, Responses, or Messages"
+              />
             </div>
           )}
         </CardContent>
@@ -211,6 +303,7 @@ export function ClientSetupView({
             <TabsTrigger value="claude">Claude Code</TabsTrigger>
             <TabsTrigger value="opencode">opencode</TabsTrigger>
             <TabsTrigger value="pi">Pi</TabsTrigger>
+            <TabsTrigger value="dsh">DeepSeek Harness</TabsTrigger>
           </TabsList>
           <TabsContent value="codex">
             <ClientSnippetCard
@@ -263,6 +356,22 @@ export function ClientSetupView({
               <EmptyNotice
                 title="No Pi routes"
                 body="Add an eligible OpenAI Responses route to generate a Pi provider config."
+              />
+            )}
+          </TabsContent>
+          <TabsContent value="dsh">
+            {dshModels.length > 0 ? (
+              <ClientSnippetCard
+                title="DeepSeek Harness provider"
+                description="Set TOKEN_TOXICATION_API_KEY in the harness process environment, then merge these llm-pi-ai provider routes and the default model into ~/.dsh/settings.yaml. Keep existing keys; the harness applies changes on the next request."
+                endpoint="settings.yaml · llm-pi-ai"
+                model={selectedDshModel}
+                snippet={snippets.dsh}
+              />
+            ) : (
+              <EmptyNotice
+                title="No DeepSeek Harness routes"
+                body="Add an eligible OpenAI Chat, OpenAI Responses, or Anthropic Messages route to generate a DeepSeek Harness config."
               />
             )}
           </TabsContent>
@@ -357,7 +466,7 @@ function ClientSnippetCard({
   );
 }
 
-function buildClientSetupSnippets({
+export function buildClientSetupSnippets({
   apiKey,
   serviceOrigin,
   codexModel,
@@ -365,6 +474,8 @@ function buildClientSetupSnippets({
   opencodeModel,
   opencodeModels,
   piModels,
+  dshModel,
+  dshModels,
 }: {
   apiKey: string;
   serviceOrigin: string;
@@ -373,6 +484,8 @@ function buildClientSetupSnippets({
   opencodeModel: string;
   opencodeModels: OpencodeModelOption[];
   piModels: ClientModelOption[];
+  dshModel: string;
+  dshModels: DshModelOption[];
 }) {
   const origin = serviceOrigin.replace(/\/+$/, "");
   const relayApiKey = apiKey.trim() || "tokentoxication-REPLACE_ME";
@@ -437,6 +550,28 @@ function buildClientSetupSnippets({
     null,
     2,
   );
+  const dshModelName = dshModel.trim() || dshModels[0]?.id || "";
+  const selectedDshModel = dshModels.find((model) => model.id === dshModelName);
+  const dshProviderSections = (Object.keys(dshProviderIds) as DshProtocol[])
+    .map((protocol) =>
+      dshProviderYaml(
+        protocol,
+        dshModels.filter((model) => model.protocols[protocol]),
+        openaiBaseUrl,
+        anthropicBaseUrl,
+      ),
+    )
+    .filter((section) => section !== "");
+  const dshSnippet = [
+    "# Set TOKEN_TOXICATION_API_KEY in the DeepSeek Harness process environment.",
+    "# Merge the sections below into ~/.dsh/settings.yaml, then reload the",
+    "# harness page. Keep your existing keys (ui-theme, permission, ...).",
+    "",
+    "llm-pi-ai:",
+    "  providers:",
+    ...dshProviderSections,
+    ...(selectedDshModel ? ["", dshDefaultModelYaml(selectedDshModel)] : []),
+  ].join("\n");
 
   return {
     openaiBaseUrl,
@@ -481,5 +616,6 @@ function buildClientSetupSnippets({
       "JSON",
       "pi",
     ].join("\n"),
+    dsh: dshSnippet,
   };
 }
