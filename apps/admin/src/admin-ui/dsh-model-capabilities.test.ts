@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { dshReasoningProfile } from "./dsh-reasoning";
+import { dshModelCapabilities } from "./dsh-model-capabilities";
 import type { DshModelOption, DshProtocol } from "./types";
 
 function model(id: string, family = "openai"): DshModelOption {
@@ -13,7 +13,7 @@ function model(id: string, family = "openai"): DshModelOption {
 }
 
 function profileFor(id: string, protocol: DshProtocol = "responses") {
-  return dshReasoningProfile(model(id), protocol);
+  return dshModelCapabilities(model(id), protocol)?.reasoning;
 }
 
 function reasoningProfileFor(id: string) {
@@ -27,10 +27,10 @@ function effortsFor(id: string) {
   );
 }
 
-const codexStandardEfforts = ["low:low", "medium:medium", "high:high", "xhigh:xhigh"];
-const codex56Efforts = [...codexStandardEfforts, "max:max"];
+const subscriptionStandardEfforts = ["low:low", "medium:medium", "high:high", "xhigh:xhigh"];
+const subscription56Efforts = [...subscriptionStandardEfforts, "max:max"];
 
-describe("dshReasoningProfile", () => {
+describe("dshModelCapabilities", () => {
   it.each([
     ["gpt-5", ["minimal:minimal", "low:low", "medium:medium", "high:high"], "high"],
     ["gpt-5-pro", ["high:high"], "high"],
@@ -43,21 +43,21 @@ describe("dshReasoningProfile", () => {
   });
 
   it.each([
-    ["gpt-5.6-sol", codex56Efforts, "low"],
-    ["gpt-5.6-terra", codex56Efforts, "medium"],
-    ["gpt-5.6-luna", codex56Efforts, "medium"],
-    ["gpt-5.5", codexStandardEfforts, "medium"],
-    ["gpt-5.4", codexStandardEfforts, "medium"],
-    ["gpt-5.4-mini", codexStandardEfforts, "medium"],
-    ["gpt-5.2", codexStandardEfforts, "medium"],
-    ["codex-auto-review", codexStandardEfforts, "medium"],
-  ])("covers current Codex model %s", (id, efforts, defaultEffort) => {
+    ["gpt-5.6-sol", subscription56Efforts, "low"],
+    ["gpt-5.6-terra", subscription56Efforts, "medium"],
+    ["gpt-5.6-luna", subscription56Efforts, "medium"],
+    ["gpt-5.5", subscriptionStandardEfforts, "medium"],
+    ["gpt-5.4", subscriptionStandardEfforts, "medium"],
+    ["gpt-5.4-mini", subscriptionStandardEfforts, "medium"],
+    ["gpt-5.2", subscriptionStandardEfforts, "medium"],
+    ["codex-auto-review", subscriptionStandardEfforts, "medium"],
+  ])("covers current bundled model %s", (id, efforts, defaultEffort) => {
     expect(effortsFor(id as string)).toEqual(efforts);
     expect(reasoningProfileFor(id as string)?.defaultEffort).toBe(defaultEffort);
   });
 
-  it.each(["gpt-5.3-codex", "gpt-5.3-codex-spark"])("keeps Codex 5.3 model %s supported", (id) => {
-    expect(effortsFor(id)).toEqual(codexStandardEfforts);
+  it.each(["gpt-5.3-codex", "gpt-5.3-codex-spark"])("keeps 5.3 model %s supported", (id) => {
+    expect(effortsFor(id)).toEqual(subscriptionStandardEfforts);
     expect(reasoningProfileFor(id)?.defaultEffort).toBe("medium");
   });
 
@@ -76,13 +76,37 @@ describe("dshReasoningProfile", () => {
     expect(profileFor("gpt-5.7")).toBeUndefined();
   });
 
-  it("only applies OpenAI profiles to Responses routes in the OpenAI family", () => {
+  it("uses exact model IDs on Responses routes regardless of the catalog family", () => {
     expect(profileFor("gpt-5.5", "chat")).toBeUndefined();
-    expect(dshReasoningProfile(model("gpt-5.5", "custom"), "responses")).toBeUndefined();
+    expect(dshModelCapabilities(model("gpt-5.5", "other"), "responses")?.reasoning).toEqual(
+      reasoningProfileFor("gpt-5.5"),
+    );
+  });
+
+  it("declares image input for exact multimodal model IDs", () => {
+    expect(dshModelCapabilities(model("gpt-5.6-luna", "other"), "responses")?.input).toEqual([
+      "text",
+      "image",
+    ]);
+    expect(dshModelCapabilities(model("gpt-5.6-luna", "other"), "chat")?.input).toEqual([
+      "text",
+      "image",
+    ]);
+  });
+
+  it.each(["gpt-4", "o3-mini", "gpt-5.3-codex-spark", "gpt-5.7"])(
+    "keeps text-only or unknown model %s on the default input",
+    (id) => {
+      expect(dshModelCapabilities(model(id), "responses")?.input).toBeUndefined();
+    },
+  );
+
+  it("does not apply OpenAI input metadata to Anthropic routes", () => {
+    expect(dshModelCapabilities(model("gpt-5.6-luna"), "anthropic")).toBeUndefined();
   });
 
   it("preserves DeepSeek Chat reasoning and wire compatibility", () => {
-    const profile = dshReasoningProfile(model("deepseek-v4-pro", "deepseek"), "chat");
+    const profile = dshModelCapabilities(model("deepseek-v4-pro", "deepseek"), "chat")?.reasoning;
     if (!profile) {
       throw new Error("expected DeepSeek reasoning profile");
     }

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ClipboardCopyIcon, DatabaseIcon, KeyRoundIcon } from "lucide-react";
 
-import { dshReasoningProfile } from "./dsh-reasoning";
+import { dshModelCapabilities } from "./dsh-model-capabilities";
 import {
   catalogModelIds,
   copyText,
@@ -57,7 +57,11 @@ export function dshModelEntryYaml(model: DshModelOption, protocol: DshProtocol) 
   if (model.displayName && model.displayName !== model.id) {
     lines.push(`${entryIndent}name: ${JSON.stringify(model.displayName)}`);
   }
-  const reasoning = dshReasoningProfile(model, protocol);
+  const capabilities = dshModelCapabilities(model, protocol);
+  if (capabilities?.input) {
+    lines.push(`${entryIndent}input: [${capabilities.input.join(", ")}]`);
+  }
+  const reasoning = capabilities?.reasoning;
   if (reasoning === false) {
     lines.push(`${entryIndent}reasoningEfforts: false`);
   } else if (reasoning) {
@@ -106,7 +110,7 @@ export function dshDefaultModelYaml(model: DshModelOption) {
     `  provider: ${dshProviderIds[protocol]}`,
     `  model: ${JSON.stringify(model.id)}`,
   ];
-  const reasoning = dshReasoningProfile(model, protocol);
+  const reasoning = dshModelCapabilities(model, protocol)?.reasoning;
   if (reasoning) {
     lines.push(`  reasoningEffort: ${reasoning.defaultEffort}`);
   }

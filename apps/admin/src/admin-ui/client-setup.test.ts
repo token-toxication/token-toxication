@@ -133,6 +133,7 @@ describe("DeepSeek Harness settings snippet", () => {
     expect(snippets.dsh).toContain(
       [
         '        - id: "gpt-5"',
+        "          input: [text, image]",
         "          reasoningEfforts:",
         "            minimal: minimal",
         "            low: low",
@@ -232,6 +233,12 @@ describe("DeepSeek Harness YAML builders", () => {
     family: "openai",
     protocols: { chat: false, responses: true, anthropic: false },
   };
+  const gpt56OtherFamily: DshModelOption = {
+    id: "gpt-5.6-luna",
+    displayName: "gpt-5.6 (Luna)",
+    family: "other",
+    protocols: { chat: false, responses: true, anthropic: false },
+  };
 
   it("indents model entries under the provider models list", () => {
     const provider = dshProviderYaml(
@@ -258,8 +265,18 @@ describe("DeepSeek Harness YAML builders", () => {
   it("marks known non-reasoning OpenAI models explicitly", () => {
     const entry = dshModelEntryYaml(gpt41Responses, "responses");
 
+    expect(entry).toContain("input: [text, image]");
     expect(entry).toContain("reasoningEfforts: false");
     expect(dshDefaultModelYaml(gpt41Responses)).not.toContain("reasoningEffort:");
+  });
+
+  it("uses exact capabilities when the catalog family is generic", () => {
+    const entry = dshModelEntryYaml(gpt56OtherFamily, "responses");
+
+    expect(entry).toContain("input: [text, image]");
+    expect(entry).toContain("reasoningEfforts:");
+    expect(entry).toContain("  max: max");
+    expect(dshDefaultModelYaml(gpt56OtherFamily)).toContain("reasoningEffort: medium");
   });
 
   it("renders OpenAI wire spellings without Chat compatibility fields", () => {
