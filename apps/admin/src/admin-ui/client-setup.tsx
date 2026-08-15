@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ClipboardCopyIcon, DatabaseIcon, KeyRoundIcon } from "lucide-react";
 
+import { dshReasoningProfile } from "./dsh-reasoning";
 import {
   catalogModelIds,
   copyText,
@@ -50,23 +51,25 @@ const dshWireApis: Record<DshProtocol, string> = {
   anthropic: "anthropic-messages",
 };
 
-function dshUsesDeepSeekReasoning(model: DshModelOption, protocol: DshProtocol) {
-  return protocol === "chat" && model.family === "deepseek";
-}
-
 export function dshModelEntryYaml(model: DshModelOption, protocol: DshProtocol) {
   const entryIndent = "          ";
   const lines = [`- id: ${JSON.stringify(model.id)}`];
   if (model.displayName && model.displayName !== model.id) {
     lines.push(`${entryIndent}name: ${JSON.stringify(model.displayName)}`);
   }
-  if (dshUsesDeepSeekReasoning(model, protocol)) {
+  const reasoning = dshReasoningProfile(model, protocol);
+  if (reasoning === false) {
+    lines.push(`${entryIndent}reasoningEfforts: false`);
+  } else if (reasoning) {
     lines.push(`${entryIndent}reasoningEfforts:`);
-    lines.push(`${entryIndent}  off:`);
-    lines.push(`${entryIndent}  high: high`);
-    lines.push(`${entryIndent}  max: max`);
-    lines.push(`${entryIndent}compat:`);
-    lines.push(`${entryIndent}  thinkingFormat: deepseek`);
+    for (const effort of reasoning.efforts) {
+      const wireValue = effort.wireValue === undefined ? "" : ` ${effort.wireValue}`;
+      lines.push(`${entryIndent}  ${effort.id}:${wireValue}`);
+    }
+    if (reasoning.thinkingFormat) {
+      lines.push(`${entryIndent}compat:`);
+      lines.push(`${entryIndent}  thinkingFormat: ${reasoning.thinkingFormat}`);
+    }
   }
   return lines.join("\n");
 }
@@ -103,8 +106,9 @@ export function dshDefaultModelYaml(model: DshModelOption) {
     `  provider: ${dshProviderIds[protocol]}`,
     `  model: ${JSON.stringify(model.id)}`,
   ];
-  if (dshUsesDeepSeekReasoning(model, protocol)) {
-    lines.push("  reasoningEffort: max");
+  const reasoning = dshReasoningProfile(model, protocol);
+  if (reasoning) {
+    lines.push(`  reasoningEffort: ${reasoning.defaultEffort}`);
   }
   return lines.join("\n");
 }

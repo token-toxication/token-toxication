@@ -115,7 +115,7 @@ describe("DeepSeek Harness settings snippet", () => {
     expect(snippets.dsh).toContain("\nllm-pi-ai:\n");
   });
 
-  it("declares DeepSeek reasoning dispatch and efforts on deepseek chat models", () => {
+  it("declares protocol-specific reasoning efforts for DeepSeek and OpenAI models", () => {
     const snippets = snippetsFor("deepseek-v4-pro");
 
     expect(snippets.dsh).toContain(
@@ -130,9 +130,23 @@ describe("DeepSeek Harness settings snippet", () => {
         "            thinkingFormat: deepseek",
       ].join("\n"),
     );
-    // A non-deepseek chat model carries no reasoning override.
+    expect(snippets.dsh).toContain(
+      [
+        '        - id: "gpt-5"',
+        "          reasoningEfforts:",
+        "            minimal: minimal",
+        "            low: low",
+        "            medium: medium",
+        "            high: high",
+      ].join("\n"),
+    );
+    // A non-deepseek Chat model carries no reasoning override.
     expect(snippets.dsh).toContain('        - id: "qwen-max"\n          name: "Qwen Max"');
     expect(snippets.dsh.match(/thinkingFormat: deepseek/g)).toHaveLength(1);
+    const responsesProvider = snippets.dsh
+      .split("token-toxication-responses:")[1]
+      ?.split("token-toxication-anthropic:")[0];
+    expect(responsesProvider).not.toContain("thinkingFormat:");
   });
 
   it("points the default model at its protocol route", () => {
@@ -148,12 +162,13 @@ describe("DeepSeek Harness settings snippet", () => {
 
     const responses = snippetsFor("gpt-5");
     expect(responses.dsh).toContain(
-      ["agent-default-model:", "  provider: token-toxication-responses", '  model: "gpt-5"'].join(
-        "\n",
-      ),
+      [
+        "agent-default-model:",
+        "  provider: token-toxication-responses",
+        '  model: "gpt-5"',
+        "  reasoningEffort: high",
+      ].join("\n"),
     );
-    // The default-model section itself declares no effort for a non-deepseek model.
-    expect(responses.dsh.split("agent-default-model:")[1]).not.toContain("reasoningEffort");
 
     const anthropic = snippetsFor("claude-sonnet-4-5");
     expect(anthropic.dsh).toContain("provider: token-toxication-anthropic");
@@ -205,6 +220,18 @@ describe("DeepSeek Harness YAML builders", () => {
     family: "deepseek",
     protocols: { chat: true, responses: true, anthropic: true },
   };
+  const gpt55Responses: DshModelOption = {
+    id: "gpt-5.5",
+    displayName: "GPT-5.5",
+    family: "openai",
+    protocols: { chat: false, responses: true, anthropic: false },
+  };
+  const gpt41Responses: DshModelOption = {
+    id: "gpt-4.1",
+    displayName: "GPT-4.1",
+    family: "openai",
+    protocols: { chat: false, responses: true, anthropic: false },
+  };
 
   it("indents model entries under the provider models list", () => {
     const provider = dshProviderYaml(
@@ -226,6 +253,25 @@ describe("DeepSeek Harness YAML builders", () => {
 
     expect(entry).toContain('- id: "gpt-5"');
     expect(entry).not.toContain("name:");
+  });
+
+  it("marks known non-reasoning OpenAI models explicitly", () => {
+    const entry = dshModelEntryYaml(gpt41Responses, "responses");
+
+    expect(entry).toContain("reasoningEfforts: false");
+    expect(dshDefaultModelYaml(gpt41Responses)).not.toContain("reasoningEffort:");
+  });
+
+  it("renders OpenAI wire spellings without Chat compatibility fields", () => {
+    const entry = dshModelEntryYaml(gpt55Responses, "responses");
+
+    expect(entry).toContain("reasoningEfforts:");
+    expect(entry).toContain("  low: low");
+    expect(entry).toContain("  xhigh: xhigh");
+    expect(entry).not.toContain("off:");
+    expect(entry).not.toContain("max:");
+    expect(entry).not.toContain("compat:");
+    expect(dshDefaultModelYaml(gpt55Responses)).toContain("reasoningEffort: medium");
   });
 
   it("keeps DeepSeek reasoning compatibility on Chat provider entries", () => {
@@ -252,9 +298,12 @@ describe("DeepSeek Harness YAML builders", () => {
 
   it("defaults a model routed on one protocol to that protocol's provider", () => {
     expect(dshDefaultModelYaml(plainResponses)).toBe(
-      ["agent-default-model:", "  provider: token-toxication-responses", '  model: "gpt-5"'].join(
-        "\n",
-      ),
+      [
+        "agent-default-model:",
+        "  provider: token-toxication-responses",
+        '  model: "gpt-5"',
+        "  reasoningEffort: high",
+      ].join("\n"),
     );
   });
 });
