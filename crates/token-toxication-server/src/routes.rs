@@ -2054,6 +2054,38 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn responses_relay_accepts_a_32_mebibyte_request_body() {
+        let database_path = test_database_path();
+        let db = Db::open(&database_path).await.expect("open test database");
+        let state = test_state(db, database_path.clone());
+        let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
+        let address = listener.local_addr().expect("address");
+        let server = tokio::spawn(async move {
+            axum::serve(
+                listener,
+                crate::app(state, PathBuf::from("missing-admin-assets")),
+            )
+            .await
+            .expect("serve");
+        });
+        let endpoint = format!("http://{address}/openai/v1/responses");
+
+        let response = test_http_client()
+            .post(&endpoint)
+            .expect("build request")
+            .body(vec![b'x'; crate::RELAY_BODY_LIMIT_BYTES])
+            .send()
+            .await
+            .expect("send request");
+
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+        server.abort();
+        let _ = server.await;
+        remove_test_database(&database_path);
+    }
+
+    #[tokio::test]
     async fn routable_model_catalog_requires_admin_authentication() {
         let database_path = test_database_path();
         let db = Db::open(&database_path).await.expect("open test database");
