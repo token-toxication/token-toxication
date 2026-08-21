@@ -2,12 +2,13 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   buildClientSetupSnippets,
+  codexModelCatalogJson,
   dshDefaultModelYaml,
   dshModelEntryYaml,
   dshProviderYaml,
 } from "./client-setup";
-import { dshModelOptions } from "./helpers";
-import type { DshModelOption } from "./types";
+import { codexModelOptions, dshModelOptions } from "./helpers";
+import type { ClientModelOption, DshModelOption } from "./types";
 import type { ModelCatalogEntry, RoutableModelCatalogEntry } from "../types";
 
 function catalogEntry(
@@ -42,6 +43,28 @@ const routable: RoutableModelCatalogEntry[] = [
   { id: "gemini-2.5-pro", wireApi: "gemini-generate-content" },
   { id: "deepseek-disabled", wireApi: "openai-chat" },
 ];
+
+const codexModels: ClientModelOption[] = [{ id: "gpt-5", displayName: "gpt-5" }];
+
+describe("Codex static model catalog", () => {
+  it("includes every enabled Responses route and no Chat-only model", () => {
+    expect(codexModelOptions(catalog, routable)).toEqual(codexModels);
+  });
+
+  it("generates a conservative catalog that Codex can use without model discovery", () => {
+    const catalog = JSON.parse(codexModelCatalogJson(codexModels));
+
+    expect(catalog.models).toHaveLength(1);
+    expect(catalog.models[0]).toMatchObject({
+      slug: "gpt-5",
+      display_name: "gpt-5",
+      visibility: "list",
+      supported_in_api: true,
+      input_modalities: ["text"],
+    });
+    expect(catalog.models[0].supported_reasoning_levels).toEqual([]);
+  });
+});
 
 describe("dshModelOptions", () => {
   it("keeps enabled models routed through a DeepSeek Harness protocol", () => {
@@ -80,6 +103,7 @@ describe("DeepSeek Harness settings snippet", () => {
       apiKey: "tokentoxication-test",
       serviceOrigin: origin,
       codexModel: "gpt-5",
+      codexModels,
       claudeModel: "claude-sonnet-4-5",
       opencodeModel: "",
       opencodeModels: [],
@@ -188,6 +212,7 @@ describe("DeepSeek Harness settings snippet", () => {
       apiKey: "tokentoxication-test",
       serviceOrigin: "http://relay.example:3000",
       codexModel: "gpt-5",
+      codexModels,
       claudeModel: "claude-sonnet-4-5",
       opencodeModel: "",
       opencodeModels: [],
@@ -199,6 +224,31 @@ describe("DeepSeek Harness settings snippet", () => {
     expect(snippets.dsh).toContain("token-toxication-chat:");
     expect(snippets.dsh).not.toContain("token-toxication-responses:");
     expect(snippets.dsh).not.toContain("token-toxication-anthropic:");
+  });
+});
+
+describe("Codex default configuration snippet", () => {
+  it("writes the static catalog and configures the base config without a profile", () => {
+    const snippets = buildClientSetupSnippets({
+      apiKey: "tokentoxication-test",
+      serviceOrigin: "http://relay.example:3000",
+      codexModel: "gpt-5",
+      codexModels,
+      claudeModel: "claude-sonnet-4-5",
+      opencodeModel: "",
+      opencodeModels: [],
+      piModels: [],
+      dshModel: "",
+      dshModels: [],
+    });
+
+    expect(snippets.codexCatalog).toContain("token-toxication-model-catalog.json");
+    expect(snippets.codexCatalog).toContain('slug": "gpt-5"');
+    expect(snippets.codexConfig).toContain(
+      'model_catalog_json = "~/.codex/token-toxication-model-catalog.json"',
+    );
+    expect(snippets.codexConfig).toContain('model_provider = "token-toxication"');
+    expect(snippets.codexConfig).not.toContain("--profile");
   });
 });
 

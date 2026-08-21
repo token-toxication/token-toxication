@@ -4,6 +4,7 @@ import { ClipboardCopyIcon, DatabaseIcon, KeyRoundIcon } from "lucide-react";
 import { dshModelCapabilities } from "./dsh-model-capabilities";
 import {
   catalogModelIds,
+  codexModelOptions,
   copyText,
   dshModelOptions,
   enabledCatalogModelOptions,
@@ -134,8 +135,8 @@ export function ClientSetupView({
   );
   const catalogModels = useMemo(() => catalogModelIds(models), [models]);
   const codexModels = useMemo(
-    () => routableModelIdsForWireApi(routableModels, "openai-responses"),
-    [routableModels],
+    () => codexModelOptions(models, routableModels),
+    [models, routableModels],
   );
   const chatModels = useMemo(
     () => routableModelIdsForWireApi(routableModels, "openai-chat"),
@@ -150,7 +151,7 @@ export function ClientSetupView({
     [models, routableModels],
   );
   const piModels = useMemo(() => {
-    const responseModels = new Set(codexModels);
+    const responseModels = new Set(codexModels.map((model) => model.id));
     return enabledCatalogModelOptions(models).filter((model) => responseModels.has(model.id));
   }, [codexModels, models]);
   const opencodeModelIds = useMemo(() => opencodeModels.map((model) => model.id), [opencodeModels]);
@@ -169,8 +170,14 @@ export function ClientSetupView({
   const selectedDshModel = dshModelIds.includes(dshModel) ? dshModel : (dshModelIds[0] ?? "");
 
   useEffect(() => {
-    setCodexModel((current) => preferredCatalogModel(current, catalogModels, "gpt-5"));
-  }, [catalogModels]);
+    setCodexModel((current) =>
+      preferredCatalogModel(
+        current,
+        codexModels.map((model) => model.id),
+        "gpt-5",
+      ),
+    );
+  }, [codexModels]);
 
   useEffect(() => {
     setClaudeModel((current) => preferredCatalogModel(current, catalogModels, "claude-sonnet-4-5"));
@@ -186,6 +193,7 @@ export function ClientSetupView({
         apiKey,
         serviceOrigin,
         codexModel,
+        codexModels,
         claudeModel,
         opencodeModel: selectedOpencodeModel,
         opencodeModels,
@@ -197,6 +205,7 @@ export function ClientSetupView({
       apiKey,
       serviceOrigin,
       codexModel,
+      codexModels,
       claudeModel,
       selectedOpencodeModel,
       opencodeModels,
@@ -268,8 +277,8 @@ export function ClientSetupView({
                 label="Codex"
                 value={codexModel}
                 onChange={setCodexModel}
-                options={catalogModels}
-                routedOptions={codexModels}
+                options={codexModels.map((model) => model.id)}
+                routedOptions={codexModels.map((model) => model.id)}
                 routeLabel="Responses"
               />
               <ClientModelField
@@ -314,13 +323,29 @@ export function ClientSetupView({
             <TabsTrigger value="dsh">DeepSeek Harness</TabsTrigger>
           </TabsList>
           <TabsContent value="codex">
-            <ClientSnippetCard
-              title="Codex profile"
-              description="Writes a dedicated profile using the Responses wire API."
-              endpoint="/openai/v1/responses"
-              model={codexModel}
-              snippet={snippets.codex}
-            />
+            {codexModels.length > 0 ? (
+              <div className="grid gap-5">
+                <ClientSnippetCard
+                  title="Codex static model catalog"
+                  description="Run this once to snapshot every routed Responses model. Re-run it after changing the model catalog."
+                  endpoint="~/.codex/token-toxication-model-catalog.json"
+                  model={`${codexModels.length} routed model${codexModels.length === 1 ? "" : "s"}`}
+                  snippet={snippets.codexCatalog}
+                />
+                <ClientSnippetCard
+                  title="Codex default configuration"
+                  description="Merge this root-level TOML into ~/.codex/config.toml, then run codex without --profile. It does not overwrite other settings."
+                  endpoint="/openai/v1/responses"
+                  model={codexModel || "not set"}
+                  snippet={snippets.codexConfig}
+                />
+              </div>
+            ) : (
+              <EmptyNotice
+                title="No Codex routes"
+                body="Add an enabled OpenAI Responses route to generate a Codex static catalog."
+              />
+            )}
           </TabsContent>
           <TabsContent value="claude">
             <ClientSnippetCard
@@ -474,10 +499,42 @@ function ClientSnippetCard({
   );
 }
 
+const CODEX_BASE_INSTRUCTIONS = "You are Codex, a coding agent.";
+
+export function codexModelCatalogJson(models: ClientModelOption[]) {
+  return JSON.stringify(
+    {
+      models: models.map((model, index) => ({
+        slug: model.id,
+        display_name: model.displayName,
+        description: "Routed through Token Toxication using the OpenAI Responses API.",
+        supported_reasoning_levels: [],
+        shell_type: "shell_command",
+        visibility: "list",
+        supported_in_api: true,
+        priority: index + 1,
+        availability_nux: null,
+        upgrade: null,
+        base_instructions: CODEX_BASE_INSTRUCTIONS,
+        support_verbosity: false,
+        default_verbosity: null,
+        apply_patch_tool_type: null,
+        truncation_policy: { mode: "bytes", limit: 10_000 },
+        supports_parallel_tool_calls: false,
+        experimental_supported_tools: [],
+        input_modalities: ["text"],
+      })),
+    },
+    null,
+    2,
+  );
+}
+
 export function buildClientSetupSnippets({
   apiKey,
   serviceOrigin,
   codexModel,
+  codexModels,
   claudeModel,
   opencodeModel,
   opencodeModels,
@@ -488,6 +545,7 @@ export function buildClientSetupSnippets({
   apiKey: string;
   serviceOrigin: string;
   codexModel: string;
+  codexModels: ClientModelOption[];
   claudeModel: string;
   opencodeModel: string;
   opencodeModels: OpencodeModelOption[];
@@ -500,6 +558,7 @@ export function buildClientSetupSnippets({
   const openaiBaseUrl = `${origin}/openai/v1`;
   const anthropicBaseUrl = `${origin}/anthropic`;
   const codexModelName = codexModel.trim() || "gpt-5";
+  const codexModelCatalog = codexModelCatalogJson(codexModels);
   const claudeModelName = claudeModel.trim() || "claude-sonnet-4-5";
   const opencodeModelName = opencodeModel.trim() || opencodeModels[0]?.id || "";
   const opencodeProvider = "token-toxication";
@@ -584,21 +643,27 @@ export function buildClientSetupSnippets({
   return {
     openaiBaseUrl,
     anthropicBaseUrl,
-    codex: [
+    codexCatalog: [
       `export TOKEN_TOXICATION_API_KEY=${shellQuote(relayApiKey)}`,
       "mkdir -p ~/.codex",
-      "cat > ~/.codex/token-toxication.config.toml <<'TOML'",
+      "cat > ~/.codex/token-toxication-model-catalog.json <<'JSON'",
+      codexModelCatalog,
+      "JSON",
+    ].join("\n"),
+    codexConfig: [
+      "# Merge this TOML into ~/.codex/config.toml. Replace any existing",
+      "# model, model_provider, model_catalog_json, and token-toxication provider",
+      "# settings instead of appending duplicate TOML keys or tables.",
+      "",
       `model = ${tomlString(codexModelName)}`,
       `model_provider = ${tomlString("token-toxication")}`,
+      `model_catalog_json = ${tomlString("~/.codex/token-toxication-model-catalog.json")}`,
       "",
       "[model_providers.token-toxication]",
       `name = ${tomlString("Token Toxication")}`,
       `base_url = ${tomlString(openaiBaseUrl)}`,
       `env_key = ${tomlString("TOKEN_TOXICATION_API_KEY")}`,
       `wire_api = ${tomlString("responses")}`,
-      "TOML",
-      "",
-      "codex --profile token-toxication",
     ].join("\n"),
     claudeCode: [
       `export ANTHROPIC_BASE_URL=${shellQuote(anthropicBaseUrl)}`,

@@ -153,6 +153,14 @@ export function enabledCatalogModelOptions(models: ModelCatalogEntry[]): ClientM
     .sort((left, right) => left.id.localeCompare(right.id));
 }
 
+export function codexModelOptions(
+  models: ModelCatalogEntry[],
+  routableModels: RoutableModelCatalogEntry[],
+): ClientModelOption[] {
+  const responses = new Set(routableModelIdsForWireApi(routableModels, "openai-responses"));
+  return enabledCatalogModelOptions(models).filter((model) => responses.has(model.id));
+}
+
 export function opencodeModelOptions(
   models: ModelCatalogEntry[],
   routableModels: RoutableModelCatalogEntry[],
