@@ -17,7 +17,7 @@ pub mod static_assets;
 
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
-use axum::Router;
+use axum::{Router, extract::DefaultBodyLimit};
 use chrono::{DateTime, Utc};
 use config::Config;
 use db::Db;
@@ -32,6 +32,8 @@ use tower_http::{
     services::{ServeDir, ServeFile},
     trace::TraceLayer,
 };
+
+const RELAY_BODY_LIMIT_BYTES: usize = 32 * 1024 * 1024;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -59,7 +61,8 @@ pub fn app(state: AppState, static_dir: PathBuf) -> Router {
         )
         .route(
             "/anthropic/v1/messages",
-            axum::routing::post(relay_messages),
+            axum::routing::post(relay_messages)
+                .layer(DefaultBodyLimit::max(RELAY_BODY_LIMIT_BYTES)),
         )
         .route(
             "/anthropic/v1/models",
@@ -76,11 +79,13 @@ pub fn app(state: AppState, static_dir: PathBuf) -> Router {
         )
         .route(
             "/openai/v1/chat/completions",
-            axum::routing::post(relay_openai_chat),
+            axum::routing::post(relay_openai_chat)
+                .layer(DefaultBodyLimit::max(RELAY_BODY_LIMIT_BYTES)),
         )
         .route(
             "/openai/v1/responses",
-            axum::routing::post(relay_openai_responses),
+            axum::routing::post(relay_openai_responses)
+                .layer(DefaultBodyLimit::max(RELAY_BODY_LIMIT_BYTES)),
         )
         .route(
             "/gemini/v1beta/models",
@@ -88,7 +93,9 @@ pub fn app(state: AppState, static_dir: PathBuf) -> Router {
         )
         .route(
             "/gemini/v1beta/models/{*operation}",
-            axum::routing::get(get_gemini_model).post(relay_gemini_generate_content),
+            axum::routing::get(get_gemini_model)
+                .post(relay_gemini_generate_content)
+                .layer(DefaultBodyLimit::max(RELAY_BODY_LIMIT_BYTES)),
         )
         .nest("/admin/api", admin_routes(state.clone()));
 
