@@ -29,7 +29,7 @@ The application ships as a Rust server with an embedded React admin interface an
 - Rust 1.95 or newer
 - [just](https://github.com/casey/just)
 - Vite+ with the `vp` command available
-- `openapi-nexus` for SDK generation
+- [openapi-nexus](https://github.com/rust-codegen-group/openapi-nexus) for SDK generation
 
 ### Run locally
 
@@ -41,6 +41,11 @@ just ui-build
 TT_BIND_ADDR=127.0.0.1:3000 \
 TT_ADMIN_PASSWORD='choose-a-strong-password' \
 just dev-server
+```
+
+#### On Windows
+```powershell
+$env:TT_BIND_ADDR="127.0.0.1:3000"; $env:TT_ADMIN_PASSWORD="choose-a-strong-password"; just dev-server
 ```
 
 Open [http://localhost:3000](http://localhost:3000) and sign in as `admin` with the password supplied through `TT_ADMIN_PASSWORD`.

@@ -1,3 +1,5 @@
+set windows-shell := ["C:/Program Files/Git/bin/bash.exe", "-c"]
+
 # List available recipes
 default:
     @just --list
