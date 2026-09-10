@@ -42,6 +42,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: voidzero-dev/setup-vp@v1
+        with:
+          working-directory: apps/admin
+          run-install: false
       - uses: taiki-e/install-action@just
       - name: Install openapi-nexus
         run: |
