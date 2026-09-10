@@ -6,6 +6,43 @@ import { codexModelCatalogJson } from "./codex-model-catalog";
 import { codexModelOptions } from "./helpers";
 
 describe("Codex model profiles", () => {
+  it("keeps advanced settings explicit, model-specific, and conservative for aliases", () => {
+    const ids = ["gpt-6-astra", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "custom-astra"];
+    const models = ids.map((id) => ({ id, displayName: "same label" }));
+    const enabled = Object.fromEntries(
+      ids.map((id) => [id, { responsesLite: true, codeMode: true, multiAgent: true }]),
+    );
+    const profiles = JSON.parse(codexModelCatalogJson(models, enabled)).models;
+    for (const [index, profile] of profiles.entries()) {
+      if (index === 4) {
+        expect(profile).not.toHaveProperty("use_responses_lite");
+        expect(profile).not.toHaveProperty("tool_mode");
+        expect(profile).not.toHaveProperty("multi_agent_version");
+        continue;
+      }
+      expect(profile.use_responses_lite).toBe(true);
+      expect(profile.tool_mode).toBe("code_mode_only");
+      expect(profile.multi_agent_version).toBe(index === 3 ? "v1" : "v2");
+      expect(profile.multi_agent_reasoning_effort).toBe(
+        index === 0 ? "xhigh" : index === 3 ? undefined : "max",
+      );
+      expect(
+        profile.supported_reasoning_levels.some(
+          (level: { effort: string }) => level.effort === "ultra",
+        ),
+      ).toBe(index !== 3);
+      expect(profile.base_instructions).toBe(
+        index === 0 ? CODEX_ASTRA_INSTRUCTIONS : CODEX_GPT56_INSTRUCTIONS,
+      );
+    }
+    const isolated = JSON.parse(
+      codexModelCatalogJson(models, { "gpt-6-astra": { codeMode: true } }),
+    ).models;
+    expect(isolated[0].use_responses_lite).toBe(false);
+    expect(isolated[0]).not.toHaveProperty("multi_agent_version");
+    expect(isolated[1]).not.toHaveProperty("tool_mode");
+    expect(JSON.parse(codexModelCatalogJson(models)).models[0]).not.toHaveProperty("tool_mode");
+  });
   it("keeps family instructions independent in a mixed catalog", () => {
     const ids = ["gpt-5.6-terra", "unknown", "gpt-6-astra", "gpt-5.6-sol", "gpt-5.6-luna"];
     const catalog = JSON.parse(

@@ -133,7 +133,55 @@ const modelProfiles = new Map<string, KnownModelProfile>([
   ],
 ]);
 
-export function codexModelCatalogJson(models: ClientModelOption[]) {
+export type CodexAdvancedOptions = {
+  responsesLite?: boolean;
+  codeMode?: boolean;
+  multiAgent?: boolean;
+};
+
+type AgentProfile = { version: "v1" } | { version: "v2"; effort: ReasoningEffort };
+const agentProfiles = new Map<string, AgentProfile>([
+  ["gpt-6-astra", { version: "v2", effort: "xhigh" }],
+  ["gpt-5.6-sol", { version: "v2", effort: "max" }],
+  ["gpt-5.6-terra", { version: "v2", effort: "max" }],
+  ["gpt-5.6-luna", { version: "v1" }],
+]);
+
+export function supportsAdvancedCodexProfile(id: string) {
+  return modelProfiles.has(id) && agentProfiles.has(id);
+}
+
+function advancedProfile(id: string, options: CodexAdvancedOptions = {}) {
+  const profile = modelProfiles.get(id);
+  const agents = agentProfiles.get(id);
+  if (!profile || !agents) return {};
+  return {
+    ...(options.responsesLite ? { use_responses_lite: true } : {}),
+    ...(options.codeMode ? { tool_mode: "code_mode_only" } : {}),
+    ...(options.multiAgent
+      ? {
+          multi_agent_version: agents.version,
+          ...(agents.version === "v2"
+            ? {
+                supported_reasoning_levels: [
+                  ...profile.supported_reasoning_levels,
+                  {
+                    effort: "ultra",
+                    description: "Multi-agent mode using the model's supported reasoning effort",
+                  },
+                ],
+                multi_agent_reasoning_effort: agents.effort,
+              }
+            : {}),
+        }
+      : {}),
+  };
+}
+
+export function codexModelCatalogJson(
+  models: ClientModelOption[],
+  advanced: Record<string, CodexAdvancedOptions> = {},
+) {
   return JSON.stringify(
     {
       models: models.map((model, index) => ({
@@ -146,6 +194,7 @@ export function codexModelCatalogJson(models: ClientModelOption[]) {
         availability_nux: null,
         upgrade: null,
         ...(modelProfiles.get(model.id) ?? fallbackProfile),
+        ...advancedProfile(model.id, advanced[model.id]),
       })),
     },
     null,

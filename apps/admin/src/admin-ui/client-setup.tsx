@@ -2,7 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { ClipboardCopyIcon, DatabaseIcon, KeyRoundIcon } from "lucide-react";
 
 import { dshModelCapabilities } from "./dsh-model-capabilities";
-import { codexModelCatalogJson } from "./codex-model-catalog";
+import {
+  codexModelCatalogJson,
+  supportsAdvancedCodexProfile,
+  type CodexAdvancedOptions,
+} from "./codex-model-catalog";
 import {
   catalogModelIds,
   codexModelOptions,
@@ -31,6 +35,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -140,6 +145,7 @@ export function ClientSetupView({
     [],
   );
   const catalogModels = useMemo(() => catalogModelIds(models), [models]);
+  const [codexAdvanced, setCodexAdvanced] = useState<Record<string, CodexAdvancedOptions>>({});
   const codexModels = useMemo(
     () => codexModelOptions(models, routableModels),
     [models, routableModels],
@@ -200,6 +206,7 @@ export function ClientSetupView({
         serviceOrigin,
         codexModel,
         codexModels,
+        codexAdvanced,
         claudeModel,
         opencodeModel: selectedOpencodeModel,
         opencodeModels,
@@ -212,6 +219,7 @@ export function ClientSetupView({
       serviceOrigin,
       codexModel,
       codexModels,
+      codexAdvanced,
       claudeModel,
       selectedOpencodeModel,
       opencodeModels,
@@ -331,6 +339,53 @@ export function ClientSetupView({
           <TabsContent value="codex">
             {codexModels.length > 0 ? (
               <div className="grid gap-5">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Optional Codex capabilities</CardTitle>
+                    <CardDescription>
+                      Applies only to {codexModel}. The full profile requires Codex 0.153.4 and
+                      compatible upstream routes. These settings do not verify upstream support or
+                      change billing tiers.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="flex flex-col gap-4">
+                    {(
+                      [
+                        [
+                          "responsesLite",
+                          "Responses Lite",
+                          "Requires every eligible route for this model to support Lite.",
+                        ],
+                        [
+                          "codeMode",
+                          "Code mode",
+                          "Run tools through the client's JavaScript tool runtime.",
+                        ],
+                        [
+                          "multiAgent",
+                          "Multi-agent tools",
+                          "Expose model-specific agent tools and Ultra where supported. Delegation still follows user instructions.",
+                        ],
+                      ] as const
+                    ).map(([key, label, hint]) => (
+                      <Field key={key} label={label} htmlFor={`codex-${key}`}>
+                        <Switch
+                          id={`codex-${key}`}
+                          aria-label={label}
+                          disabled={!supportsAdvancedCodexProfile(codexModel)}
+                          checked={Boolean(codexAdvanced[codexModel]?.[key])}
+                          onCheckedChange={(checked) =>
+                            setCodexAdvanced((previous) => ({
+                              ...previous,
+                              [codexModel]: { ...previous[codexModel], [key]: checked },
+                            }))
+                          }
+                        />
+                        <p className="text-sm text-muted-foreground">{hint}</p>
+                      </Field>
+                    ))}
+                  </CardContent>
+                </Card>
                 <ClientSnippetCard
                   title="Codex static model catalog"
                   description="Run this once to snapshot every routed Responses model. Re-run it after changing the model catalog."
@@ -510,6 +565,7 @@ export function buildClientSetupSnippets({
   serviceOrigin,
   codexModel,
   codexModels,
+  codexAdvanced = {},
   claudeModel,
   opencodeModel,
   opencodeModels,
@@ -521,6 +577,7 @@ export function buildClientSetupSnippets({
   serviceOrigin: string;
   codexModel: string;
   codexModels: ClientModelOption[];
+  codexAdvanced?: Record<string, CodexAdvancedOptions>;
   claudeModel: string;
   opencodeModel: string;
   opencodeModels: OpencodeModelOption[];
@@ -533,7 +590,7 @@ export function buildClientSetupSnippets({
   const openaiBaseUrl = `${origin}/openai/v1`;
   const anthropicBaseUrl = `${origin}/anthropic`;
   const codexModelName = codexModel.trim() || "gpt-5";
-  const codexModelCatalog = codexModelCatalogJson(codexModels);
+  const codexModelCatalog = codexModelCatalogJson(codexModels, codexAdvanced);
   const claudeModelName = claudeModel.trim() || "claude-sonnet-4-5";
   const opencodeModelName = opencodeModel.trim() || opencodeModels[0]?.id || "";
   const opencodeProvider = "token-toxication";
