@@ -144,6 +144,12 @@ export function dshModelCapabilities(
   if (model.id === "gpt-6-astra") {
     return protocol === "responses" ? subscription56LowCapabilities : undefined;
   }
+  if (["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"].includes(model.id)) {
+    if (protocol === "anthropic") return undefined;
+    const capabilities =
+      model.id === "gpt-5.6-sol" ? subscription56LowCapabilities : subscription56MediumCapabilities;
+    return protocol === "responses" ? capabilities : { input: imageInput };
+  }
   if (protocol === "chat" && model.family.trim().toLowerCase() === "deepseek") {
     return { reasoning: deepseekProfile };
   }

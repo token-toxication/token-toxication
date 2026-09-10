@@ -12,6 +12,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { buildClientSetupSnippets } from "./client-setup";
 import { CODEX_ASTRA_INSTRUCTIONS } from "./codex-astra-instructions";
+import { CODEX_GPT56_INSTRUCTIONS } from "./codex-gpt56-instructions";
 
 // Explicit opt-in: no real OpenAI endpoint, inherited credentials, or daily
 // Codex configuration. The mock asks for pwd and a patch in a disposable cwd.
@@ -47,7 +48,13 @@ async function stop(child: ChildProcess) {
 
 type Item = Record<string, unknown>;
 
-async function checkModelPicker(binary: string, env: NodeJS.ProcessEnv, cwd: string) {
+async function checkModelPicker(
+  binary: string,
+  env: NodeJS.ProcessEnv,
+  cwd: string,
+  model: string,
+  defaultEffort: string,
+) {
   const child = spawn(binary, ["app-server", "-c", "features.plugins=false"], { cwd, env });
   const lines = createInterface({ input: child.stdout });
   const replies = new Map<number, { result?: { data: Item[] }; error?: unknown }>();
@@ -74,8 +81,8 @@ async function checkModelPicker(binary: string, env: NodeJS.ProcessEnv, cwd: str
     expect(replies.get(2)?.error).toBeUndefined();
     expect(replies.get(2)?.result?.data).toEqual([
       expect.objectContaining({
-        model: "gpt-6-astra",
-        defaultReasoningEffort: "low",
+        model,
+        defaultReasoningEffort: defaultEffort,
         inputModalities: ["text", "image"],
         supportedReasoningEfforts: ["low", "medium", "high", "xhigh", "max"].map(
           (reasoningEffort) => expect.objectContaining({ reasoningEffort }),
@@ -115,12 +122,23 @@ function responseStream(index: number, item: Item) {
     .join("");
 }
 
-describe.skipIf(!codexBinary)("Codex client through the Responses relay", () => {
+describe.skipIf(!codexBinary).each([
+  { model: "gpt-6-astra", defaultEffort: "low", instructions: CODEX_ASTRA_INSTRUCTIONS },
+  { model: "gpt-5.6-sol", defaultEffort: "low", instructions: CODEX_GPT56_INSTRUCTIONS },
+  { model: "gpt-5.6-terra", defaultEffort: "medium", instructions: CODEX_GPT56_INSTRUCTIONS },
+  { model: "gpt-5.6-luna", defaultEffort: "medium", instructions: CODEX_GPT56_INSTRUCTIONS },
+])("$model client through the Responses relay", ({ model, defaultEffort, instructions }) => {
   it.each([
     { name: "default effort", effort: undefined, contextWindow: undefined, usableContext: 258_400 },
+    ...["low", "medium", "high", "xhigh", "max"].map((effort) => ({
+      name: `explicit ${effort} effort`,
+      effort,
+      contextWindow: undefined,
+      usableContext: 258_400,
+    })),
     {
-      name: "explicit max effort",
-      effort: "max",
+      name: "web search and summary",
+      effort: undefined,
       contextWindow: undefined,
       usableContext: 258_400,
     },
@@ -132,7 +150,8 @@ describe.skipIf(!codexBinary)("Codex client through the Responses relay", () => 
     },
   ])(
     "loads the generated setup with $name",
-    async ({ effort, contextWindow, usableContext }) => {
+    async ({ name, effort, contextWindow, usableContext }) => {
+      const withWebSearch = name === "web search and summary";
       if (!codexBinary || !relayBinary) throw new Error("Set both TT_CODEX_BIN and TT_RELAY_BIN");
       if (!path.isAbsolute(codexBinary) || !path.isAbsolute(relayBinary)) {
         throw new Error("TT_CODEX_BIN and TT_RELAY_BIN must be absolute paths");
@@ -274,13 +293,13 @@ describe.skipIf(!codexBinary)("Codex client through the Responses relay", () => 
           },
           login.token,
         );
-        await admin("model-catalog", { id: "gpt-6-astra", family: "other" }, login.token);
+        await admin("model-catalog", { id: model, family: "other" }, login.token);
         await admin(
           "provider-model-routes",
           {
-            publicModelId: "gpt-6-astra",
+            publicModelId: model,
             providerAccountId: account.data.id,
-            upstreamModelId: "mock-astra-upstream",
+            upstreamModelId: "mock-coding-upstream",
             wireApi: "openai-responses",
           },
           login.token,
@@ -288,8 +307,8 @@ describe.skipIf(!codexBinary)("Codex client through the Responses relay", () => 
         const snippets = buildClientSetupSnippets({
           apiKey: key.secret,
           serviceOrigin: relayUrl,
-          codexModel: "gpt-6-astra",
-          codexModels: [{ id: "gpt-6-astra", displayName: "Astra" }],
+          codexModel: model,
+          codexModels: [{ id: model, displayName: model }],
           claudeModel: "",
           opencodeModel: "",
           opencodeModels: [],
@@ -326,7 +345,7 @@ describe.skipIf(!codexBinary)("Codex client through the Responses relay", () => 
           CODEX_HOME: configDirectory,
           TOKEN_TOXICATION_API_KEY: key.secret,
         };
-        if (!effort) await checkModelPicker(codexBinary, childEnv, workspace);
+        if (!effort) await checkModelPicker(codexBinary, childEnv, workspace, model, defaultEffort);
         const versionProcess = spawn(codexBinary, ["--version"], { env: childEnv });
         let version = "";
         versionProcess.stdout.on("data", (data) => {
@@ -349,7 +368,8 @@ describe.skipIf(!codexBinary)("Codex client through the Responses relay", () => 
           "-c",
           "check_for_update_on_startup=false",
           "-c",
-          'web_search="disabled"',
+          `web_search="${withWebSearch ? "live" : "disabled"}"`,
+          ...(withWebSearch ? ["-c", 'model_reasoning_summary="detailed"'] : []),
           // Prevent background marketplace clones unrelated to this contract.
           "-c",
           "features.plugins=false",
@@ -378,9 +398,24 @@ describe.skipIf(!codexBinary)("Codex client through the Responses relay", () => 
         }
         expect(captures, output).toHaveLength(4);
         const first = captures[0];
-        expect(first.model).toBe("mock-astra-upstream");
-        expect(first.instructions).toBe(CODEX_ASTRA_INSTRUCTIONS);
-        expect(first.reasoning).toEqual({ effort: effort ?? "low" });
+        expect(first.model).toBe("mock-coding-upstream");
+        for (const request of captures) expect(request.instructions).toBe(instructions);
+        expect(first.reasoning).toEqual({
+          effort: effort ?? defaultEffort,
+          ...(withWebSearch ? { summary: "detailed" } : {}),
+        });
+        const webTools = first.tools.filter((tool) => String(tool.type).startsWith("web_search"));
+        if (withWebSearch) {
+          expect(webTools).toEqual([
+            expect.objectContaining({
+              search_content_types: ["text", "image"],
+              external_web_access: true,
+            }),
+          ]);
+        } else {
+          expect(webTools).toEqual([]);
+        }
+        expect(first).not.toHaveProperty("service_tier");
         expect(first.text.verbosity).toBe("low");
         expect(first.parallel_tool_calls).toBe(true);
         for (const unsupported of [

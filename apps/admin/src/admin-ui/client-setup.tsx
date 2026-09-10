@@ -102,11 +102,16 @@ export function dshProviderYaml(
 }
 
 export function dshDefaultModelYaml(model: DshModelOption) {
-  const protocol: DshProtocol = model.protocols.chat
-    ? "chat"
-    : model.protocols.responses
-      ? "responses"
-      : "anthropic";
+  const preferResponses =
+    model.protocols.responses &&
+    ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"].includes(model.id);
+  const protocol: DshProtocol = preferResponses
+    ? "responses"
+    : model.protocols.chat
+      ? "chat"
+      : model.protocols.responses
+        ? "responses"
+        : "anthropic";
   const lines = [
     "agent-default-model:",
     `  provider: ${dshProviderIds[protocol]}`,
