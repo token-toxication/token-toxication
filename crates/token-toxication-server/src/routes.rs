@@ -1839,6 +1839,8 @@ fn validate_provider_model_route_input(
 
 #[cfg(test)]
 mod tests {
+    mod responses_contract;
+
     use std::{convert::Infallible, net::SocketAddr, path::PathBuf, sync::Arc, time::Duration};
 
     use super::*;
