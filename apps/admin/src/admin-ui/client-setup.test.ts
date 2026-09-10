@@ -67,6 +67,38 @@ describe("Codex static model catalog", () => {
 });
 
 describe("dshModelOptions", () => {
+  it("requires Responses for Astra agent routes and chooses that protocol", () => {
+    const models = [catalogEntry("gpt-6-astra", "other")];
+    const chat = { id: "gpt-6-astra", wireApi: "openai-chat" };
+    expect(dshModelOptions(models, [chat])).toEqual([]);
+    const [astra] = dshModelOptions(models, [
+      chat,
+      { id: "gpt-6-astra", wireApi: "openai-responses" },
+      { id: "gpt-6-astra", wireApi: "anthropic-messages" },
+    ]);
+    expect(astra.protocols).toEqual({ chat: false, responses: true, anthropic: false });
+    expect(dshModelEntryYaml(astra, "responses")).toBe(
+      [
+        '- id: "gpt-6-astra"',
+        "          input: [text, image]",
+        "          reasoningEfforts:",
+        "            low: low",
+        "            medium: medium",
+        "            high: high",
+        "            xhigh: xhigh",
+        "            max: max",
+      ].join("\n"),
+    );
+    expect(dshDefaultModelYaml(astra)).toBe(
+      [
+        "agent-default-model:",
+        "  provider: token-toxication-responses",
+        '  model: "gpt-6-astra"',
+        "  reasoningEffort: low",
+      ].join("\n"),
+    );
+  });
+
   it("keeps enabled models routed through a DeepSeek Harness protocol", () => {
     const options = dshModelOptions(catalog, routable);
 

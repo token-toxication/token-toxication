@@ -184,20 +184,24 @@ export function dshModelOptions(
   const responses = new Set(routableModelIdsForWireApi(routableModels, "openai-responses"));
   const anthropic = new Set(routableModelIdsForWireApi(routableModels, "anthropic-messages"));
 
-  return models
-    .filter((model) => model.enabled && model.id)
-    .filter((model) => chat.has(model.id) || responses.has(model.id) || anthropic.has(model.id))
-    .map((model) => ({
-      id: model.id,
-      displayName: model.displayName || model.id,
-      family: model.family,
-      protocols: {
-        chat: chat.has(model.id),
-        responses: responses.has(model.id),
-        anthropic: anthropic.has(model.id),
-      },
-    }))
-    .sort((left, right) => left.id.localeCompare(right.id));
+  return (
+    models
+      .filter((model) => model.enabled && model.id)
+      // DSH is an agent harness; Astra Chat does not support tool calling.
+      .filter((model) => model.id !== "gpt-6-astra" || responses.has(model.id))
+      .filter((model) => chat.has(model.id) || responses.has(model.id) || anthropic.has(model.id))
+      .map((model) => ({
+        id: model.id,
+        displayName: model.displayName || model.id,
+        family: model.family,
+        protocols: {
+          chat: model.id !== "gpt-6-astra" && chat.has(model.id),
+          responses: responses.has(model.id),
+          anthropic: model.id !== "gpt-6-astra" && anthropic.has(model.id),
+        },
+      }))
+      .sort((left, right) => left.id.localeCompare(right.id))
+  );
 }
 
 export function preferredCatalogModel(current: string, catalogModels: string[], fallback: string) {
