@@ -31,6 +31,23 @@ const subscriptionStandardEfforts = ["low:low", "medium:medium", "high:high", "x
 const subscription56Efforts = [...subscriptionStandardEfforts, "max:max"];
 
 describe("dshModelCapabilities", () => {
+  it("offers Astra's ordinary Responses efforts regardless of family", () => {
+    expect(dshModelCapabilities(model("gpt-6-astra", "other"), "responses")).toEqual({
+      input: ["text", "image"],
+      reasoning: {
+        efforts: ["low", "medium", "high", "xhigh", "max"].map((id) => ({ id, wireValue: id })),
+        defaultEffort: "low",
+      },
+    });
+    expect(dshModelCapabilities(model("gpt-6-astra", "deepseek"), "chat")).toBeUndefined();
+    expect(dshModelCapabilities(model("gpt-6-astra"), "anthropic")).toBeUndefined();
+  });
+
+  it.each(["OpenAI/GPT-6-ASTRA", "gpt-6-astra-2026-09-10", "custom-astra"])(
+    "does not infer Astra capabilities for %s",
+    (id) => expect(dshModelCapabilities(model(id), "responses")).toBeUndefined(),
+  );
+
   it.each([
     ["gpt-5", ["minimal:minimal", "low:low", "medium:medium", "high:high"], "high"],
     ["gpt-5-pro", ["high:high"], "high"],

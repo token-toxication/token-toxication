@@ -139,6 +139,11 @@ export function dshModelCapabilities(
   model: DshModelOption,
   protocol: DshProtocol,
 ): DshModelCapabilities | undefined {
+  // Astra tools require Responses. Do not extend the older models' permissive
+  // prefix/date normalization to unverified Astra aliases.
+  if (model.id === "gpt-6-astra") {
+    return protocol === "responses" ? subscription56LowCapabilities : undefined;
+  }
   if (protocol === "chat" && model.family.trim().toLowerCase() === "deepseek") {
     return { reasoning: deepseekProfile };
   }
