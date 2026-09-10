@@ -59,6 +59,10 @@ ui-check:
 ui-test:
     cd apps/admin && vp test --run
 
+# Opt-in real Codex client test against a local mock; pass an absolute binary path.
+codex-compat codex_bin: build
+    cd apps/admin && TT_CODEX_BIN={{quote(codex_bin)}} TT_RELAY_BIN={{quote(justfile_directory() / "target/debug/token-toxication-server")}} vp test --run src/admin-ui/codex-client.integration.test.ts
+
 # Build admin UI
 ui-build:
     cd apps/admin && vp build
