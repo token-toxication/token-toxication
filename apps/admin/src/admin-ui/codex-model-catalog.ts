@@ -1,4 +1,5 @@
 import { CODEX_ASTRA_INSTRUCTIONS } from "./codex-astra-instructions";
+import { CODEX_GPT56_INSTRUCTIONS } from "./codex-gpt56-instructions";
 import type { ClientModelOption } from "./types";
 
 type ReasoningEffort = "low" | "medium" | "high" | "xhigh" | "max";
@@ -7,7 +8,6 @@ type CodexModelProfile = {
   supported_reasoning_levels: { effort: ReasoningEffort; description: string }[];
   default_reasoning_level?: ReasoningEffort;
   shell_type: "shell_command" | "unified_exec";
-  base_instructions: string;
   support_verbosity: boolean;
   default_verbosity: "low" | null;
   apply_patch_tool_type: "freeform" | null;
@@ -20,9 +20,18 @@ type CodexModelProfile = {
   max_context_window?: number;
   default_reasoning_summary?: "none";
   use_responses_lite?: boolean;
+  web_search_tool_type?: "text_and_image";
+  supports_reasoning_summary_parameter?: boolean;
+  effective_context_window_percent?: number;
+  include_skills_usage_instructions?: boolean;
+  include_apps_usage_instructions?: boolean;
+  include_plugin_usage_instructions?: boolean;
+  node_repl_auto_review_required?: boolean;
+  supports_experimental_context?: boolean;
+  supports_search_tool?: boolean;
 };
 
-const fallbackProfile: CodexModelProfile = {
+const fallbackProfile: CodexModelProfile & { base_instructions: string } = {
   supported_reasoning_levels: [],
   shell_type: "shell_command",
   base_instructions: "You are Codex, a coding agent.",
@@ -35,11 +44,11 @@ const fallbackProfile: CodexModelProfile = {
   input_modalities: ["text"],
 };
 
-// Astra capabilities offered by this application's ordinary Responses profile.
+// Capabilities offered by this application's ordinary Responses coding profile.
 // Context values are client limits, not a guarantee about arbitrary upstreams.
 // Ultra, Lite, code mode, experimental context, and multi-agent need separate
 // transport/harness validation; do not enable them by copying the full catalog.
-const astraProfile: CodexModelProfile = {
+const codingProfile: CodexModelProfile = {
   supported_reasoning_levels: [
     { effort: "low", description: "Fast responses with lighter reasoning" },
     { effort: "medium", description: "Balances speed and reasoning depth" },
@@ -47,9 +56,7 @@ const astraProfile: CodexModelProfile = {
     { effort: "xhigh", description: "Extra high reasoning depth for complex problems" },
     { effort: "max", description: "Maximum reasoning depth for the hardest problems" },
   ],
-  default_reasoning_level: "low",
   shell_type: "unified_exec",
-  base_instructions: CODEX_ASTRA_INSTRUCTIONS,
   support_verbosity: true,
   default_verbosity: "low",
   apply_patch_tool_type: "freeform",
@@ -62,7 +69,69 @@ const astraProfile: CodexModelProfile = {
   max_context_window: 872_000,
   default_reasoning_summary: "none",
   use_responses_lite: false,
+  web_search_tool_type: "text_and_image",
+  supports_reasoning_summary_parameter: true,
+  effective_context_window_percent: 95,
+  include_skills_usage_instructions: false,
+  supports_experimental_context: false,
+  // Deferred tool discovery is separate from hosted web search.
+  supports_search_tool: false,
 };
+
+type KnownModelProfile = CodexModelProfile & {
+  base_instructions: string;
+  default_reasoning_level: ReasoningEffort;
+  include_apps_usage_instructions: boolean;
+  include_plugin_usage_instructions: boolean;
+  node_repl_auto_review_required: boolean;
+};
+
+const modelProfiles = new Map<string, KnownModelProfile>([
+  [
+    "gpt-6-astra",
+    {
+      ...codingProfile,
+      base_instructions: CODEX_ASTRA_INSTRUCTIONS,
+      default_reasoning_level: "low",
+      include_apps_usage_instructions: false,
+      include_plugin_usage_instructions: false,
+      node_repl_auto_review_required: true,
+    },
+  ],
+  [
+    "gpt-5.6-sol",
+    {
+      ...codingProfile,
+      base_instructions: CODEX_GPT56_INSTRUCTIONS,
+      default_reasoning_level: "low",
+      include_apps_usage_instructions: true,
+      include_plugin_usage_instructions: true,
+      node_repl_auto_review_required: false,
+    },
+  ],
+  [
+    "gpt-5.6-terra",
+    {
+      ...codingProfile,
+      base_instructions: CODEX_GPT56_INSTRUCTIONS,
+      default_reasoning_level: "medium",
+      include_apps_usage_instructions: true,
+      include_plugin_usage_instructions: true,
+      node_repl_auto_review_required: false,
+    },
+  ],
+  [
+    "gpt-5.6-luna",
+    {
+      ...codingProfile,
+      base_instructions: CODEX_GPT56_INSTRUCTIONS,
+      default_reasoning_level: "medium",
+      include_apps_usage_instructions: true,
+      include_plugin_usage_instructions: true,
+      node_repl_auto_review_required: false,
+    },
+  ],
+]);
 
 export function codexModelCatalogJson(models: ClientModelOption[]) {
   return JSON.stringify(
@@ -76,7 +145,7 @@ export function codexModelCatalogJson(models: ClientModelOption[]) {
         priority: index + 1,
         availability_nux: null,
         upgrade: null,
-        ...(model.id === "gpt-6-astra" ? astraProfile : fallbackProfile),
+        ...(modelProfiles.get(model.id) ?? fallbackProfile),
       })),
     },
     null,

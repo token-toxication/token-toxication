@@ -51,7 +51,77 @@ Responses Lite, Ultra, code-mode-only, experimental context management, and mult
 
 For other clients, use Responses for tool calling and omit unsupported sampling parameters. The relay preserves client parameters except for configured route `stripParams` and the existing Codex OAuth `max_output_tokens` removal; it does not silently repair every invalid Astra request.
 
+### GPT-5.6 Sol, Terra, and Luna
+
+The exact public IDs below receive complete ordinary Responses coding profiles
+from [codex-model-catalog.ts](../apps/admin/src/admin-ui/codex-model-catalog.ts).
+Sol, Terra, and Luna share their own standalone instructions in
+[codex-gpt56-instructions.ts](../apps/admin/src/admin-ui/codex-gpt56-instructions.ts).
+Astra uses separate instructions in
+[codex-astra-instructions.ts](../apps/admin/src/admin-ui/codex-astra-instructions.ts).
+
+The GPT-5.6 instructions retain explicit task-type boundaries, workspace editing
+and destructive-action rules, a structured skill workflow, and concise collaborative
+communication. Astra emphasizes carrying forward authorization, completing reviewable
+preparation before requesting approval, continuity across user steering and compaction,
+connected prose, and judgment about optional skills. Both remain bounded by user
+authorization and the tools available in the session. Neither template enables
+persistent mode, automatic review, or multi-agent orchestration. These are
+product-owned instructions for ordinary Responses, not an entire client runtime.
+
+| Public model ID | Default reasoning | Available reasoning |
+| --- | --- | --- |
+| `gpt-5.6-sol` | `low` | `low`, `medium`, `high`, `xhigh`, `max` |
+| `gpt-5.6-terra` | `medium` | `low`, `medium`, `high`, `xhigh`, `max` |
+| `gpt-5.6-luna` | `medium` | `low`, `medium`, `high`, `xhigh`, `max` |
+
+All three profiles declare text/image input, original image detail, low verbosity,
+unified exec, freeform apply_patch, parallel tool calls, and 10,000-token tool output
+truncation. The default context is 272,000 tokens, with a configurable maximum of
+872,000; these are client limits, not live upstream guarantees. Reasoning summaries
+are omitted by default. Lite, Ultra, code mode, multi-agent orchestration, and
+WebSockets are not enabled by these profiles.
+
+Regenerate an existing static catalog to receive these settings. Explicit user
+reasoning and instruction overrides still take precedence. The `gpt-5.6` family
+alias, provider-prefixed IDs, dated variants, and custom aliases keep the conservative
+Codex fallback; display labels do not select a profile. Routing eligibility is unchanged.
+
+DSH retains its existing model recognition and protocol handling. Exact GPT-5.6
+IDs take precedence over a conflicting family label. Responses entries
+offer images and the reasoning levels/defaults above; when both Chat and Responses
+routes exist, the default selects Responses. This change does not add reasoning or
+agent-tool guarantees to Chat routes.
+
+### Capability boundaries
+
+The four coding profiles explicitly select text-and-image hosted web search when
+the client enables search, accept an explicit reasoning summary while omitting it
+by default, and reserve 5% of the configured context for overhead. Search availability
+still depends on the client provider and upstream route; declaring its request shape
+does not establish that an arbitrary upstream can execute it.
+
+| Client policy | Astra | Sol, Terra, Luna |
+| --- | --- | --- |
+| Additional app usage instructions | Disabled | Enabled when apps are available |
+| Additional plugin usage instructions | Disabled | Enabled when plugins are available |
+| Additional skill usage instructions | Disabled | Disabled |
+| Node REPL automatic review requirement | Required if that tool is enabled | No model-specific requirement |
+
+These flags do not install integrations, enable Node REPL, or bypass normal
+permission checks. Deferred tool discovery is a separate capability from hosted
+web search and remains disabled in these profiles. Experimental context management
+and Responses Lite also remain explicitly disabled. No paid speed tier is selected
+or advertised. Client-version gates, compaction compatibility hashes, advanced tool
+modes, and account-plan metadata are not copied into this static relay catalog.
+The tested client versions below qualify the ordinary Responses subset only.
+
 ### Compatibility checks
+
+The suite covers Astra, Sol, Terra, and Luna separately: default reasoning, each
+of the five explicit reasoning levels, a bounded context override, and hosted web
+search with an explicit summary. Web search is exercised as a request contract
+against the mock, not as a live search service.
 
 The isolated mock suite has passed with Codex CLI **0.146.0** and **0.153.4** on macOS. These are tested versions, not a promise that every version between them, or every future version, is compatible. The test starts the real relay, uses its admin API to create temporary routes, loads the generated catalog in Codex, checks the model picker, and completes shell and patch tool round trips. It also checks image input, default/explicit reasoning, and runtime context limits. No production credentials or remote model responses are used.
 

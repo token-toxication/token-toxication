@@ -2,9 +2,9 @@ use super::*;
 use crate::models::UpdateProviderModelRouteRequest;
 
 // Synthetic protocol data only. Never substitute captured user requests here.
-fn astra_request() -> Value {
+fn coding_request() -> Value {
     json!({
-        "model": "public-astra",
+        "model": "public-coding",
         "instructions": "synthetic-private-instructions",
         "input": [
             {"role": "user", "content": [
@@ -34,8 +34,17 @@ fn astra_request() -> Value {
 }
 
 #[tokio::test]
-async fn astra_contract_preserves_payloads_and_auth_boundaries() {
-    for auth_mode in ["bearer", "codex-oauth"] {
+async fn coding_models_preserve_payloads_and_auth_boundaries() {
+    for (auth_mode, upstream_model) in ["bearer", "codex-oauth"].into_iter().flat_map(|auth| {
+        [
+            "gpt-6-astra",
+            "gpt-5.6-sol",
+            "gpt-5.6-terra",
+            "gpt-5.6-luna",
+        ]
+        .into_iter()
+        .map(move |model| (auth, model))
+    }) {
         let captured = Arc::new(Mutex::new(Vec::<(HeaderMap, Value)>::new()));
         let capture = captured.clone();
         let upstream_path = if auth_mode == "bearer" {
@@ -86,8 +95,8 @@ async fn astra_contract_preserves_payloads_and_auth_boundaries() {
                 auth_mode,
                 provider_secret,
                 wire_api: "openai-responses",
-                public_model: "public-astra",
-                upstream_model: "gpt-6-astra",
+                public_model: "public-coding",
+                upstream_model,
             },
         )
         .await;
@@ -115,7 +124,7 @@ async fn astra_contract_preserves_payloads_and_auth_boundaries() {
             "originator",
             HeaderValue::from_static("untrusted-originator"),
         );
-        let input = astra_request();
+        let input = coding_request();
         let response = relay_openai_responses(
             State(state.clone()),
             headers,
@@ -136,7 +145,7 @@ async fn astra_contract_preserves_payloads_and_auth_boundaries() {
         assert_eq!(captured.len(), 1);
         let (headers, body) = &captured[0];
         let mut expected = input;
-        expected["model"] = json!("gpt-6-astra");
+        expected["model"] = json!(upstream_model);
         let expected_object = expected.as_object_mut().expect("object");
         expected_object.remove("remove_for_route");
         if auth_mode == "codex-oauth" {

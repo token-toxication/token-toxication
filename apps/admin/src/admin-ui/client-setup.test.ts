@@ -67,6 +67,52 @@ describe("Codex static model catalog", () => {
 });
 
 describe("dshModelOptions", () => {
+  it.each([
+    ["gpt-5.6-sol", "low"],
+    ["gpt-5.6-terra", "medium"],
+    ["gpt-5.6-luna", "medium"],
+  ])("keeps %s Responses configuration and its %s default", (id, effort) => {
+    const [model] = dshModelOptions(
+      [catalogEntry(id, "other")],
+      [
+        { id, wireApi: "openai-responses" },
+        { id, wireApi: "openai-chat" },
+      ],
+    );
+    expect(dshModelEntryYaml(model, "responses")).toContain("input: [text, image]");
+    expect(dshModelEntryYaml(model, "responses")).toContain("max: max");
+    expect(dshDefaultModelYaml(model)).toBe(
+      [
+        "agent-default-model:",
+        "  provider: token-toxication-responses",
+        `  model: "${id}"`,
+        `  reasoningEffort: ${effort}`,
+      ].join("\n"),
+    );
+    expect(
+      dshDefaultModelYaml({
+        ...model,
+        protocols: { chat: true, responses: false, anthropic: false },
+      }),
+    ).toBe(
+      ["agent-default-model:", "  provider: token-toxication-chat", `  model: "${id}"`].join("\n"),
+    );
+  });
+
+  it.each(["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"])(
+    "does not let an incorrect family label override %s Chat capabilities",
+    (id) => {
+      const [model] = dshModelOptions(
+        [catalogEntry(id, "deepseek")],
+        [{ id, wireApi: "openai-chat" }],
+      );
+      expect(dshModelEntryYaml(model, "chat")).toContain("input: [text, image]");
+      expect(dshModelEntryYaml(model, "chat")).not.toContain("reasoningEfforts");
+      expect(dshModelEntryYaml(model, "chat")).not.toContain("thinkingFormat");
+      expect(dshDefaultModelYaml(model)).not.toContain("reasoningEffort");
+    },
+  );
+
   it("requires Responses for Astra agent routes and chooses that protocol", () => {
     const models = [catalogEntry("gpt-6-astra", "other")];
     const chat = { id: "gpt-6-astra", wireApi: "openai-chat" };
