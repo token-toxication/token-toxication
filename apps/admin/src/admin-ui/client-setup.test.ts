@@ -2,11 +2,11 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   buildClientSetupSnippets,
-  codexModelCatalogJson,
   dshDefaultModelYaml,
   dshModelEntryYaml,
   dshProviderYaml,
 } from "./client-setup";
+import { codexModelCatalogJson } from "./codex-model-catalog";
 import { codexModelOptions, dshModelOptions } from "./helpers";
 import type { ClientModelOption, DshModelOption } from "./types";
 import type { ModelCatalogEntry, RoutableModelCatalogEntry } from "../types";
