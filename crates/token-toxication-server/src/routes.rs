@@ -337,6 +337,9 @@ async fn relay_json_endpoint(
     let mut request_json: Value = serde_json::from_slice(&body)
         .map_err(|error| AppError::BadRequest(format!("invalid JSON body: {error}")))?;
     wire_api.validate(&request_json)?;
+    if wire_api == WireApi::OpenAiResponses {
+        validate_responses_protocol(&headers, &request_json)?;
+    }
     let model = request_json
         .get("model")
         .and_then(Value::as_str)
@@ -1056,6 +1059,9 @@ fn validate_messages_request(value: &Value) -> Result<(), AppError> {
     }
 }
 
+mod responses_websocket;
+pub use responses_websocket::relay_responses_websocket;
+
 fn validate_responses_request(value: &Value) -> Result<(), AppError> {
     if !value.is_object() {
         return Err(AppError::BadRequest(
@@ -1099,6 +1105,11 @@ where
     R: RuntimePoll,
     C: ConnectorSend,
 {
+    if wire_api == WireApi::OpenAiResponses
+        && let Some(lite) = headers.get(RESPONSES_LITE_HEADER)
+    {
+        request = request.header(HeaderName::from_static(RESPONSES_LITE_HEADER), lite.clone());
+    }
     if matches!(wire_api, WireApi::AnthropicMessages) {
         request = request.header(
             HeaderName::from_static("anthropic-version"),
@@ -1109,6 +1120,32 @@ where
         }
     }
     request
+}
+
+const RESPONSES_LITE_HEADER: &str = "x-openai-internal-codex-responses-lite";
+
+fn validate_responses_protocol(headers: &HeaderMap, value: &Value) -> Result<(), AppError> {
+    let mut values = headers.get_all(RESPONSES_LITE_HEADER).iter();
+    let lite = values.next();
+    if values.next().is_some() || lite.is_some_and(|value| value != "true") {
+        return Err(AppError::BadRequest(
+            "Responses Lite header must have exactly one value: true".into(),
+        ));
+    }
+    let has_tools_item = value
+        .get("input")
+        .and_then(Value::as_array)
+        .is_some_and(|items| {
+            items
+                .iter()
+                .any(|item| item.get("type").and_then(Value::as_str) == Some("additional_tools"))
+        });
+    if has_tools_item && lite.is_none() {
+        return Err(AppError::BadRequest(
+            "additional_tools input requires the Responses Lite header".into(),
+        ));
+    }
+    Ok(())
 }
 
 fn apply_provider_auth<'a, R, C>(
@@ -1671,7 +1708,7 @@ impl StreamingApplicationFailure {
 
 fn openai_responses_stream_failure(value: &Value) -> Option<StreamingApplicationFailure> {
     let error = match value.get("type").and_then(Value::as_str)? {
-        "error" => value,
+        "error" => value.get("error").unwrap_or(value),
         "response.failed" => value.pointer("/response/error").unwrap_or(value),
         _ => return None,
     };
@@ -1840,6 +1877,7 @@ fn validate_provider_model_route_input(
 #[cfg(test)]
 mod tests {
     mod responses_contract;
+    mod responses_websocket;
 
     use std::{convert::Infallible, net::SocketAddr, path::PathBuf, sync::Arc, time::Duration};
 
@@ -1912,6 +1950,8 @@ mod tests {
             db,
             http: test_http_client(),
             gemini_http: test_http_client(),
+            websocket_http: crate::websocket_transport::build_client(Duration::from_secs(3))
+                .unwrap(),
             antigravity_oauth: AntigravityOAuthStore::default(),
             relay_stream_idle_timeout: Duration::from_secs(5),
             relay_stream_max_duration: Duration::from_secs(900),

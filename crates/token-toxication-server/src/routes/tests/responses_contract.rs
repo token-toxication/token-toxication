@@ -35,16 +35,18 @@ fn coding_request() -> Value {
 
 #[tokio::test]
 async fn coding_models_preserve_payloads_and_auth_boundaries() {
-    for (auth_mode, upstream_model) in ["bearer", "codex-oauth"].into_iter().flat_map(|auth| {
-        [
-            "gpt-6-astra",
-            "gpt-5.6-sol",
-            "gpt-5.6-terra",
-            "gpt-5.6-luna",
-        ]
-        .into_iter()
-        .map(move |model| (auth, model))
-    }) {
+    for (auth_mode, upstream_model, lite) in
+        ["bearer", "codex-oauth"].into_iter().flat_map(|auth| {
+            [
+                "gpt-6-astra",
+                "gpt-5.6-sol",
+                "gpt-5.6-terra",
+                "gpt-5.6-luna",
+            ]
+            .into_iter()
+            .flat_map(move |model| [false, true].map(|lite| (auth, model, lite)))
+        })
+    {
         let captured = Arc::new(Mutex::new(Vec::<(HeaderMap, Value)>::new()));
         let capture = captured.clone();
         let upstream_path = if auth_mode == "bearer" {
@@ -124,7 +126,29 @@ async fn coding_models_preserve_payloads_and_auth_boundaries() {
             "originator",
             HeaderValue::from_static("untrusted-originator"),
         );
-        let input = coding_request();
+        headers.insert(
+            "x-openai-internal-untrusted",
+            HeaderValue::from_static("do-not-forward"),
+        );
+        headers.insert(
+            "openai-organization",
+            HeaderValue::from_static("untrusted-organization"),
+        );
+        let mut input = coding_request();
+        if lite {
+            headers.insert(RESPONSES_LITE_HEADER, HeaderValue::from_static("true"));
+            let tools = input
+                .as_object_mut()
+                .expect("object")
+                .remove("tools")
+                .expect("tools");
+            input["instructions"] = json!("");
+            input["parallel_tool_calls"] = json!(false);
+            input["reasoning"]["context"] = json!("all_turns");
+            let items = input["input"].as_array_mut().expect("input");
+            items.insert(0, json!({"type":"additional_tools", "id":"at_synthetic", "role":"developer", "tools":tools}));
+            items.insert(1, json!({"type":"message", "id":"msg_synthetic", "role":"developer", "content":[{"type":"input_text", "text":"synthetic-private-instructions"}]}));
+        }
         let response = relay_openai_responses(
             State(state.clone()),
             headers,
@@ -144,6 +168,9 @@ async fn coding_models_preserve_payloads_and_auth_boundaries() {
         let captured = captured.lock().await;
         assert_eq!(captured.len(), 1);
         let (headers, body) = &captured[0];
+        assert_eq!(headers.get(RESPONSES_LITE_HEADER).is_some(), lite);
+        assert!(!headers.contains_key("x-openai-internal-untrusted"));
+        assert!(!headers.contains_key("openai-organization"));
         let mut expected = input;
         expected["model"] = json!(upstream_model);
         let expected_object = expected.as_object_mut().expect("object");
@@ -191,4 +218,20 @@ async fn coding_models_preserve_payloads_and_auth_boundaries() {
         drop(state);
         remove_test_database(&database_path);
     }
+}
+
+#[test]
+fn responses_lite_rejects_ambiguous_or_missing_protocol_markers() {
+    let input = json!({"input":[{"type":"additional_tools","tools":[]}]});
+    let mut headers = HeaderMap::new();
+    assert!(validate_responses_protocol(&headers, &input).is_err());
+    for value in ["false", "1", "TRUE", "true, true", ""] {
+        headers.insert(RESPONSES_LITE_HEADER, HeaderValue::from_str(value).unwrap());
+        assert!(validate_responses_protocol(&headers, &input).is_err());
+    }
+    headers.insert(RESPONSES_LITE_HEADER, HeaderValue::from_static("true"));
+    assert!(validate_responses_protocol(&headers, &input).is_ok());
+    headers.append(RESPONSES_LITE_HEADER, HeaderValue::from_static("true"));
+    assert!(validate_responses_protocol(&headers, &input).is_err());
+    assert!(validate_responses_protocol(&HeaderMap::new(), &coding_request()).is_ok());
 }
