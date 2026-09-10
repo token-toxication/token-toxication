@@ -68,6 +68,7 @@ use crate::models::{
         relay_anthropic_messages,
         relay_openai_chat_completions,
         relay_openai_responses,
+        relay_responses_websocket,
         relay_gemini_generate_content,
         relay_gemini_stream_generate_content,
     ),
@@ -599,6 +600,18 @@ pub fn relay_openai_chat_completions() {}
     ),
 )]
 pub fn relay_openai_responses() {}
+
+#[utoipa::path(
+    get,
+    path = "/openai/v1/responses",
+    tag = "Relay",
+    responses(
+        (status = 101, description = "Authenticated Responses WebSocket; first response.create selects a fixed model and account"),
+        (status = 400, description = "Invalid upgrade or protocol", body = ErrorResponse),
+        (status = 401, description = "Missing or invalid API key", body = ErrorResponse),
+    ),
+)]
+pub fn relay_responses_websocket() {}
 
 #[utoipa::path(
     post,

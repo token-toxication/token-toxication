@@ -69,6 +69,15 @@ impl RelayAttempt {
         &self.selection
     }
 
+    pub(crate) fn continuation(&self) -> Self {
+        Self {
+            state: self.state.clone(),
+            api_key_id: self.api_key_id.clone(),
+            selection: self.selection.clone(),
+            started: Instant::now(),
+        }
+    }
+
     pub(crate) async fn record_failure(
         &self,
         log: &RelayAttemptLog,

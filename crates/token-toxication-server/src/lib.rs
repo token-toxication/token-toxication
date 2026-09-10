@@ -14,6 +14,7 @@ pub mod routes;
 pub mod routing;
 pub mod server;
 pub mod static_assets;
+pub mod websocket_transport;
 
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
@@ -41,6 +42,7 @@ pub struct AppState {
     pub db: Db,
     pub http: aioduct::TokioClient,
     pub gemini_http: aioduct::TokioClient,
+    pub websocket_http: aioduct::TokioClient,
     pub antigravity_oauth: antigravity_oauth::AntigravityOAuthStore,
     pub relay_stream_idle_timeout: Duration,
     pub relay_stream_max_duration: Duration,
@@ -85,6 +87,7 @@ pub fn app(state: AppState, static_dir: PathBuf) -> Router {
         .route(
             "/openai/v1/responses",
             axum::routing::post(relay_openai_responses)
+                .get(routes::relay_responses_websocket)
                 .layer(DefaultBodyLimit::max(RELAY_BODY_LIMIT_BYTES)),
         )
         .route(

@@ -71,12 +71,16 @@ async fn run_server(config: Config) -> Result<(), MainError> {
     )
     .map_err(|source| MainError::BuildHttpClient { source })?;
     let shutdown = server::ShutdownSignal::new();
+    let websocket_http =
+        token_toxication_server::websocket_transport::build_client(relay_stream_idle_timeout)
+            .map_err(|source| MainError::BuildHttpClient { source })?;
 
     let state = AppState {
         config: config.clone(),
         db,
         http,
         gemini_http,
+        websocket_http,
         antigravity_oauth: Default::default(),
         relay_stream_idle_timeout,
         relay_stream_max_duration,
