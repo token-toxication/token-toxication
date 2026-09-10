@@ -47,7 +47,7 @@ Unknown IDs retain the existing conservative text-only profile and short fallbac
 
 The setup does not overwrite an explicit `model_reasoning_effort`. If a previous configuration specifies `none` or `minimal`, change it to a supported Astra effort such as `low`. Existing user instruction overrides also remain authoritative. The relay does not inject or rewrite the caller's `instructions`.
 
-Responses Lite, Ultra, code-mode-only, experimental context management, and multi-agent v2 are not enabled by this profile. There is no WebSocket upgrade or mid-turn steering support in the relay. Ultra is a Codex orchestration mode, not a wire effort that other clients should forward literally. This profile does not introduce Fast/priority processing defaults.
+Responses Lite, Ultra, code-mode-only, experimental context management, and multi-agent v2 are not enabled by the default profile. Optional advanced settings and WebSocket transport are described below. Ultra is a Codex orchestration mode, not a wire effort that other clients should forward literally. This profile does not introduce Fast/priority processing defaults.
 
 For other clients, use Responses for tool calling and omit unsupported sampling parameters. The relay preserves client parameters except for configured route `stripParams` and the existing Codex OAuth `max_output_tokens` removal; it does not silently repair every invalid Astra request.
 
@@ -111,10 +111,85 @@ does not establish that an arbitrary upstream can execute it.
 These flags do not install integrations, enable Node REPL, or bypass normal
 permission checks. Deferred tool discovery is a separate capability from hosted
 web search and remains disabled in these profiles. Experimental context management
-and Responses Lite also remain explicitly disabled. No paid speed tier is selected
-or advertised. Client-version gates, compaction compatibility hashes, advanced tool
-modes, and account-plan metadata are not copied into this static relay catalog.
-The tested client versions below qualify the ordinary Responses subset only.
+remains disabled. Responses Lite is disabled unless explicitly selected. No paid
+speed tier is selected or advertised. Compaction compatibility hashes and account-plan
+metadata are not copied into this static relay catalog.
+
+### Optional advanced settings
+
+In Client Setup, select a model and use **Optional Codex capabilities** to enable
+Lite, code mode, or multi-agent tools independently. Switches start off and apply
+only to the selected exact model ID; unknown aliases stay conservative. These are
+catalog-generation choices, not persistent server route settings. Regenerate and
+copy the catalog after changing them. Family-specific base instructions remain
+unchanged; the client supplies the runtime's role and tool instructions.
+
+Use **Codex 0.153.4** for the full advanced profile tested here. Older clients may
+silently ignore metadata: 0.146.0 sends Astra Ultra as `max`, not `xhigh`. Do not
+enable Ultra on that version. Passing on these versions does not qualify all future
+versions. To disable delegation, set `agents.enabled = false` and do not force
+`features.multi_agent_v2 = true` in another profile. A user instruction forbidding
+delegation must still be respected even when tools are available.
+
+| Model | Optional agent runtime | Ultra wire effort |
+| --- | --- | --- |
+| `gpt-6-astra` | v2 | `xhigh` |
+| `gpt-5.6-sol` | v2 | `max` |
+| `gpt-5.6-terra` | v2 | `max` |
+| `gpt-5.6-luna` | v1 | Not offered |
+
+Code mode runs shell, patch, and image tools through the client's JavaScript tool
+runtime. It does not give those tools additional permissions. Multi-agent mode
+can make additional requests and consume additional upstream usage.
+
+**Responses Lite requires compatible upstreams.** Confirm every eligible route
+for that public model supports it before enabling the switch, including fallback
+accounts. The relay does not discover upstream protocol support from a model name
+or authentication mode. It preserves `additional_tools`, developer instructions,
+all-turn reasoning context, and tool returns, and forwards only the explicit
+`x-openai-internal-codex-responses-lite: true` protocol header. Missing or ambiguous
+markers are rejected. It never converts or replays Lite as ordinary Responses.
+In Lite mode the client omits top-level instructions/tools and image detail fields;
+this is distinct from ordinary Responses image-detail serialization.
+
+### WebSocket transport and steering
+
+For a provider whose routes all support Responses WebSockets, explicitly add
+`supports_websockets = true` under `[model_providers.token-toxication]` and enable
+`responses_websockets_v2 = true` in the root `[features]` table. Do not place that
+features table inside the provider table or replace unrelated feature settings.
+The default generated configuration remains HTTP/SSE.
+
+The relay accepts authenticated GET upgrades on `/openai/v1/responses`. The first
+`response.create` selects the model, route, and account for the entire connection;
+later requests cannot change model or reference another connection's response IDs.
+Only one inference request is active at a time. Tool results and steered user input
+can continue after its terminal event, using the same connection and account.
+Steering is delivered by the client at its tool boundary, not by inventing a new
+upstream steering event. Disconnecting cancels the upstream connection. There is
+no cross-connection resume, account failover, or automatic relay replay.
+
+Upstream connection establishment and TLS use aioduct 0.2.5 with an HTTP/1.1-only
+upgrade client that disables redirects and retries. WebSocket frames remain handled
+by tungstenite after validating the upgrade headers and accept key; unsolicited
+subprotocols and extensions are rejected. The existing relay timeouts and message
+limits continue to apply after the HTTP upgrade.
+
+WebSocket authentication uses the relay key in headers; query parameters are
+rejected. Upstream credentials are selected server-side. Arbitrary internal header
+metadata is not forwarded. Frames/messages are limited to 32 MiB. The existing
+stream idle timeout and maximum duration settings also bound WebSocket connections;
+connections accept at most 1,024 completed response IDs, each at most 512 bytes. Slow writes are bounded,
+and shutdown releases the upstream socket. Each inference request is logged once
+with usage metadata, not prompts, images, tool contents, or raw provider errors.
+Handshake and authorization failures return sanitized errors with a numeric
+`status` and stable `error.code`. Authentication rejection blocks the account;
+rate limits and upstream server errors cool the route using the same policy as HTTP.
+
+Clients should start a fresh request with full context on a new connection only
+when they know doing so is safe. The relay does not guarantee exactly-once tool
+execution across client retries. Subscription eligibility, real inference, real
+compaction, hosted search execution, and image generation remain separate checks.
 
 ### Compatibility checks
 
@@ -124,6 +199,13 @@ search with an explicit summary. Web search is exercised as a request contract
 against the mock, not as a live search service.
 
 The isolated mock suite has passed with Codex CLI **0.146.0** and **0.153.4** on macOS. These are tested versions, not a promise that every version between them, or every future version, is compatible. The test starts the real relay, uses its admin API to create temporary routes, loads the generated catalog in Codex, checks the model picker, and completes shell and patch tool round trips. It also checks image input, default/explicit reasoning, and runtime context limits. No production credentials or remote model responses are used.
+
+Advanced cases additionally exercise Lite, code mode (including nonzero shell exit
+results in ordinary and Lite mode), WebSocket tool continuation, and app-server
+steering while a shell tool is active. On 0.153.4 the suite also
+creates and waits for a real local child agent against the mock, checks model-specific
+Ultra normalization, and checks disabled delegation. These agent cases are explicitly
+skipped on older clients; ordinary CI skips all external-binary cases.
 
 Run the opt-in suite with an absolute path to a Codex binary:
 
