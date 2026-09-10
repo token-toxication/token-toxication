@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ClipboardCopyIcon, DatabaseIcon, KeyRoundIcon } from "lucide-react";
 
 import { dshModelCapabilities } from "./dsh-model-capabilities";
+import { codexModelCatalogJson } from "./codex-model-catalog";
 import {
   catalogModelIds,
   codexModelOptions,
@@ -496,37 +497,6 @@ function ClientSnippetCard({
         </pre>
       </CardContent>
     </Card>
-  );
-}
-
-const CODEX_BASE_INSTRUCTIONS = "You are Codex, a coding agent.";
-
-export function codexModelCatalogJson(models: ClientModelOption[]) {
-  return JSON.stringify(
-    {
-      models: models.map((model, index) => ({
-        slug: model.id,
-        display_name: model.displayName,
-        description: "Routed through Token Toxication using the OpenAI Responses API.",
-        supported_reasoning_levels: [],
-        shell_type: "shell_command",
-        visibility: "list",
-        supported_in_api: true,
-        priority: index + 1,
-        availability_nux: null,
-        upgrade: null,
-        base_instructions: CODEX_BASE_INSTRUCTIONS,
-        support_verbosity: false,
-        default_verbosity: null,
-        apply_patch_tool_type: null,
-        truncation_policy: { mode: "bytes", limit: 10_000 },
-        supports_parallel_tool_calls: false,
-        experimental_supported_tools: [],
-        input_modalities: ["text"],
-      })),
-    },
-    null,
-    2,
   );
 }
 
