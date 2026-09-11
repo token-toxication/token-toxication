@@ -3,6 +3,8 @@ import path from "node:path";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig, lazyPlugins } from "vite-plus";
+import { lingui, linguiTransformerBabelPreset } from "@lingui/vite-plugin";
+import babel from "@rolldown/plugin-babel";
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -25,7 +27,12 @@ export default defineConfig({
       },
     ],
   },
-  plugins: lazyPlugins(() => [react(), tailwindcss()]),
+  plugins: lazyPlugins(() => [
+    react(),
+    tailwindcss(),
+    lingui(),
+    babel({ presets: [linguiTransformerBabelPreset()] }),
+  ]),
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import type React from "react";
 import { Link, useNavigate, useParams } from "react-router";
+import { plural, t } from "@lingui/core/macro";
+import { Trans } from "@lingui/react/macro";
 import { DatabaseIcon, PlusIcon, RouteIcon, Trash2Icon } from "lucide-react";
 
 import { adminPaths } from "../admin-routes";
@@ -84,17 +86,21 @@ export function ModelCatalogView({
       <Card>
         <CardHeader className="flex-row items-start justify-between gap-4">
           <div className="flex flex-col gap-1">
-            <CardTitle>Model Catalog</CardTitle>
-            <CardDescription>Every exact model name clients may send.</CardDescription>
+            <CardTitle>
+              <Trans>Model Catalog</Trans>
+            </CardTitle>
+            <CardDescription>
+              <Trans>Every exact model name clients may send.</Trans>
+            </CardDescription>
           </div>
           <div className="flex flex-wrap gap-2">
             <Button type="button" variant="outline" onClick={onCreateRoute}>
               <RouteIcon data-icon="inline-start" />
-              Add Route
+              <Trans>Add Route</Trans>
             </Button>
             <Button type="button" onClick={onCreateModel}>
               <PlusIcon data-icon="inline-start" />
-              Add Model
+              <Trans>Add Model</Trans>
             </Button>
           </div>
         </CardHeader>
@@ -103,7 +109,7 @@ export function ModelCatalogView({
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search model, display name, or family"
+              placeholder={t`Search model, display name, or family`}
             />
             <div className="flex flex-wrap gap-2">
               {families.map((item) => (
@@ -114,7 +120,7 @@ export function ModelCatalogView({
                   variant={family === item ? "secondary" : "outline"}
                   onClick={() => setFamily(item)}
                 >
-                  {item}
+                  {item === "all" ? t`all` : item}
                 </Button>
               ))}
             </div>
@@ -123,11 +129,21 @@ export function ModelCatalogView({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Model</TableHead>
-                  <TableHead>Display Name</TableHead>
-                  <TableHead>Family</TableHead>
-                  <TableHead>Routes</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>
+                    <Trans>Model</Trans>
+                  </TableHead>
+                  <TableHead>
+                    <Trans>Display Name</Trans>
+                  </TableHead>
+                  <TableHead>
+                    <Trans>Family</Trans>
+                  </TableHead>
+                  <TableHead>
+                    <Trans>Routes</Trans>
+                  </TableHead>
+                  <TableHead>
+                    <Trans>Status</Trans>
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -153,8 +169,8 @@ export function ModelCatalogView({
                   <TableRow>
                     <TableCell colSpan={5}>
                       <EmptyNotice
-                        title="No catalog models"
-                        body="Add exact public model names before creating provider routes."
+                        title={t`No catalog models`}
+                        body={t`Add exact public model names before creating provider routes.`}
                       />
                     </TableCell>
                   </TableRow>
@@ -165,8 +181,8 @@ export function ModelCatalogView({
           <div className="grid gap-3 md:hidden">
             {filteredModels.length === 0 ? (
               <EmptyNotice
-                title="No catalog models"
-                body="Add exact public model names before creating provider routes."
+                title={t`No catalog models`}
+                body={t`Add exact public model names before creating provider routes.`}
               />
             ) : (
               filteredModels.map((model) => (
@@ -187,7 +203,12 @@ export function ModelCatalogView({
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Badge variant="outline">{model.family}</Badge>
-                    <Badge variant="secondary">{routeCountForModel(routes, model.id)} routes</Badge>
+                    <Badge variant="secondary">
+                      {plural(routeCountForModel(routes, model.id), {
+                        one: "# route",
+                        other: "# routes",
+                      })}
+                    </Badge>
                   </div>
                 </div>
               ))
@@ -198,22 +219,38 @@ export function ModelCatalogView({
 
       <Card>
         <CardHeader>
-          <CardTitle>Provider Model Routes</CardTitle>
+          <CardTitle>
+            <Trans>Provider Model Routes</Trans>
+          </CardTitle>
           <CardDescription>
-            Primary and backup bindings from public models to upstream models.
+            <Trans>Primary and backup bindings from public models to upstream models.</Trans>
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Public Model</TableHead>
-                <TableHead>Upstream Model</TableHead>
-                <TableHead>Provider Account</TableHead>
-                <TableHead>Protocol</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Policy</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>
+                  <Trans>Public Model</Trans>
+                </TableHead>
+                <TableHead>
+                  <Trans>Upstream Model</Trans>
+                </TableHead>
+                <TableHead>
+                  <Trans>Provider Account</Trans>
+                </TableHead>
+                <TableHead>
+                  <Trans>Protocol</Trans>
+                </TableHead>
+                <TableHead>
+                  <Trans>Role</Trans>
+                </TableHead>
+                <TableHead>
+                  <Trans>Policy</Trans>
+                </TableHead>
+                <TableHead>
+                  <Trans>Status</Trans>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -253,7 +290,7 @@ export function ModelCatalogView({
                       {statusBadge(route.status, route.enabled)}
                       {route.cooldownUntil ? (
                         <span className="text-xs text-muted-foreground">
-                          until {formatDate(route.cooldownUntil)}
+                          <Trans>until {formatDate(route.cooldownUntil)}</Trans>
                         </span>
                       ) : null}
                     </div>
@@ -264,8 +301,8 @@ export function ModelCatalogView({
                 <TableRow>
                   <TableCell colSpan={7}>
                     <EmptyNotice
-                      title="No provider routes"
-                      body="Add a route to make a catalog model reachable."
+                      title={t`No provider routes`}
+                      body={t`Add a route to make a catalog model reachable.`}
                     />
                   </TableCell>
                 </TableRow>
@@ -307,10 +344,10 @@ export function ModelDetailView({
   if (!model) {
     return (
       <MissingRecordView
-        title="Catalog Model not found"
-        body="This Catalog Model may have been deleted or the link is incomplete."
+        title={t`Catalog Model not found`}
+        body={t`This Catalog Model may have been deleted or the link is incomplete.`}
         to={adminPaths.models()}
-        label="Back to model catalog"
+        label={t`Back to model catalog`}
       />
     );
   }
@@ -331,27 +368,35 @@ export function ModelDetailView({
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
         <div className="flex min-w-0 flex-col gap-2">
           <Button asChild type="button" variant="ghost" size="sm" className="w-fit">
-            <Link to={adminPaths.models()}>Model Catalog</Link>
+            <Link to={adminPaths.models()}>
+              <Trans>Model Catalog</Trans>
+            </Link>
           </Button>
           <div>
-            <div className="text-sm text-muted-foreground">Catalog Model</div>
+            <div className="text-sm text-muted-foreground">
+              <Trans>Catalog Model</Trans>
+            </div>
             <h1 className="truncate font-mono text-2xl font-semibold">{model.id}</h1>
           </div>
         </div>
         <Button type="button" variant="outline" onClick={() => void onToggle(model)}>
-          {model.enabled ? "Disable" : "Enable"}
+          {model.enabled ? t`Disable` : t`Enable`}
         </Button>
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[0.75fr_1.25fr]">
         <Card>
           <CardHeader>
-            <CardTitle>Catalog details</CardTitle>
-            <CardDescription>Public model identity and client-facing metadata.</CardDescription>
+            <CardTitle>
+              <Trans>Catalog details</Trans>
+            </CardTitle>
+            <CardDescription>
+              <Trans>Public model identity and client-facing metadata.</Trans>
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <form className="flex flex-col gap-4" onSubmit={handleSave}>
-              <Field label="Display name" htmlFor="catalog-model-display-name">
+              <Field label={t`Display name`} htmlFor="catalog-model-display-name">
                 <Input
                   id="catalog-model-display-name"
                   value={draft.displayName}
@@ -360,7 +405,7 @@ export function ModelDetailView({
                   }
                 />
               </Field>
-              <Field label="Family" htmlFor="catalog-model-family">
+              <Field label={t`Family`} htmlFor="catalog-model-family">
                 <Input
                   id="catalog-model-family"
                   value={draft.family}
@@ -370,11 +415,13 @@ export function ModelDetailView({
                 />
               </Field>
               <div className="flex items-center justify-between gap-3 text-sm">
-                <span className="text-muted-foreground">Status</span>
+                <span className="text-muted-foreground">
+                  <Trans>Status</Trans>
+                </span>
                 {statusBadge(model.enabled ? "healthy" : "paused", model.enabled)}
               </div>
               <Button type="submit" disabled={!changed}>
-                Save changes
+                <Trans>Save changes</Trans>
               </Button>
             </form>
           </CardContent>
@@ -382,24 +429,36 @@ export function ModelDetailView({
 
         <Card>
           <CardHeader>
-            <CardTitle>Provider Model Routes</CardTitle>
-            <CardDescription>Bindings that make this Catalog Model reachable.</CardDescription>
+            <CardTitle>
+              <Trans>Provider Model Routes</Trans>
+            </CardTitle>
+            <CardDescription>
+              <Trans>Bindings that make this Catalog Model reachable.</Trans>
+            </CardDescription>
           </CardHeader>
           <CardContent>
             {linkedRoutes.length === 0 ? (
               <EmptyNotice
-                title="No provider routes"
-                body="Add a route from the model catalog to make this Catalog Model routable."
+                title={t`No provider routes`}
+                body={t`Add a route from the model catalog to make this Catalog Model routable.`}
               />
             ) : (
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Upstream Model</TableHead>
-                      <TableHead>Provider Account</TableHead>
-                      <TableHead>Role</TableHead>
-                      <TableHead>Status</TableHead>
+                      <TableHead>
+                        <Trans>Upstream Model</Trans>
+                      </TableHead>
+                      <TableHead>
+                        <Trans>Provider Account</Trans>
+                      </TableHead>
+                      <TableHead>
+                        <Trans>Role</Trans>
+                      </TableHead>
+                      <TableHead>
+                        <Trans>Status</Trans>
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -456,10 +515,10 @@ export function ProviderRouteDetailView({
   if (!route) {
     return (
       <MissingRecordView
-        title="Provider Model Route not found"
-        body="This Provider Model Route may have been deleted or the link is incomplete."
+        title={t`Provider Model Route not found`}
+        body={t`This Provider Model Route may have been deleted or the link is incomplete.`}
         to={adminPaths.models()}
-        label="Back to model catalog"
+        label={t`Back to model catalog`}
       />
     );
   }
@@ -479,10 +538,14 @@ export function ProviderRouteDetailView({
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
         <div className="flex min-w-0 flex-col gap-2">
           <Button asChild type="button" variant="ghost" size="sm" className="w-fit">
-            <Link to={adminPaths.models()}>Model Catalog</Link>
+            <Link to={adminPaths.models()}>
+              <Trans>Model Catalog</Trans>
+            </Link>
           </Button>
           <div>
-            <div className="text-sm text-muted-foreground">Provider Model Route</div>
+            <div className="text-sm text-muted-foreground">
+              <Trans>Provider Model Route</Trans>
+            </div>
             <h1 className="truncate text-2xl font-semibold">
               {route.publicModelId} → {route.upstreamModelId}
             </h1>
@@ -490,24 +553,30 @@ export function ProviderRouteDetailView({
         </div>
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="outline" onClick={() => void onToggle(route)}>
-            {route.enabled ? "Disable" : "Enable"}
+            {route.enabled ? t`Disable` : t`Enable`}
           </Button>
           <Button type="button" variant="destructive" onClick={handleDelete}>
             <Trash2Icon data-icon="inline-start" />
-            Delete
+            <Trans>Delete</Trans>
           </Button>
         </div>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Binding details</CardTitle>
-          <CardDescription>How this Catalog Model reaches its upstream model.</CardDescription>
+          <CardTitle>
+            <Trans>Binding details</Trans>
+          </CardTitle>
+          <CardDescription>
+            <Trans>How this Catalog Model reaches its upstream model.</Trans>
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <dl className="grid gap-5 text-sm sm:grid-cols-2 xl:grid-cols-3">
             <div>
-              <dt className="text-xs text-muted-foreground">Catalog Model</dt>
+              <dt className="text-xs text-muted-foreground">
+                <Trans>Catalog Model</Trans>
+              </dt>
               <dd className="mt-1">
                 <Link
                   to={adminPaths.model(route.publicModelId)}
@@ -518,7 +587,9 @@ export function ProviderRouteDetailView({
               </dd>
             </div>
             <div>
-              <dt className="text-xs text-muted-foreground">Provider Account</dt>
+              <dt className="text-xs text-muted-foreground">
+                <Trans>Provider Account</Trans>
+              </dt>
               <dd className="mt-1">
                 <Link
                   to={adminPaths.account(route.providerAccountId)}
@@ -529,32 +600,46 @@ export function ProviderRouteDetailView({
               </dd>
             </div>
             <div>
-              <dt className="text-xs text-muted-foreground">Upstream Model</dt>
+              <dt className="text-xs text-muted-foreground">
+                <Trans>Upstream Model</Trans>
+              </dt>
               <dd className="mt-1 font-mono text-xs">{route.upstreamModelId}</dd>
             </div>
             <div>
-              <dt className="text-xs text-muted-foreground">Protocol</dt>
+              <dt className="text-xs text-muted-foreground">
+                <Trans>Protocol</Trans>
+              </dt>
               <dd className="mt-1">{wireApiLabel(route.wireApi)}</dd>
             </div>
             <div>
-              <dt className="text-xs text-muted-foreground">Role</dt>
+              <dt className="text-xs text-muted-foreground">
+                <Trans>Role</Trans>
+              </dt>
               <dd className="mt-1">{routeRoleBadge(route.role)}</dd>
             </div>
             <div>
-              <dt className="text-xs text-muted-foreground">Status</dt>
+              <dt className="text-xs text-muted-foreground">
+                <Trans>Status</Trans>
+              </dt>
               <dd className="mt-1">{statusBadge(route.status, route.enabled)}</dd>
             </div>
             <div>
-              <dt className="text-xs text-muted-foreground">Policy</dt>
+              <dt className="text-xs text-muted-foreground">
+                <Trans>Policy</Trans>
+              </dt>
               <dd className="mt-1 text-xs text-muted-foreground">{formatRoutePolicy(route)}</dd>
             </div>
             <div>
-              <dt className="text-xs text-muted-foreground">Last used</dt>
+              <dt className="text-xs text-muted-foreground">
+                <Trans>Last used</Trans>
+              </dt>
               <dd className="mt-1">{formatDate(route.lastUsedAt)}</dd>
             </div>
             {route.lastError ? (
               <div className="sm:col-span-2 xl:col-span-3">
-                <dt className="text-xs text-muted-foreground">Last error</dt>
+                <dt className="text-xs text-muted-foreground">
+                  <Trans>Last error</Trans>
+                </dt>
                 <dd className="mt-1 break-words text-destructive">{route.lastError}</dd>
               </div>
             ) : null}
@@ -582,11 +667,15 @@ export function CreateModelSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="sm:max-w-md">
         <SheetHeader>
-          <SheetTitle>Add catalog model</SheetTitle>
-          <SheetDescription>Register an exact public model name clients may send.</SheetDescription>
+          <SheetTitle>
+            <Trans>Add catalog model</Trans>
+          </SheetTitle>
+          <SheetDescription>
+            <Trans>Register an exact public model name clients may send.</Trans>
+          </SheetDescription>
         </SheetHeader>
         <form className="flex flex-col gap-4 px-4" onSubmit={onSubmit}>
-          <Field label="Model ID" htmlFor="model-id">
+          <Field label={t`Model ID`} htmlFor="model-id">
             <Input
               id="model-id"
               value={form.id}
@@ -595,17 +684,17 @@ export function CreateModelSheet({
               required
             />
           </Field>
-          <Field label="Display name" htmlFor="model-display-name">
+          <Field label={t`Display name`} htmlFor="model-display-name">
             <Input
               id="model-display-name"
               value={form.displayName}
               onChange={(event) =>
                 setForm((current) => ({ ...current, displayName: event.target.value }))
               }
-              placeholder="Defaults to model ID"
+              placeholder={t`Defaults to model ID`}
             />
           </Field>
-          <Field label="Family" htmlFor="model-family">
+          <Field label={t`Family`} htmlFor="model-family">
             <Input
               id="model-family"
               value={form.family}
@@ -617,9 +706,11 @@ export function CreateModelSheet({
           </Field>
           <div className="flex items-center justify-between gap-3 rounded-md border p-3">
             <div className="flex flex-col gap-1">
-              <Label htmlFor="model-enabled">Advertise when routed</Label>
+              <Label htmlFor="model-enabled">
+                <Trans>Advertise when routed</Trans>
+              </Label>
               <span className="text-xs text-muted-foreground">
-                Disabled models are hidden from client model lists.
+                <Trans>Disabled models are hidden from client model lists.</Trans>
               </span>
             </div>
             <Switch
@@ -633,7 +724,7 @@ export function CreateModelSheet({
           <SheetFooter>
             <Button type="submit">
               <DatabaseIcon data-icon="inline-start" />
-              Add model
+              <Trans>Add model</Trans>
             </Button>
           </SheetFooter>
         </form>
@@ -663,11 +754,15 @@ export function CreateRouteSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="overflow-y-auto sm:max-w-lg">
         <SheetHeader>
-          <SheetTitle>Add provider model route</SheetTitle>
-          <SheetDescription>Bind a public model to an upstream provider model.</SheetDescription>
+          <SheetTitle>
+            <Trans>Add provider model route</Trans>
+          </SheetTitle>
+          <SheetDescription>
+            <Trans>Bind a public model to an upstream provider model.</Trans>
+          </SheetDescription>
         </SheetHeader>
         <form className="flex flex-col gap-4 px-4" onSubmit={onSubmit}>
-          <Field label="Public model" htmlFor="route-public-model">
+          <Field label={t`Public model`} htmlFor="route-public-model">
             <Select
               value={form.publicModelId || "__none"}
               onValueChange={(value) =>
@@ -684,7 +779,7 @@ export function CreateRouteSheet({
               <SelectContent>
                 <SelectGroup>
                   <SelectItem value="__none" disabled>
-                    Select model
+                    <Trans>Select model</Trans>
                   </SelectItem>
                   {models.map((model) => (
                     <SelectItem key={model.id} value={model.id}>
@@ -695,7 +790,7 @@ export function CreateRouteSheet({
               </SelectContent>
             </Select>
           </Field>
-          <Field label="Provider account" htmlFor="route-provider-account">
+          <Field label={t`Provider account`} htmlFor="route-provider-account">
             <Select
               value={form.providerAccountId || "__none"}
               onValueChange={(value) =>
@@ -711,7 +806,7 @@ export function CreateRouteSheet({
               <SelectContent>
                 <SelectGroup>
                   <SelectItem value="__none" disabled>
-                    Select account
+                    <Trans>Select account</Trans>
                   </SelectItem>
                   {accounts.map((account) => (
                     <SelectItem key={account.id} value={account.id}>
@@ -722,19 +817,19 @@ export function CreateRouteSheet({
               </SelectContent>
             </Select>
           </Field>
-          <Field label="Upstream model ID" htmlFor="route-upstream-model">
+          <Field label={t`Upstream model ID`} htmlFor="route-upstream-model">
             <Input
               id="route-upstream-model"
               value={form.upstreamModelId}
               onChange={(event) =>
                 setForm((current) => ({ ...current, upstreamModelId: event.target.value }))
               }
-              placeholder="Exact upstream model ID"
+              placeholder={t`Exact upstream model ID`}
               required
             />
           </Field>
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Protocol" htmlFor="route-wire-api">
+            <Field label={t`Protocol`} htmlFor="route-wire-api">
               <Select
                 value={form.wireApi}
                 onValueChange={(value) => setForm((current) => ({ ...current, wireApi: value }))}
@@ -752,7 +847,7 @@ export function CreateRouteSheet({
                 </SelectContent>
               </Select>
             </Field>
-            <Field label="Role" htmlFor="route-role">
+            <Field label={t`Role`} htmlFor="route-role">
               <Select
                 value={form.role}
                 onValueChange={(value) => setForm((current) => ({ ...current, role: value }))}
@@ -762,14 +857,18 @@ export function CreateRouteSheet({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
-                    <SelectItem value="primary">Primary</SelectItem>
-                    <SelectItem value="backup">Backup</SelectItem>
+                    <SelectItem value="primary">
+                      <Trans>Primary</Trans>
+                    </SelectItem>
+                    <SelectItem value="backup">
+                      <Trans>Backup</Trans>
+                    </SelectItem>
                   </SelectGroup>
                 </SelectContent>
               </Select>
             </Field>
           </div>
-          <Field label="Strip request params" htmlFor="route-strip-params">
+          <Field label={t`Strip request params`} htmlFor="route-strip-params">
             <Input
               id="route-strip-params"
               value={form.stripParams}
@@ -781,9 +880,11 @@ export function CreateRouteSheet({
           </Field>
           <div className="flex items-center justify-between gap-3 rounded-md border p-3">
             <div className="flex flex-col gap-1">
-              <Label htmlFor="route-enabled">Enabled</Label>
+              <Label htmlFor="route-enabled">
+                <Trans>Enabled</Trans>
+              </Label>
               <span className="text-xs text-muted-foreground">
-                Enabled primary routes must be unique for a model and protocol.
+                <Trans>Enabled primary routes must be unique for a model and protocol.</Trans>
               </span>
             </div>
             <Switch
@@ -797,7 +898,7 @@ export function CreateRouteSheet({
           <SheetFooter>
             <Button type="submit">
               <RouteIcon data-icon="inline-start" />
-              Add route
+              <Trans>Add route</Trans>
             </Button>
           </SheetFooter>
         </form>

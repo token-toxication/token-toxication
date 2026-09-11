@@ -1,3 +1,4 @@
+import { Trans, useLingui } from "@lingui/react/macro";
 import { Link, useParams } from "react-router";
 
 import { adminPaths } from "../admin-routes";
@@ -23,16 +24,17 @@ import {
 } from "@/components/ui/table";
 
 export function RequestLogDetailView({ logs }: { logs: readonly RequestLog[] }) {
+  const { t } = useLingui();
   const { logId } = useParams();
   const log = logs.find((item) => item.id === logId);
 
   if (!log) {
     return (
       <MissingRecordView
-        title="Request Log not found"
-        body="This Request Log may have aged out of the current log collection or the link is incomplete."
+        title={t`Request Log not found`}
+        body={t`This Request Log may have aged out of the current log collection or the link is incomplete.`}
         to={adminPaths.logs()}
-        label="Back to request log"
+        label={t`Back to request log`}
       />
     );
   }
@@ -42,10 +44,14 @@ export function RequestLogDetailView({ logs }: { logs: readonly RequestLog[] }) 
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
         <div className="flex min-w-0 flex-col gap-2">
           <Button asChild type="button" variant="ghost" size="sm" className="w-fit">
-            <Link to={adminPaths.logs()}>Request Log</Link>
+            <Link to={adminPaths.logs()}>
+              <Trans>Request Log</Trans>
+            </Link>
           </Button>
           <div>
-            <div className="text-sm text-muted-foreground">Request Log</div>
+            <div className="text-sm text-muted-foreground">
+              <Trans>Request Log</Trans>
+            </div>
             <h1 className="truncate text-2xl font-semibold">{formatLogModel(log)}</h1>
             <p className="mt-1 text-sm text-muted-foreground">{formatDate(log.createdAt)}</p>
           </div>
@@ -56,31 +62,45 @@ export function RequestLogDetailView({ logs }: { logs: readonly RequestLog[] }) 
       <div className="grid gap-5 xl:grid-cols-[0.75fr_1.25fr]">
         <Card>
           <CardHeader>
-            <CardTitle>Request summary</CardTitle>
+            <CardTitle>
+              <Trans>Request summary</Trans>
+            </CardTitle>
             <CardDescription>
-              Relay result and accounting for this completed attempt.
+              <Trans>Relay result and accounting for this completed attempt.</Trans>
             </CardDescription>
           </CardHeader>
           <CardContent>
             <dl className="grid gap-4 text-sm">
               <div>
-                <dt className="text-xs text-muted-foreground">Latency</dt>
-                <dd className="mt-1">{log.latencyMs}ms</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-muted-foreground">Tokens</dt>
+                <dt className="text-xs text-muted-foreground">
+                  <Trans>Latency</Trans>
+                </dt>
                 <dd className="mt-1">
-                  {formatNumber(log.inputTokens + log.outputTokens)} total ·{" "}
-                  {formatCacheHitRate(log.cachedInputTokens, log.inputTokens)} cache hit
+                  <Trans>{log.latencyMs}ms</Trans>
                 </dd>
               </div>
               <div>
-                <dt className="text-xs text-muted-foreground">Client key</dt>
+                <dt className="text-xs text-muted-foreground">
+                  <Trans>Tokens</Trans>
+                </dt>
+                <dd className="mt-1">
+                  <Trans>
+                    {formatNumber(log.inputTokens + log.outputTokens)} total ·{" "}
+                    {formatCacheHitRate(log.cachedInputTokens, log.inputTokens)} cache hit
+                  </Trans>
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted-foreground">
+                  <Trans>Client key</Trans>
+                </dt>
                 <dd className="mt-1 font-mono text-xs">{log.apiKeyId}</dd>
               </div>
               {log.providerAccountId ? (
                 <div>
-                  <dt className="text-xs text-muted-foreground">Provider Account</dt>
+                  <dt className="text-xs text-muted-foreground">
+                    <Trans>Provider Account</Trans>
+                  </dt>
                   <dd className="mt-1">
                     <Link
                       to={adminPaths.account(log.providerAccountId)}
@@ -97,7 +117,9 @@ export function RequestLogDetailView({ logs }: { logs: readonly RequestLog[] }) 
 
         <Card>
           <CardHeader>
-            <CardTitle>Routing details</CardTitle>
+            <CardTitle>
+              <Trans>Routing details</Trans>
+            </CardTitle>
             <CardDescription>{formatRequestSummary(log)}</CardDescription>
           </CardHeader>
           <CardContent>
@@ -116,12 +138,16 @@ export function RequestLogsView({
   logs: readonly RequestLog[];
   compact?: boolean;
 }) {
+  const { t } = useLingui();
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{compact ? "Recent requests" : "Request Log"}</CardTitle>
+        <CardTitle>{compact ? t`Recent requests` : t`Request Log`}</CardTitle>
         <CardDescription>
-          Relay status, latency, model, sanitized routing metadata, and token accounting.
+          <Trans>
+            Relay status, latency, model, sanitized routing metadata, and token accounting.
+          </Trans>
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -139,14 +165,30 @@ export function RequestLogsView({
             </colgroup>
             <TableHeader>
               <TableRow>
-                <TableHead>Time</TableHead>
-                <TableHead>Path</TableHead>
-                <TableHead>Model</TableHead>
-                <TableHead>Request</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Latency</TableHead>
-                <TableHead className="text-right">Tokens</TableHead>
-                <TableHead className="text-right">Cache hit</TableHead>
+                <TableHead>
+                  <Trans>Time</Trans>
+                </TableHead>
+                <TableHead>
+                  <Trans>Path</Trans>
+                </TableHead>
+                <TableHead>
+                  <Trans>Model</Trans>
+                </TableHead>
+                <TableHead>
+                  <Trans>Request</Trans>
+                </TableHead>
+                <TableHead>
+                  <Trans>Status</Trans>
+                </TableHead>
+                <TableHead>
+                  <Trans>Latency</Trans>
+                </TableHead>
+                <TableHead className="text-right">
+                  <Trans>Tokens</Trans>
+                </TableHead>
+                <TableHead className="text-right">
+                  <Trans>Cache hit</Trans>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -197,7 +239,9 @@ export function RequestLogsView({
                     </span>
                   </TableCell>
                   <TableCell>{statusCodeBadge(log.statusCode)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{log.latencyMs}ms</TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    <Trans>{log.latencyMs}ms</Trans>
+                  </TableCell>
                   <TableCell className="text-right tabular-nums">
                     {formatNumber(log.inputTokens + log.outputTokens)}
                   </TableCell>
@@ -210,8 +254,8 @@ export function RequestLogsView({
                 <TableRow>
                   <TableCell colSpan={8}>
                     <EmptyNotice
-                      title="No relay traffic"
-                      body="Requests appear here after clients call the relay."
+                      title={t`No relay traffic`}
+                      body={t`Requests appear here after clients call the relay.`}
                     />
                   </TableCell>
                 </TableRow>
@@ -230,11 +274,21 @@ export function RequestLogsView({
             </colgroup>
             <TableHeader>
               <TableRow>
-                <TableHead>Request</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Latency</TableHead>
-                <TableHead className="text-right">Tokens</TableHead>
-                <TableHead className="text-right">Cache hit</TableHead>
+                <TableHead>
+                  <Trans>Request</Trans>
+                </TableHead>
+                <TableHead>
+                  <Trans>Status</Trans>
+                </TableHead>
+                <TableHead className="text-right">
+                  <Trans>Latency</Trans>
+                </TableHead>
+                <TableHead className="text-right">
+                  <Trans>Tokens</Trans>
+                </TableHead>
+                <TableHead className="text-right">
+                  <Trans>Cache hit</Trans>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -259,7 +313,9 @@ export function RequestLogsView({
                     </div>
                   </TableCell>
                   <TableCell>{statusCodeBadge(log.statusCode)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{log.latencyMs}ms</TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    <Trans>{log.latencyMs}ms</Trans>
+                  </TableCell>
                   <TableCell className="text-right tabular-nums">
                     {formatNumber(log.inputTokens + log.outputTokens)}
                   </TableCell>
@@ -272,8 +328,8 @@ export function RequestLogsView({
                 <TableRow>
                   <TableCell colSpan={5}>
                     <EmptyNotice
-                      title="No relay traffic"
-                      body="Requests appear here after clients call the relay."
+                      title={t`No relay traffic`}
+                      body={t`Requests appear here after clients call the relay.`}
                     />
                   </TableCell>
                 </TableRow>
@@ -284,8 +340,8 @@ export function RequestLogsView({
         <div className="grid gap-3 md:hidden">
           {logs.length === 0 ? (
             <EmptyNotice
-              title="No relay traffic"
-              body="Requests appear here after clients call the relay."
+              title={t`No relay traffic`}
+              body={t`Requests appear here after clients call the relay.`}
             />
           ) : (
             logs.map((log) => (
@@ -318,13 +374,17 @@ export function RequestLogsView({
                 </div>
                 <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground">
                   <span>{formatDate(log.createdAt)}</span>
-                  <span className="text-right tabular-nums">{log.latencyMs}ms</span>
+                  <span className="text-right tabular-nums">
+                    <Trans>{log.latencyMs}ms</Trans>
+                  </span>
                   <span className="text-right tabular-nums">
                     <span className="block">
-                      {formatNumber(log.inputTokens + log.outputTokens)} tokens
+                      <Trans>{formatNumber(log.inputTokens + log.outputTokens)} tokens</Trans>
                     </span>
                     <span className="block">
-                      {formatCacheHitRate(log.cachedInputTokens, log.inputTokens)} cache hit
+                      <Trans>
+                        {formatCacheHitRate(log.cachedInputTokens, log.inputTokens)} cache hit
+                      </Trans>
                     </span>
                   </span>
                 </div>
@@ -344,7 +404,7 @@ function RequestLogDetails({ log }: { log: RequestLog }) {
   return (
     <details className="group mt-2 text-xs text-muted-foreground">
       <summary className="w-fit cursor-pointer list-none text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-        Routing details
+        <Trans>Routing details</Trans>
       </summary>
       <RequestLogFacts log={log} />
     </details>
@@ -355,33 +415,45 @@ function RequestLogFacts({ log }: { log: RequestLog }) {
   return (
     <dl className="mt-2 grid gap-1 border-l pl-3 text-xs text-muted-foreground">
       <div className="flex gap-2">
-        <dt className="shrink-0">Time</dt>
+        <dt className="shrink-0">
+          <Trans>Time</Trans>
+        </dt>
         <dd>{formatDate(log.createdAt)}</dd>
       </div>
       <div className="flex min-w-0 gap-2">
-        <dt className="shrink-0">Path</dt>
+        <dt className="shrink-0">
+          <Trans>Path</Trans>
+        </dt>
         <dd className="min-w-0 truncate font-mono" title={log.path}>
           {log.path}
         </dd>
       </div>
       {log.upstreamUrl ? (
         <div className="flex min-w-0 gap-2">
-          <dt className="shrink-0">Upstream</dt>
+          <dt className="shrink-0">
+            <Trans>Upstream</Trans>
+          </dt>
           <dd className="min-w-0 truncate font-mono" title={log.upstreamUrl}>
             {log.upstreamUrl}
           </dd>
         </div>
       ) : null}
       <div className="flex gap-2">
-        <dt className="shrink-0">Tokens</dt>
+        <dt className="shrink-0">
+          <Trans>Tokens</Trans>
+        </dt>
         <dd>
-          {formatNumber(log.inputTokens)} input · {formatNumber(log.cachedInputTokens)} cached ·{" "}
-          {formatNumber(log.outputTokens)} output
+          <Trans>
+            {formatNumber(log.inputTokens)} input · {formatNumber(log.cachedInputTokens)} cached ·{" "}
+            {formatNumber(log.outputTokens)} output
+          </Trans>
         </dd>
       </div>
       {log.error ? (
         <div className="flex min-w-0 gap-2 text-destructive">
-          <dt className="shrink-0">Error</dt>
+          <dt className="shrink-0">
+            <Trans>Error</Trans>
+          </dt>
           <dd className="min-w-0 truncate" title={log.error}>
             {log.error}
           </dd>

@@ -1,4 +1,5 @@
 import type { ComponentType } from "react";
+import { Trans, useLingui } from "@lingui/react/macro";
 import {
   ActivityIcon,
   CableIcon,
@@ -15,6 +16,7 @@ import {
   TerminalSquareIcon,
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { LocaleToggle } from "@/components/locale-toggle";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -88,6 +90,7 @@ const navigationIcons: Record<AdminRouteId, ComponentType<{ className?: string }
 };
 
 function App() {
+  const { t } = useLingui();
   const location = useLocation();
   const navigate = useNavigate();
   const {
@@ -163,7 +166,8 @@ function App() {
     return (
       <TooltipProvider>
         <main className="relative min-h-svh bg-background text-foreground">
-          <div className="absolute top-4 right-4">
+          <div className="absolute top-4 right-4 flex items-center gap-2">
+            <LocaleToggle />
             <ThemeToggle />
           </div>
           <div className="mx-auto flex min-h-svh w-full max-w-md flex-col justify-center gap-6 px-6">
@@ -172,19 +176,25 @@ function App() {
                 <RouteIcon className="size-5" />
               </div>
               <h1 className="text-2xl font-semibold">Token Toxication</h1>
-              <p className="text-sm text-muted-foreground">Relay operations console</p>
+              <p className="text-sm text-muted-foreground">
+                <Trans>Relay operations console</Trans>
+              </p>
             </div>
             <Card>
               <CardHeader>
-                <CardTitle>Admin sign in</CardTitle>
+                <CardTitle>
+                  <Trans>Admin sign in</Trans>
+                </CardTitle>
                 <CardDescription>
-                  Use the credentials from your service environment.
+                  <Trans>Use the credentials from your service environment.</Trans>
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <form className="flex flex-col gap-4" onSubmit={handleLogin}>
                   <div className="flex flex-col gap-2">
-                    <Label htmlFor="username">Username</Label>
+                    <Label htmlFor="username">
+                      <Trans>Username</Trans>
+                    </Label>
                     <Input
                       id="username"
                       value={username}
@@ -193,7 +203,9 @@ function App() {
                     />
                   </div>
                   <div className="flex flex-col gap-2">
-                    <Label htmlFor="password">Password</Label>
+                    <Label htmlFor="password">
+                      <Trans>Password</Trans>
+                    </Label>
                     <Input
                       id="password"
                       type="password"
@@ -204,7 +216,7 @@ function App() {
                   </div>
                   <Button type="submit">
                     <ShieldCheckIcon data-icon="inline-start" />
-                    Sign in
+                    <Trans>Sign in</Trans>
                   </Button>
                 </form>
               </CardContent>
@@ -228,7 +240,9 @@ function App() {
                 </div>
                 <div className="min-w-0">
                   <div className="truncate text-sm font-semibold">Token Toxication</div>
-                  <div className="text-xs text-muted-foreground">Relay control plane</div>
+                  <div className="text-xs text-muted-foreground">
+                    <Trans>Relay control plane</Trans>
+                  </div>
                 </div>
               </div>
               <nav className="grid gap-1">
@@ -258,11 +272,13 @@ function App() {
             <header className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur">
               <div className="flex min-h-16 items-center justify-between gap-3 px-5">
                 <div className="min-w-0">
-                  <div className="text-sm text-muted-foreground">Environment</div>
+                  <div className="text-sm text-muted-foreground">
+                    <Trans>Environment</Trans>
+                  </div>
                   <div className="flex items-center gap-2">
                     <Badge variant="outline">
                       <CheckIcon className="size-3" />
-                      Local
+                      <Trans>Local</Trans>
                     </Badge>
                     <span className="truncate text-sm font-medium">
                       {adminPathLabel(location.pathname)}
@@ -270,22 +286,23 @@ function App() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  <LocaleToggle />
                   <ThemeToggle />
                   <Button type="button" variant="outline" onClick={refresh}>
                     <RefreshCcwIcon data-icon="inline-start" />
-                    Refresh
+                    <Trans>Refresh</Trans>
                   </Button>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button type="button" variant="secondary">
                         <TerminalSquareIcon data-icon="inline-start" />
-                        Admin
+                        <Trans>Admin</Trans>
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem onClick={handleLogout}>
                         <LogOutIcon className="size-4" />
-                        Sign out
+                        <Trans>Sign out</Trans>
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -307,8 +324,8 @@ function App() {
                       />
                     ) : (
                       <EmptyNotice
-                        title="Dashboard unavailable"
-                        body="Refresh the admin data to load the overview."
+                        title={t`Dashboard unavailable`}
+                        body={t`Refresh the admin data to load the overview.`}
                       />
                     ),
                     keys: (
@@ -433,12 +450,18 @@ function App() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>API key secret</DialogTitle>
-            <DialogDescription>This secret is shown once.</DialogDescription>
+            <DialogTitle>
+              <Trans>API key secret</Trans>
+            </DialogTitle>
+            <DialogDescription>
+              <Trans>This secret is shown once.</Trans>
+            </DialogDescription>
           </DialogHeader>
           <Alert>
             <KeyRoundIcon className="size-4" />
-            <AlertTitle>Store this value now</AlertTitle>
+            <AlertTitle>
+              <Trans>Store this value now</Trans>
+            </AlertTitle>
             <AlertDescription className="break-all font-mono text-xs">
               {createdSecret}
             </AlertDescription>
@@ -446,7 +469,7 @@ function App() {
           <div className="grid gap-2 sm:grid-cols-2">
             <Button type="button" onClick={() => createdSecret && copyText(createdSecret)}>
               <ClipboardCopyIcon data-icon="inline-start" />
-              Copy secret
+              <Trans>Copy secret</Trans>
             </Button>
             <Button
               type="button"
@@ -457,7 +480,7 @@ function App() {
               }}
             >
               <TerminalSquareIcon data-icon="inline-start" />
-              Client setup
+              <Trans>Client setup</Trans>
             </Button>
           </div>
         </DialogContent>

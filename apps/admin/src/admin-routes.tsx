@@ -1,20 +1,23 @@
 import type { ReactNode } from "react";
+import { msg } from "@lingui/core/macro";
 import { generatePath, matchRoutes, Route, Routes, type RouteObject } from "react-router";
 
+import { i18n } from "./i18n";
+
 const adminRouteMetadata = [
-  { id: "overview", path: "/", label: "Overview" },
-  { id: "keys", path: "/keys", label: "API Keys" },
-  { id: "key-detail", path: "/keys/:keyId", label: "API Key" },
-  { id: "accounts", path: "/accounts", label: "Provider Accounts" },
-  { id: "account-detail", path: "/accounts/:accountId", label: "Provider Account" },
-  { id: "models", path: "/models", label: "Model Catalog" },
-  { id: "model-detail", path: "/models/:modelId", label: "Catalog Model" },
-  { id: "route-detail", path: "/routes/:routeId", label: "Provider Model Route" },
-  { id: "setup", path: "/setup", label: "Client Setup" },
-  { id: "logs", path: "/logs", label: "Request Log" },
-  { id: "log-detail", path: "/logs/:logId", label: "Request Log" },
-  { id: "settings", path: "/settings", label: "Settings" },
-  { id: "not-found", path: "*", label: "Not found" },
+  { id: "overview", path: "/", label: msg`Overview` },
+  { id: "keys", path: "/keys", label: msg`API Keys` },
+  { id: "key-detail", path: "/keys/:keyId", label: msg`API Key` },
+  { id: "accounts", path: "/accounts", label: msg`Provider Accounts` },
+  { id: "account-detail", path: "/accounts/:accountId", label: msg`Provider Account` },
+  { id: "models", path: "/models", label: msg`Model Catalog` },
+  { id: "model-detail", path: "/models/:modelId", label: msg`Catalog Model` },
+  { id: "route-detail", path: "/routes/:routeId", label: msg`Provider Model Route` },
+  { id: "setup", path: "/setup", label: msg`Client Setup` },
+  { id: "logs", path: "/logs", label: msg`Request Log` },
+  { id: "log-detail", path: "/logs/:logId", label: msg`Request Log` },
+  { id: "settings", path: "/settings", label: msg`Settings` },
+  { id: "not-found", path: "*", label: msg`Not found` },
 ] as const;
 
 export type AdminRouteId = (typeof adminRouteMetadata)[number]["id"];
@@ -61,7 +64,7 @@ export const adminPaths = {
 };
 
 export function adminRouteLabel(id: AdminRouteId): string {
-  return adminRouteById[id].label;
+  return i18n._(adminRouteById[id].label);
 }
 
 export function adminPathLabel(pathname: string): string {

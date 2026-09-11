@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useLingui } from "@lingui/react/macro";
 import { Link } from "react-router";
 
 import { adminPaths } from "../admin-routes";
@@ -34,12 +35,14 @@ export function MissingRecordView({
 }
 
 export function NotFoundView() {
+  const { t } = useLingui();
+
   return (
     <MissingRecordView
-      title="Page not found"
-      body="This admin location does not exist."
+      title={t`Page not found`}
+      body={t`This admin location does not exist.`}
       to={adminPaths.overview()}
-      label="Back to overview"
+      label={t`Back to overview`}
     />
   );
 }
