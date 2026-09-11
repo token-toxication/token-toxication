@@ -45,7 +45,7 @@ sdk-generate: openapi-generate
         --output apps/admin/src/generated/token-toxication \
         --config openapi-nexus.toml \
         --generator-config typescript-fetch.package_name=@token-toxication/admin-api
-    cd apps/admin && vp format src/generated/token-toxication
+    cd apps/admin && vp format --no-error-on-unmatched-pattern src/generated/token-toxication
 
 # ---------- Frontend ----------
 
