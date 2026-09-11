@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ClipboardCopyIcon, DatabaseIcon, KeyRoundIcon } from "lucide-react";
+import { plural, t } from "@lingui/core/macro";
+import { Trans } from "@lingui/react/macro";
 
 import { dshModelCapabilities } from "./dsh-model-capabilities";
 import {
@@ -234,28 +236,38 @@ export function ClientSetupView({
     <div className="flex flex-col gap-5">
       <Card>
         <CardHeader>
-          <CardTitle>Client Setup</CardTitle>
+          <CardTitle>
+            <Trans>Client Setup</Trans>
+          </CardTitle>
           <CardDescription>
-            Generate copy-paste configuration for local AI coding clients.
+            <Trans>Generate copy-paste configuration for local AI coding clients.</Trans>
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 lg:grid-cols-[1fr_1fr]">
           <Alert className="lg:col-span-2">
             <KeyRoundIcon className="size-4" />
-            <AlertTitle>Use a relay API key secret</AlertTitle>
+            <AlertTitle>
+              <Trans>Use a relay API key secret</Trans>
+            </AlertTitle>
             <AlertDescription>
-              Newly created keys are prefilled here once. Existing rows only show previews, so paste
-              the original tokentoxication-* value before copying a setup block.
+              <Trans>
+                Newly created keys are prefilled here once. Existing rows only show previews, so
+                paste the original tokentoxication-* value before copying a setup block.
+              </Trans>
             </AlertDescription>
           </Alert>
           {!keyLooksValid ? (
             <Alert variant="destructive" className="lg:col-span-2">
               <KeyRoundIcon className="size-4" />
-              <AlertTitle>Unexpected key prefix</AlertTitle>
-              <AlertDescription>Client keys should start with tokentoxication-.</AlertDescription>
+              <AlertTitle>
+                <Trans>Unexpected key prefix</Trans>
+              </AlertTitle>
+              <AlertDescription>
+                <Trans>Client keys should start with tokentoxication-.</Trans>
+              </AlertDescription>
             </Alert>
           ) : null}
-          <Field label="Relay API key" htmlFor="setup-api-key">
+          <Field label={t`Relay API key`} htmlFor="setup-api-key">
             <Input
               id="setup-api-key"
               type="password"
@@ -266,22 +278,26 @@ export function ClientSetupView({
             />
           </Field>
           <div className="flex flex-col gap-3">
-            <SettingRow label="OpenAI base" value={snippets.openaiBaseUrl} />
-            <SettingRow label="Anthropic base" value={snippets.anthropicBaseUrl} />
+            <SettingRow label={t`OpenAI base`} value={snippets.openaiBaseUrl} />
+            <SettingRow label={t`Anthropic base`} value={snippets.anthropicBaseUrl} />
             <div className="grid gap-3 sm:grid-cols-2">
-              <SettingRow label="Catalog models" value={String(catalogModels.length)} />
-              <SettingRow label="Chat routed" value={String(chatModels.length)} />
-              <SettingRow label="Responses routed" value={String(codexModels.length)} />
-              <SettingRow label="Messages routed" value={String(claudeModels.length)} />
+              <SettingRow label={t`Catalog models`} value={String(catalogModels.length)} />
+              <SettingRow label={t`Chat routed`} value={String(chatModels.length)} />
+              <SettingRow label={t`Responses routed`} value={String(codexModels.length)} />
+              <SettingRow label={t`Messages routed`} value={String(claudeModels.length)} />
             </div>
           </div>
           {catalogModels.length === 0 ? (
             <Alert className="lg:col-span-2">
               <DatabaseIcon className="size-4" />
-              <AlertTitle>No catalog models yet</AlertTitle>
+              <AlertTitle>
+                <Trans>No catalog models yet</Trans>
+              </AlertTitle>
               <AlertDescription>
-                Add exact model names in Model Catalog, then bind them to provider routes. Client
-                setup will populate from that catalog.
+                <Trans>
+                  Add exact model names in Model Catalog, then bind them to provider routes. Client
+                  setup will populate from that catalog.
+                </Trans>
               </AlertDescription>
             </Alert>
           ) : (
@@ -293,7 +309,7 @@ export function ClientSetupView({
                 onChange={setCodexModel}
                 options={codexModels.map((model) => model.id)}
                 routedOptions={codexModels.map((model) => model.id)}
-                routeLabel="Responses"
+                routeLabel={t`Responses`}
               />
               <ClientModelField
                 id="setup-claude-model"
@@ -302,7 +318,7 @@ export function ClientSetupView({
                 onChange={setClaudeModel}
                 options={catalogModels}
                 routedOptions={claudeModels}
-                routeLabel="Messages"
+                routeLabel={t`Messages`}
               />
               <ClientModelField
                 id="setup-opencode-model"
@@ -311,7 +327,7 @@ export function ClientSetupView({
                 onChange={setOpencodeModel}
                 options={opencodeModelIds}
                 routedOptions={opencodeModelIds}
-                routeLabel="Chat or Responses"
+                routeLabel={t`Chat or Responses`}
               />
               <ClientModelField
                 id="setup-dsh-model"
@@ -320,7 +336,7 @@ export function ClientSetupView({
                 onChange={setDshModel}
                 options={dshModelIds}
                 routedOptions={dshModelIds}
-                routeLabel="Chat, Responses, or Messages"
+                routeLabel={t`Chat, Responses, or Messages`}
               />
             </div>
           )}
@@ -387,31 +403,34 @@ export function ClientSetupView({
                   </CardContent>
                 </Card>
                 <ClientSnippetCard
-                  title="Codex static model catalog"
-                  description="Run this once to snapshot every routed Responses model. Re-run it after changing the model catalog."
+                  title={t`Codex static model catalog`}
+                  description={t`Run this once to snapshot every routed Responses model. Re-run it after changing the model catalog.`}
                   endpoint="~/.codex/token-toxication-model-catalog.json"
-                  model={`${codexModels.length} routed model${codexModels.length === 1 ? "" : "s"}`}
+                  model={plural(codexModels.length, {
+                    one: "# routed model",
+                    other: "# routed models",
+                  })}
                   snippet={snippets.codexCatalog}
                 />
                 <ClientSnippetCard
-                  title="Codex default configuration"
-                  description="Merge this root-level TOML into ~/.codex/config.toml, then run codex without --profile. It does not overwrite other settings."
+                  title={t`Codex default configuration`}
+                  description={t`Merge this root-level TOML into ~/.codex/config.toml, then run codex without --profile. It does not overwrite other settings.`}
                   endpoint="/openai/v1/responses"
-                  model={codexModel || "not set"}
+                  model={codexModel || t`not set`}
                   snippet={snippets.codexConfig}
                 />
               </div>
             ) : (
               <EmptyNotice
-                title="No Codex routes"
-                body="Add an enabled OpenAI Responses route to generate a Codex static catalog."
+                title={t`No Codex routes`}
+                body={t`Add an enabled OpenAI Responses route to generate a Codex static catalog.`}
               />
             )}
           </TabsContent>
           <TabsContent value="claude">
             <ClientSnippetCard
-              title="Claude Code environment"
-              description="Points Claude Code at the Anthropic Messages namespace."
+              title={t`Claude Code environment`}
+              description={t`Points Claude Code at the Anthropic Messages namespace.`}
               endpoint="/anthropic/v1/messages"
               model={claudeModel}
               snippet={snippets.claudeCode}
@@ -420,8 +439,8 @@ export function ClientSetupView({
           <TabsContent value="opencode">
             {opencodeModels.length > 0 ? (
               <ClientSnippetCard
-                title="opencode project config"
-                description="Binds each model to the AI SDK matching its configured OpenAI route."
+                title={t`opencode project config`}
+                description={t`Binds each model to the AI SDK matching its configured OpenAI route.`}
                 endpoint={
                   opencodeWireApi === "openai-responses"
                     ? "/openai/v1/responses"
@@ -432,40 +451,43 @@ export function ClientSetupView({
               />
             ) : (
               <EmptyNotice
-                title="No opencode routes"
-                body="Add an eligible OpenAI Chat or Responses route to generate an opencode config."
+                title={t`No opencode routes`}
+                body={t`Add an eligible OpenAI Chat or Responses route to generate an opencode config.`}
               />
             )}
           </TabsContent>
           <TabsContent value="pi">
             {piModels.length > 0 ? (
               <ClientSnippetCard
-                title="Pi custom provider"
-                description="Writes a complete Pi models.json file using the OpenAI Responses API. Back up any existing Pi configuration first."
+                title={t`Pi custom provider`}
+                description={t`Writes a complete Pi models.json file using the OpenAI Responses API. Back up any existing Pi configuration first.`}
                 endpoint="/openai/v1/responses"
-                model={`${piModels.length} routed model${piModels.length === 1 ? "" : "s"}`}
+                model={plural(piModels.length, {
+                  one: "# routed model",
+                  other: "# routed models",
+                })}
                 snippet={snippets.pi}
               />
             ) : (
               <EmptyNotice
-                title="No Pi routes"
-                body="Add an eligible OpenAI Responses route to generate a Pi provider config."
+                title={t`No Pi routes`}
+                body={t`Add an eligible OpenAI Responses route to generate a Pi provider config.`}
               />
             )}
           </TabsContent>
           <TabsContent value="dsh">
             {dshModels.length > 0 ? (
               <ClientSnippetCard
-                title="DeepSeek Harness provider"
-                description="Set TOKEN_TOXICATION_API_KEY in the harness process environment, then merge these llm-pi-ai provider routes and the default model into ~/.dsh/settings.yaml. Keep existing keys; the harness applies changes on the next request."
+                title={t`DeepSeek Harness provider`}
+                description={t`Set TOKEN_TOXICATION_API_KEY in the harness process environment, then merge these llm-pi-ai provider routes and the default model into ~/.dsh/settings.yaml. Keep existing keys; the harness applies changes on the next request.`}
                 endpoint="settings.yaml · llm-pi-ai"
                 model={selectedDshModel}
                 snippet={snippets.dsh}
               />
             ) : (
               <EmptyNotice
-                title="No DeepSeek Harness routes"
-                body="Add an eligible OpenAI Chat, OpenAI Responses, or Anthropic Messages route to generate a DeepSeek Harness config."
+                title={t`No DeepSeek Harness routes`}
+                body={t`Add an eligible OpenAI Chat, OpenAI Responses, or Anthropic Messages route to generate a DeepSeek Harness config.`}
               />
             )}
           </TabsContent>
@@ -498,10 +520,12 @@ function ClientModelField({
       <div className="flex items-start justify-between gap-3">
         <div className="flex flex-col gap-1">
           <Label htmlFor={id}>{label}</Label>
-          <span className="text-xs text-muted-foreground">{routeLabel} route required</span>
+          <span className="text-xs text-muted-foreground">
+            <Trans>{routeLabel} route required</Trans>
+          </span>
         </div>
         <Badge variant={isRouted ? "secondary" : "outline"}>
-          {isRouted ? "routed" : "not routed"}
+          {isRouted ? t`routed` : t`not routed`}
         </Badge>
       </div>
       <Select value={value} onValueChange={onChange}>
@@ -543,14 +567,14 @@ function ClientSnippetCard({
         <CardAction>
           <Button type="button" onClick={() => copyText(snippet)}>
             <ClipboardCopyIcon data-icon="inline-start" />
-            Copy
+            <Trans>Copy</Trans>
           </Button>
         </CardAction>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <div className="grid gap-3 md:grid-cols-2">
-          <SettingRow label="Route" value={endpoint} />
-          <SettingRow label="Model" value={model || "not set"} />
+          <SettingRow label={t`Route`} value={endpoint} />
+          <SettingRow label={t`Model`} value={model || t`not set`} />
         </div>
         <pre className="max-h-[560px] overflow-auto rounded-md border bg-muted/40 p-3 text-xs leading-5">
           <code>{snippet}</code>

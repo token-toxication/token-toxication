@@ -8,6 +8,7 @@ import {
   PlusIcon,
   TerminalSquareIcon,
 } from "lucide-react";
+import { Trans, useLingui } from "@lingui/react/macro";
 
 import { adminPaths } from "../admin-routes";
 import {
@@ -37,40 +38,42 @@ export function Overview({
   onCreateKey: () => void;
   onCreateAccount: () => void;
 }) {
+  const { t } = useLingui();
+
   return (
     <div className="flex flex-col gap-5">
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <MetricCard
-          title="Requests today"
+          title={t`Requests today`}
           value={formatNumber(dashboard.usage.requestsToday)}
-          detail={`${formatNumber(dashboard.usage.totalRequests)} total`}
+          detail={t`${formatNumber(dashboard.usage.totalRequests)} total`}
           icon={ActivityIcon}
         />
         <MetricCard
-          title="Tokens today"
+          title={t`Tokens today`}
           value={formatNumber(dashboard.usage.tokensToday)}
-          detail={`${formatNumber(dashboard.usage.totalTokens)} total`}
+          detail={t`${formatNumber(dashboard.usage.totalTokens)} total`}
           icon={TerminalSquareIcon}
         />
         <MetricCard
-          title="Cache hit rate"
+          title={t`Cache hit rate`}
           value={formatCacheHitRate(
             dashboard.usage.cachedInputTokensToday,
             dashboard.usage.inputTokensToday,
           )}
-          detail={`${formatNumber(dashboard.usage.cachedInputTokensToday)} / ${formatNumber(dashboard.usage.inputTokensToday)} input tokens`}
+          detail={t`${formatNumber(dashboard.usage.cachedInputTokensToday)} / ${formatNumber(dashboard.usage.inputTokensToday)} input tokens`}
           icon={GaugeIcon}
         />
         <MetricCard
-          title="Active API keys"
+          title={t`Active API keys`}
           value={`${dashboard.activeApiKeys}/${dashboard.totalApiKeys}`}
-          detail="usable client credentials"
+          detail={t`usable client credentials`}
           icon={KeyRoundIcon}
         />
         <MetricCard
-          title="Healthy accounts"
+          title={t`Healthy accounts`}
           value={`${dashboard.healthyAccounts}/${dashboard.totalAccounts}`}
-          detail="active upstream accounts"
+          detail={t`active upstream accounts`}
           icon={CableIcon}
         />
       </section>
@@ -79,14 +82,16 @@ export function Overview({
         <Card>
           <CardHeader className="flex-row items-start justify-between gap-4">
             <div className="flex flex-col gap-1">
-              <CardTitle>Request flow</CardTitle>
+              <CardTitle>
+                <Trans>Request flow</Trans>
+              </CardTitle>
               <CardDescription>
-                Completed relay requests across clock-aligned intervals.
+                <Trans>Completed relay requests across clock-aligned intervals.</Trans>
               </CardDescription>
             </div>
             <Button type="button" onClick={onCreateKey}>
               <PlusIcon data-icon="inline-start" />
-              API Key
+              <Trans>API Key</Trans>
             </Button>
           </CardHeader>
           <CardContent>
@@ -97,19 +102,23 @@ export function Overview({
         <Card>
           <CardHeader className="flex-row items-start justify-between gap-4">
             <div className="flex flex-col gap-1">
-              <CardTitle>Provider pool</CardTitle>
-              <CardDescription>Routing health and availability.</CardDescription>
+              <CardTitle>
+                <Trans>Provider pool</Trans>
+              </CardTitle>
+              <CardDescription>
+                <Trans>Routing health and availability.</Trans>
+              </CardDescription>
             </div>
             <Button type="button" variant="outline" onClick={onCreateAccount}>
               <PlusIcon data-icon="inline-start" />
-              Account
+              <Trans>Account</Trans>
             </Button>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             {dashboard.accounts.length === 0 ? (
               <EmptyNotice
-                title="No provider accounts"
-                body="Add a provider account to relay traffic."
+                title={t`No provider accounts`}
+                body={t`Add a provider account to relay traffic.`}
               />
             ) : (
               dashboard.accounts.slice(0, 5).map((account) => (
@@ -164,6 +173,7 @@ function MetricCard({
 }
 
 function TrendChart({ trend }: { trend: RequestTrend }) {
+  const { t } = useLingui();
   const values = trend.buckets.map((bucket) => bucket.requestCount);
   const peak = Math.max(...values, 0);
   const max = niceChartMaximum(peak);
@@ -190,13 +200,19 @@ function TrendChart({ trend }: { trend: RequestTrend }) {
       <div className="rounded-lg border bg-muted/10 p-4">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
-            <div className="text-sm font-medium">Requests per {intervalMinutes} minutes</div>
+            <div className="text-sm font-medium">
+              <Trans>Requests per {intervalMinutes} minutes</Trans>
+            </div>
             <p className="text-xs text-muted-foreground">
-              Each point counts completed requests in one interval. Hover or focus for details.
+              <Trans>
+                Each point counts completed requests in one interval. Hover or focus for details.
+              </Trans>
             </p>
           </div>
           <Badge variant="outline">
-            {values.length} × {intervalMinutes} min
+            <Trans>
+              {values.length} × {intervalMinutes} min
+            </Trans>
           </Badge>
         </div>
 
@@ -209,13 +225,13 @@ function TrendChart({ trend }: { trend: RequestTrend }) {
             <span className="absolute right-0 bottom-[4%] translate-y-1/2">0</span>
           </div>
 
-          <div className="relative h-40" aria-label="Request count by local time">
+          <div className="relative h-40" aria-label={t`Request count by local time`}>
             <svg
               viewBox="0 0 100 100"
               preserveAspectRatio="none"
               className="pointer-events-none absolute inset-0 h-full w-full text-foreground/70"
               role="img"
-              aria-label={`Request counts across ${values.length} clock-aligned ${intervalMinutes}-minute intervals`}
+              aria-label={t`Request counts across ${values.length} clock-aligned ${intervalMinutes}-minute intervals`}
             >
               {[chartTop, 50, chartBottom].map((y) => (
                 <line
@@ -252,7 +268,7 @@ function TrendChart({ trend }: { trend: RequestTrend }) {
                     type="button"
                     className="group absolute z-10 flex size-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     style={{ left: `${x}%`, top: `${y}%` }}
-                    aria-label={`${formatChartInterval(bucket.startedAt, trend.bucketDurationSeconds)}: ${formatRequestCount(value)}`}
+                    aria-label={t`${formatChartInterval(bucket.startedAt, trend.bucketDurationSeconds)}: ${formatRequestCount(value)}`}
                   >
                     <span className="size-2.5 rounded-full border-2 border-background bg-foreground shadow-sm transition-transform group-hover:scale-125 group-focus-visible:scale-125" />
                   </button>
@@ -269,7 +285,7 @@ function TrendChart({ trend }: { trend: RequestTrend }) {
             {total === 0 ? (
               <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
                 <span className="rounded-md border bg-background/90 px-2 py-1 text-xs text-muted-foreground shadow-sm">
-                  No requests in this window
+                  <Trans>No requests in this window</Trans>
                 </span>
               </div>
             ) : null}
@@ -279,22 +295,28 @@ function TrendChart({ trend }: { trend: RequestTrend }) {
           <div className="mt-2 flex justify-between text-[11px] tabular-nums text-muted-foreground">
             <span>{firstBucket ? formatChartTime(firstBucket.startedAt) : ""}</span>
             <span>{middleBucket ? formatChartTime(middleBucket.startedAt) : ""}</span>
-            <span>Now</span>
+            <span>
+              <Trans>Now</Trans>
+            </span>
           </div>
           <div />
-          <div className="mt-1 text-center text-[11px] text-muted-foreground">Local time</div>
+          <div className="mt-1 text-center text-[11px] text-muted-foreground">
+            <Trans>Local time</Trans>
+          </div>
         </div>
 
         <p className="mt-3 text-xs text-muted-foreground">
-          Intervals align to local {intervalMinutes}-minute boundaries. The rightmost interval is
-          still in progress, so its count is excluded from the average.
+          <Trans>
+            Intervals align to local {intervalMinutes}-minute boundaries. The rightmost interval is
+            still in progress, so its count is excluded from the average.
+          </Trans>
         </p>
       </div>
       <div className="grid gap-3 md:grid-cols-3">
-        <ChartStat label="Window total" value={formatNumber(total)} />
-        <ChartStat label={`Peak / ${intervalMinutes} min`} value={formatNumber(peak)} />
+        <ChartStat label={t`Window total`} value={formatNumber(total)} />
+        <ChartStat label={t`Peak / ${intervalMinutes} min`} value={formatNumber(peak)} />
         <ChartStat
-          label={`Completed avg / ${intervalMinutes} min`}
+          label={t`Completed avg / ${intervalMinutes} min`}
           value={completedAverage.toLocaleString(undefined, { maximumFractionDigits: 1 })}
         />
       </div>

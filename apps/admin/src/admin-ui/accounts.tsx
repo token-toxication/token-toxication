@@ -1,6 +1,8 @@
 import { useMemo } from "react";
 import type React from "react";
 import { Link, useNavigate, useParams } from "react-router";
+import { plural, t } from "@lingui/core/macro";
+import { Trans } from "@lingui/react/macro";
 import {
   ActivityIcon,
   CableIcon,
@@ -115,12 +117,16 @@ export function AccountsView({
     <Card>
       <CardHeader className="flex-row items-start justify-between gap-4">
         <div className="flex flex-col gap-1">
-          <CardTitle>Provider Accounts</CardTitle>
-          <CardDescription>Upstream credentials used by model routes.</CardDescription>
+          <CardTitle>
+            <Trans>Provider Accounts</Trans>
+          </CardTitle>
+          <CardDescription>
+            <Trans>Upstream credentials used by model routes.</Trans>
+          </CardDescription>
         </div>
         <Button type="button" onClick={onCreate}>
           <PlusIcon data-icon="inline-start" />
-          Add Account
+          <Trans>Add Account</Trans>
         </Button>
       </CardHeader>
       <CardContent>
@@ -128,13 +134,27 @@ export function AccountsView({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Provider</TableHead>
-                <TableHead>Protocol</TableHead>
-                <TableHead>Base URL</TableHead>
-                <TableHead>Routes</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead>
+                  <Trans>Name</Trans>
+                </TableHead>
+                <TableHead>
+                  <Trans>Provider</Trans>
+                </TableHead>
+                <TableHead>
+                  <Trans>Protocol</Trans>
+                </TableHead>
+                <TableHead>
+                  <Trans>Base URL</Trans>
+                </TableHead>
+                <TableHead>
+                  <Trans>Routes</Trans>
+                </TableHead>
+                <TableHead>
+                  <Trans>Status</Trans>
+                </TableHead>
+                <TableHead className="text-right">
+                  <Trans>Actions</Trans>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -162,13 +182,15 @@ export function AccountsView({
                               type="button"
                               variant="outline"
                               size="icon-sm"
-                              aria-label="Codex quota"
+                              aria-label={t`Codex quota`}
                               onClick={() => onInspectCodex(account)}
                             >
                               <GaugeIcon />
                             </Button>
                           </TooltipTrigger>
-                          <TooltipContent>Codex quota</TooltipContent>
+                          <TooltipContent>
+                            <Trans>Codex quota</Trans>
+                          </TooltipContent>
                         </Tooltip>
                       ) : null}
                       {isGeminiAccount(account) ? (
@@ -178,13 +200,15 @@ export function AccountsView({
                               type="button"
                               variant="outline"
                               size="icon-sm"
-                              aria-label="Models and quota"
+                              aria-label={t`Models and quota`}
                               onClick={() => onInspectGemini(account)}
                             >
                               <GaugeIcon />
                             </Button>
                           </TooltipTrigger>
-                          <TooltipContent>Models and quota</TooltipContent>
+                          <TooltipContent>
+                            <Trans>Models and quota</Trans>
+                          </TooltipContent>
                         </Tooltip>
                       ) : null}
                       {isGeminiAccount(account) ? (
@@ -194,13 +218,15 @@ export function AccountsView({
                               type="button"
                               variant="outline"
                               size="icon-sm"
-                              aria-label="Reconnect Antigravity"
+                              aria-label={t`Reconnect Antigravity`}
                               onClick={() => onReconnectAntigravity(account)}
                             >
                               <LogInIcon />
                             </Button>
                           </TooltipTrigger>
-                          <TooltipContent>Reconnect Antigravity</TooltipContent>
+                          <TooltipContent>
+                            <Trans>Reconnect Antigravity</Trans>
+                          </TooltipContent>
                         </Tooltip>
                       ) : null}
                       <Button
@@ -209,7 +235,7 @@ export function AccountsView({
                         size="sm"
                         onClick={() => onToggle(account)}
                       >
-                        {account.isActive ? "Enabled" : "Disabled"}
+                        {account.isActive ? t`Enabled` : t`Disabled`}
                       </Button>
                     </div>
                   </TableCell>
@@ -219,8 +245,8 @@ export function AccountsView({
                 <TableRow>
                   <TableCell colSpan={7}>
                     <EmptyNotice
-                      title="No provider accounts"
-                      body="Add an account to make the relay schedulable."
+                      title={t`No provider accounts`}
+                      body={t`Add an account to make the relay schedulable.`}
                     />
                   </TableCell>
                 </TableRow>
@@ -231,8 +257,8 @@ export function AccountsView({
         <div className="grid gap-3 md:hidden">
           {accounts.length === 0 ? (
             <EmptyNotice
-              title="No provider accounts"
-              body="Add an account to make the relay schedulable."
+              title={t`No provider accounts`}
+              body={t`Add an account to make the relay schedulable.`}
             />
           ) : (
             accounts.map((account) => (
@@ -255,7 +281,10 @@ export function AccountsView({
                 </div>
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-xs text-muted-foreground">
-                    {routeCountForAccount(routes, account.id)} routes
+                    {plural(routeCountForAccount(routes, account.id), {
+                      one: "# route",
+                      other: "# routes",
+                    })}
                   </span>
                   <div className="flex items-center gap-2">
                     {isCodexAccount(account) ? (
@@ -263,7 +292,7 @@ export function AccountsView({
                         type="button"
                         variant="outline"
                         size="icon-sm"
-                        aria-label="Codex quota"
+                        aria-label={t`Codex quota`}
                         onClick={() => onInspectCodex(account)}
                       >
                         <GaugeIcon />
@@ -274,7 +303,7 @@ export function AccountsView({
                         type="button"
                         variant="outline"
                         size="icon-sm"
-                        aria-label="Models and quota"
+                        aria-label={t`Models and quota`}
                         onClick={() => onInspectGemini(account)}
                       >
                         <GaugeIcon />
@@ -285,7 +314,7 @@ export function AccountsView({
                         type="button"
                         variant="outline"
                         size="icon-sm"
-                        aria-label="Reconnect Antigravity"
+                        aria-label={t`Reconnect Antigravity`}
                         onClick={() => onReconnectAntigravity(account)}
                       >
                         <LogInIcon />
@@ -297,7 +326,7 @@ export function AccountsView({
                       size="sm"
                       onClick={() => onToggle(account)}
                     >
-                      {account.isActive ? "Enabled" : "Disabled"}
+                      {account.isActive ? t`Enabled` : t`Disabled`}
                     </Button>
                   </div>
                 </div>
@@ -336,10 +365,10 @@ export function AccountDetailView({
   if (!account) {
     return (
       <MissingRecordView
-        title="Provider account not found"
-        body="This provider account may have been deleted or the link is incomplete."
+        title={t`Provider account not found`}
+        body={t`This provider account may have been deleted or the link is incomplete.`}
         to={adminPaths.accounts()}
-        label="Back to provider accounts"
+        label={t`Back to provider accounts`}
       />
     );
   }
@@ -358,10 +387,14 @@ export function AccountDetailView({
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
         <div className="flex min-w-0 flex-col gap-2">
           <Button asChild type="button" variant="ghost" size="sm" className="w-fit">
-            <Link to={adminPaths.accounts()}>Provider Accounts</Link>
+            <Link to={adminPaths.accounts()}>
+              <Trans>Provider Accounts</Trans>
+            </Link>
           </Button>
           <div>
-            <div className="text-sm text-muted-foreground">Provider Account</div>
+            <div className="text-sm text-muted-foreground">
+              <Trans>Provider Account</Trans>
+            </div>
             <h1 className="truncate text-2xl font-semibold">{account.name}</h1>
             <p className="mt-1 truncate text-sm text-muted-foreground">{account.baseUrl}</p>
           </div>
@@ -370,31 +403,31 @@ export function AccountDetailView({
           {isCodexAccount(account) ? (
             <Button type="button" variant="outline" onClick={() => onInspectCodex(account)}>
               <GaugeIcon data-icon="inline-start" />
-              Quota
+              <Trans>Quota</Trans>
             </Button>
           ) : null}
           {isGeminiAccount(account) ? (
             <Button type="button" variant="outline" onClick={() => onInspectGemini(account)}>
               <GaugeIcon data-icon="inline-start" />
-              Models and quota
+              <Trans>Models and quota</Trans>
             </Button>
           ) : null}
           {isGeminiAccount(account) ? (
             <Button type="button" variant="outline" onClick={() => onReconnectAntigravity(account)}>
               <LogInIcon data-icon="inline-start" />
-              Reconnect
+              <Trans>Reconnect</Trans>
             </Button>
           ) : null}
           <Button type="button" variant="outline" onClick={() => onToggle(account)}>
-            {account.isActive ? "Disable" : "Enable"}
+            {account.isActive ? t`Disable` : t`Enable`}
           </Button>
           <Button type="button" variant="outline" onClick={() => onEdit(account)}>
             <PencilIcon data-icon="inline-start" />
-            Edit
+            <Trans>Edit</Trans>
           </Button>
           <Button type="button" variant="destructive" onClick={handleDelete}>
             <Trash2Icon data-icon="inline-start" />
-            Delete
+            <Trans>Delete</Trans>
           </Button>
         </div>
       </div>
@@ -402,29 +435,43 @@ export function AccountDetailView({
       <div className="grid gap-5 xl:grid-cols-[0.75fr_1.25fr]">
         <Card>
           <CardHeader>
-            <CardTitle>Connection</CardTitle>
-            <CardDescription>Configured upstream identity and scheduling state.</CardDescription>
+            <CardTitle>
+              <Trans>Connection</Trans>
+            </CardTitle>
+            <CardDescription>
+              <Trans>Configured upstream identity and scheduling state.</Trans>
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <dl className="grid gap-4 text-sm">
               <div>
-                <dt className="text-xs text-muted-foreground">Provider</dt>
+                <dt className="text-xs text-muted-foreground">
+                  <Trans>Provider</Trans>
+                </dt>
                 <dd className="mt-1">{account.provider}</dd>
               </div>
               <div>
-                <dt className="text-xs text-muted-foreground">Protocol</dt>
+                <dt className="text-xs text-muted-foreground">
+                  <Trans>Protocol</Trans>
+                </dt>
                 <dd className="mt-1">{wireApiLabel(account.wireApi)}</dd>
               </div>
               <div>
-                <dt className="text-xs text-muted-foreground">Priority</dt>
+                <dt className="text-xs text-muted-foreground">
+                  <Trans>Priority</Trans>
+                </dt>
                 <dd className="mt-1">{account.priority}</dd>
               </div>
               <div>
-                <dt className="text-xs text-muted-foreground">Status</dt>
+                <dt className="text-xs text-muted-foreground">
+                  <Trans>Status</Trans>
+                </dt>
                 <dd className="mt-1">{statusBadge(account.status, account.isActive)}</dd>
               </div>
               <div>
-                <dt className="text-xs text-muted-foreground">Created</dt>
+                <dt className="text-xs text-muted-foreground">
+                  <Trans>Created</Trans>
+                </dt>
                 <dd className="mt-1">{formatDate(account.createdAt)}</dd>
               </div>
             </dl>
@@ -433,26 +480,36 @@ export function AccountDetailView({
 
         <Card>
           <CardHeader>
-            <CardTitle>Provider Model Routes</CardTitle>
+            <CardTitle>
+              <Trans>Provider Model Routes</Trans>
+            </CardTitle>
             <CardDescription>
-              Catalog Model bindings that use this Provider Account.
+              <Trans>Catalog Model bindings that use this Provider Account.</Trans>
             </CardDescription>
           </CardHeader>
           <CardContent>
             {linkedRoutes.length === 0 ? (
               <EmptyNotice
-                title="No provider routes"
-                body="Add a provider route from a Catalog Model to make this account schedulable."
+                title={t`No provider routes`}
+                body={t`Add a provider route from a Catalog Model to make this account schedulable.`}
               />
             ) : (
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Catalog Model</TableHead>
-                      <TableHead>Upstream Model</TableHead>
-                      <TableHead>Role</TableHead>
-                      <TableHead>Status</TableHead>
+                      <TableHead>
+                        <Trans>Catalog Model</Trans>
+                      </TableHead>
+                      <TableHead>
+                        <Trans>Upstream Model</Trans>
+                      </TableHead>
+                      <TableHead>
+                        <Trans>Role</Trans>
+                      </TableHead>
+                      <TableHead>
+                        <Trans>Status</Trans>
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -524,7 +581,7 @@ export function GeminiAccountDialog({
       return [];
     }
     const standalone = summary.buckets.map((bucket) => ({
-      group: summary.description || "Account",
+      group: summary.description || t`Account`,
       groupDescription: null,
       bucket,
     }));
@@ -542,8 +599,10 @@ export function GeminiAccountDialog({
     <Dialog open={Boolean(account)} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[86svh] overflow-y-auto sm:max-w-4xl">
         <DialogHeader>
-          <DialogTitle>{account?.name || "Gemini account"}</DialogTitle>
-          <DialogDescription>Models and quota reported by this Google account.</DialogDescription>
+          <DialogTitle>{account?.name || t`Gemini account`}</DialogTitle>
+          <DialogDescription>
+            <Trans>Models and quota reported by this Google account.</Trans>
+          </DialogDescription>
         </DialogHeader>
         {loading ? (
           <div className="grid gap-3">
@@ -553,16 +612,24 @@ export function GeminiAccountDialog({
         ) : error ? (
           <Alert variant="destructive">
             <ActivityIcon className="size-4" />
-            <AlertTitle>Unable to load account data</AlertTitle>
+            <AlertTitle>
+              <Trans>Unable to load account data</Trans>
+            </AlertTitle>
             <AlertDescription className="break-words">{error}</AlertDescription>
           </Alert>
         ) : (
           <div className="flex min-w-0 flex-col gap-4">
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <SettingRow label="Project" value={quota?.project || models?.project || "unknown"} />
-              <SettingRow label="Auth" value={quota?.authMode || account?.authMode || "unknown"} />
-              <SettingRow label="Tier" value={formatGeminiTier(quota?.currentTier)} />
-              <SettingRow label="Quota source" value={quota?.quotaSource || "unknown"} />
+              <SettingRow
+                label={t`Project`}
+                value={quota?.project || models?.project || t`unknown`}
+              />
+              <SettingRow
+                label={t`Auth`}
+                value={quota?.authMode || account?.authMode || t`unknown`}
+              />
+              <SettingRow label={t`Tier`} value={formatGeminiTier(quota?.currentTier)} />
+              <SettingRow label={t`Quota source`} value={quota?.quotaSource || t`unknown`} />
             </div>
             {quota?.paidTier ? (
               <Alert>
@@ -574,7 +641,9 @@ export function GeminiAccountDialog({
             {quota?.quotaSummaryError ? (
               <Alert>
                 <ActivityIcon className="size-4" />
-                <AlertTitle>Quota summary unavailable</AlertTitle>
+                <AlertTitle>
+                  <Trans>Quota summary unavailable</Trans>
+                </AlertTitle>
                 <AlertDescription className="break-words">
                   {quota.quotaSummaryError}
                 </AlertDescription>
@@ -582,15 +651,25 @@ export function GeminiAccountDialog({
             ) : null}
             {quotaSummaryRows.length > 0 ? (
               <div className="flex flex-col gap-2">
-                <div className="text-sm font-medium">Usage windows</div>
+                <div className="text-sm font-medium">
+                  <Trans>Usage windows</Trans>
+                </div>
                 <div className="w-full min-w-0 max-w-full overflow-x-auto rounded-md border">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Model group</TableHead>
-                        <TableHead>Window</TableHead>
-                        <TableHead className="min-w-48">Remaining</TableHead>
-                        <TableHead>Reset</TableHead>
+                        <TableHead>
+                          <Trans>Model group</Trans>
+                        </TableHead>
+                        <TableHead>
+                          <Trans>Window</Trans>
+                        </TableHead>
+                        <TableHead className="min-w-48">
+                          <Trans>Remaining</Trans>
+                        </TableHead>
+                        <TableHead>
+                          <Trans>Reset</Trans>
+                        </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -616,7 +695,9 @@ export function GeminiAccountDialog({
                             </TableCell>
                             <TableCell>
                               {percent === undefined ? (
-                                <span className="text-xs text-muted-foreground">unknown</span>
+                                <span className="text-xs text-muted-foreground">
+                                  <Trans>unknown</Trans>
+                                </span>
                               ) : (
                                 <div className="flex min-w-40 items-center gap-3">
                                   <Progress value={percent} className="min-w-24" />
@@ -639,10 +720,18 @@ export function GeminiAccountDialog({
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Model</TableHead>
-                    <TableHead>Model ID</TableHead>
-                    <TableHead className="min-w-48">Remaining</TableHead>
-                    <TableHead>Reset</TableHead>
+                    <TableHead>
+                      <Trans>Model</Trans>
+                    </TableHead>
+                    <TableHead>
+                      <Trans>Model ID</Trans>
+                    </TableHead>
+                    <TableHead className="min-w-48">
+                      <Trans>Remaining</Trans>
+                    </TableHead>
+                    <TableHead>
+                      <Trans>Reset</Trans>
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -656,7 +745,9 @@ export function GeminiAccountDialog({
                         <TableCell className="font-mono text-xs">{model.id}</TableCell>
                         <TableCell>
                           {percent === undefined ? (
-                            <span className="text-xs text-muted-foreground">unknown</span>
+                            <span className="text-xs text-muted-foreground">
+                              <Trans>unknown</Trans>
+                            </span>
                           ) : (
                             <div className="flex min-w-40 items-center gap-3">
                               <Progress value={percent} className="min-w-24" />
@@ -674,8 +765,8 @@ export function GeminiAccountDialog({
                     <TableRow>
                       <TableCell colSpan={4}>
                         <EmptyNotice
-                          title="No account models returned"
-                          body="Google did not return models for this credential."
+                          title={t`No account models returned`}
+                          body={t`Google did not return models for this credential.`}
                         />
                       </TableCell>
                     </TableRow>
@@ -707,8 +798,8 @@ export function CodexAccountDialog({
     const next: CodexQuotaRow[] = [];
     quota?.limits.forEach((limit) => {
       const windows = [
-        { name: "Primary", window: limit.primaryWindow },
-        { name: "Secondary", window: limit.secondaryWindow },
+        { name: t`Primary`, window: limit.primaryWindow },
+        { name: t`Secondary`, window: limit.secondaryWindow },
       ].filter((entry): entry is { name: string; window: CodexAccountQuotaWindow } =>
         Boolean(entry.window),
       );
@@ -716,7 +807,7 @@ export function CodexAccountDialog({
         next.push({
           limitId: limit.limitId,
           displayName: limit.displayName,
-          windowName: "Unreported",
+          windowName: t`Unreported`,
           window: null,
           allowed: limit.allowed,
           limitReached: limit.limitReached,
@@ -742,8 +833,10 @@ export function CodexAccountDialog({
     <Dialog open={Boolean(account)} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[86svh] overflow-y-auto sm:max-w-4xl">
         <DialogHeader>
-          <DialogTitle>{account?.name || "Codex account"}</DialogTitle>
-          <DialogDescription>Subscription quota reported by this Codex account.</DialogDescription>
+          <DialogTitle>{account?.name || t`Codex account`}</DialogTitle>
+          <DialogDescription>
+            <Trans>Subscription quota reported by this Codex account.</Trans>
+          </DialogDescription>
         </DialogHeader>
         {loading ? (
           <div className="grid gap-3">
@@ -753,25 +846,34 @@ export function CodexAccountDialog({
         ) : error ? (
           <Alert variant="destructive">
             <ActivityIcon className="size-4" />
-            <AlertTitle>Unable to load quota</AlertTitle>
+            <AlertTitle>
+              <Trans>Unable to load quota</Trans>
+            </AlertTitle>
             <AlertDescription className="break-words">{error}</AlertDescription>
           </Alert>
         ) : (
           <div className="flex min-w-0 flex-col gap-4">
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <SettingRow label="Plan" value={quota?.planType || "unknown"} />
-              <SettingRow label="Auth" value={quota?.authMode || account?.authMode || "unknown"} />
-              <SettingRow label="Limits" value={String(quota?.limits.length ?? 0)} />
+              <SettingRow label={t`Plan`} value={quota?.planType || t`unknown`} />
               <SettingRow
-                label="Reset credits"
+                label={t`Auth`}
+                value={quota?.authMode || account?.authMode || t`unknown`}
+              />
+              <SettingRow label={t`Limits`} value={String(quota?.limits.length ?? 0)} />
+              <SettingRow
+                label={t`Reset credits`}
                 value={formatOptionalNumber(quota?.resetCreditsAvailableCount)}
               />
             </div>
-            {quota?.endpoint ? <SettingRow label="Relay endpoint" value={quota.endpoint} /> : null}
+            {quota?.endpoint ? (
+              <SettingRow label={t`Relay endpoint`} value={quota.endpoint} />
+            ) : null}
             {quota?.rateLimitReachedType ? (
               <Alert variant="destructive">
                 <ActivityIcon className="size-4" />
-                <AlertTitle>Quota unavailable</AlertTitle>
+                <AlertTitle>
+                  <Trans>Quota unavailable</Trans>
+                </AlertTitle>
                 <AlertDescription>
                   {humanizeIdentifier(quota.rateLimitReachedType)}
                 </AlertDescription>
@@ -780,11 +882,11 @@ export function CodexAccountDialog({
             {quota?.credits || quota?.spendControl ? (
               <div className="grid gap-3 sm:grid-cols-2">
                 {quota.credits ? (
-                  <SettingRow label="Credits" value={formatCodexCredits(quota.credits)} />
+                  <SettingRow label={t`Credits`} value={formatCodexCredits(quota.credits)} />
                 ) : null}
                 {quota.spendControl ? (
                   <SettingRow
-                    label="Spending limit"
+                    label={t`Spending limit`}
                     value={formatCodexSpendControl(quota.spendControl.reached, spendLimit)}
                   />
                 ) : null}
@@ -794,11 +896,21 @@ export function CodexAccountDialog({
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Limit</TableHead>
-                    <TableHead>Window</TableHead>
-                    <TableHead className="min-w-48">Used</TableHead>
-                    <TableHead>Reset</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead>
+                      <Trans>Limit</Trans>
+                    </TableHead>
+                    <TableHead>
+                      <Trans>Window</Trans>
+                    </TableHead>
+                    <TableHead className="min-w-48">
+                      <Trans>Used</Trans>
+                    </TableHead>
+                    <TableHead>
+                      <Trans>Reset</Trans>
+                    </TableHead>
+                    <TableHead>
+                      <Trans>Status</Trans>
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -818,7 +930,9 @@ export function CodexAccountDialog({
                         </TableCell>
                         <TableCell>
                           {usedPercent === undefined ? (
-                            <span className="text-xs text-muted-foreground">unknown</span>
+                            <span className="text-xs text-muted-foreground">
+                              <Trans>unknown</Trans>
+                            </span>
                           ) : (
                             <div className="flex min-w-40 items-center gap-3">
                               <Progress value={usedPercent} className="min-w-24" />
@@ -837,8 +951,8 @@ export function CodexAccountDialog({
                     <TableRow>
                       <TableCell colSpan={5}>
                         <EmptyNotice
-                          title="No quota windows returned"
-                          body="The relay returned no Codex quota windows."
+                          title={t`No quota windows returned`}
+                          body={t`The relay returned no Codex quota windows.`}
                         />
                       </TableCell>
                     </TableRow>
@@ -876,25 +990,25 @@ export function CreateAccountSheet({
   const selectedPreset = providerPresetForForm(form, presets);
   const credentialLabel =
     selectedPreset?.credentialLabel ??
-    (isCodexSubscription ? "Raw refresh token" : "Upstream API key");
+    (isCodexSubscription ? t`Raw refresh token` : t`Upstream API key`);
   const credentialPlaceholder =
     selectedPreset?.credentialPlaceholder ??
     (isCodexSubscription
-      ? "Paste the value from tokens.refresh_token or openai.refresh"
-      : "Upstream credential");
+      ? t`Paste the value from tokens.refresh_token or openai.refresh`
+      : t`Upstream credential`);
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="overflow-y-auto sm:max-w-lg">
         <SheetHeader>
-          <SheetTitle>{editing ? "Edit provider account" : "Add provider account"}</SheetTitle>
+          <SheetTitle>{editing ? t`Edit provider account` : t`Add provider account`}</SheetTitle>
           <SheetDescription>
             {editing
-              ? "Update routing details or replace the upstream credential."
-              : "Register an upstream credential for relay scheduling."}
+              ? t`Update routing details or replace the upstream credential.`
+              : t`Register an upstream credential for relay scheduling.`}
           </SheetDescription>
         </SheetHeader>
         <form className="flex flex-col gap-4 px-4" onSubmit={onSubmit}>
-          <Field label="Preset" htmlFor="account-preset">
+          <Field label={t`Preset`} htmlFor="account-preset">
             <Select
               value={accountPresetValue(form, presets)}
               onValueChange={(value) => {
@@ -913,12 +1027,14 @@ export function CreateAccountSheet({
                       {preset.label}
                     </SelectItem>
                   ))}
-                  <SelectItem value="custom">Custom</SelectItem>
+                  <SelectItem value="custom">
+                    <Trans>Custom</Trans>
+                  </SelectItem>
                 </SelectGroup>
               </SelectContent>
             </Select>
           </Field>
-          <Field label="Name" htmlFor="account-name">
+          <Field label={t`Name`} htmlFor="account-name">
             <Input
               id="account-name"
               value={form.name}
@@ -927,7 +1043,7 @@ export function CreateAccountSheet({
             />
           </Field>
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Provider" htmlFor="account-provider">
+            <Field label={t`Provider`} htmlFor="account-provider">
               <Input
                 id="account-provider"
                 value={form.provider}
@@ -936,7 +1052,7 @@ export function CreateAccountSheet({
                 }
               />
             </Field>
-            <Field label="Protocol" htmlFor="account-wire-api">
+            <Field label={t`Protocol`} htmlFor="account-wire-api">
               <Select
                 value={form.wireApi}
                 onValueChange={(value) => setForm((current) => ({ ...current, wireApi: value }))}
@@ -956,7 +1072,7 @@ export function CreateAccountSheet({
             </Field>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Auth mode" htmlFor="account-auth-mode">
+            <Field label={t`Auth mode`} htmlFor="account-auth-mode">
               <Select
                 value={form.authMode}
                 onValueChange={(value) => setForm((current) => ({ ...current, authMode: value }))}
@@ -975,22 +1091,22 @@ export function CreateAccountSheet({
                 </SelectContent>
               </Select>
             </Field>
-            <SettingRow label="Route binding" value="Configured in Model Catalog" />
+            <SettingRow label={t`Route binding`} value={t`Configured in Model Catalog`} />
           </div>
           {selectedPreset?.credentialHelp ? (
             <Alert>
               <KeyRoundIcon className="size-4" />
-              <AlertTitle>{selectedPreset.label} credential</AlertTitle>
+              <AlertTitle>{t`${selectedPreset.label} credential`}</AlertTitle>
               <AlertDescription>{selectedPreset.credentialHelp}</AlertDescription>
             </Alert>
           ) : null}
           <Field
             label={
               isCodexSubscription
-                ? "Codex account API base"
+                ? t`Codex account API base`
                 : isAntigravityAccount
-                  ? "Gemini endpoint base"
-                  : "Base URL"
+                  ? t`Gemini endpoint base`
+                  : t`Base URL`
             }
             htmlFor="account-base-url"
           >
@@ -1032,15 +1148,15 @@ export function CreateAccountSheet({
           ) : null}
           {editing && !isAntigravityAccount ? (
             <p className="text-xs text-muted-foreground">
-              Leave the credential blank to keep the current value.
+              <Trans>Leave the credential blank to keep the current value.</Trans>
             </p>
           ) : null}
           <div className="grid gap-3 sm:grid-cols-[1fr_120px]">
             <SettingRow
-              label="Upstream path"
+              label={t`Upstream path`}
               value={upstreamPathForWireApi(form.wireApi, form.authMode)}
             />
-            <Field label="Priority" htmlFor="account-priority">
+            <Field label={t`Priority`} htmlFor="account-priority">
               <Input
                 id="account-priority"
                 inputMode="numeric"
@@ -1053,9 +1169,11 @@ export function CreateAccountSheet({
           </div>
           <div className="flex items-center justify-between gap-3 rounded-md border p-3">
             <div className="flex flex-col gap-1">
-              <Label htmlFor="account-active">Schedulable</Label>
+              <Label htmlFor="account-active">
+                <Trans>Schedulable</Trans>
+              </Label>
               <span className="text-xs text-muted-foreground">
-                Use this account for relay traffic
+                <Trans>Use this account for relay traffic</Trans>
               </span>
             </div>
             <Switch
@@ -1074,10 +1192,10 @@ export function CreateAccountSheet({
                 <CableIcon data-icon="inline-start" />
               )}
               {isAntigravityAccount && !editing
-                ? "Sign in with Antigravity"
+                ? t`Sign in with Antigravity`
                 : editing
-                  ? "Save changes"
-                  : "Add account"}
+                  ? t`Save changes`
+                  : t`Add account`}
             </Button>
           </SheetFooter>
         </form>

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type React from "react";
+import { t } from "@lingui/core/macro";
 import { toast } from "sonner";
 
 import { api, clearStoredToken, getStoredToken, setStoredToken } from "../api";
@@ -103,7 +104,7 @@ export function useAdminWorkspace() {
       setModelRoutes(nextRoutes);
       setLogs(nextLogs);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to load dashboard");
+      toast.error(error instanceof Error ? error.message : t`Failed to load dashboard`);
       if (error instanceof Error && /token|session|credentials/i.test(error.message)) {
         clearStoredToken();
         setToken(null);
@@ -129,10 +130,10 @@ export function useAdminWorkspace() {
         setEditingAccount(null);
         setCreateAccountForm(emptyAccountForm);
         setIsAccountSheetOpen(false);
-        toast.success("Antigravity account connected");
+        toast.success(t`Antigravity account connected`);
         void refresh();
       } else {
-        toast.error(event.data.error || "Antigravity sign-in failed");
+        toast.error(event.data.error || t`Antigravity sign-in failed`);
       }
     }
 
@@ -147,10 +148,10 @@ export function useAdminWorkspace() {
       setStoredToken(response.token);
       setToken(response.token);
       setPassword("");
-      toast.success("Signed in");
+      toast.success(t`Signed in`);
       await refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Sign-in failed");
+      toast.error(error instanceof Error ? error.message : t`Sign-in failed`);
     }
   }
 
@@ -163,7 +164,7 @@ export function useAdminWorkspace() {
     clearStoredToken();
     setToken(null);
     setDashboard(null);
-    toast.success("Signed out");
+    toast.success(t`Signed out`);
   }
 
   async function handleCreateKey(event: React.FormEvent<HTMLFormElement>) {
@@ -183,7 +184,7 @@ export function useAdminWorkspace() {
     setClientSetupApiKey(response.secret);
     setCreateKeyForm(emptyKeyForm);
     setIsKeySheetOpen(false);
-    toast.success("API key created");
+    toast.success(t`API key created`);
     await refresh();
   }
 
@@ -233,7 +234,7 @@ export function useAdminWorkspace() {
         isActive: createAccountForm.isActive,
         priority: numberFromInput(createAccountForm.priority),
       });
-      toast.success("Provider account updated");
+      toast.success(t`Provider account updated`);
     } else {
       await api.createProviderAccount({
         name: createAccountForm.name,
@@ -245,7 +246,7 @@ export function useAdminWorkspace() {
         isActive: createAccountForm.isActive,
         priority: numberFromInput(createAccountForm.priority),
       });
-      toast.success("Provider account created");
+      toast.success(t`Provider account created`);
     }
     closeAccountSheet();
     await refresh();
@@ -266,7 +267,7 @@ export function useAdminWorkspace() {
       "popup,width=560,height=720",
     );
     if (!popup) {
-      toast.error("Allow popups to sign in with Antigravity");
+      toast.error(t`Allow popups to sign in with Antigravity`);
       return;
     }
     try {
@@ -279,7 +280,7 @@ export function useAdminWorkspace() {
       popup.location.replace(response.authorizationUrl);
     } catch (error) {
       popup.close();
-      toast.error(error instanceof Error ? error.message : "Unable to start Antigravity sign-in");
+      toast.error(error instanceof Error ? error.message : t`Unable to start Antigravity sign-in`);
     }
   }
 
@@ -305,7 +306,8 @@ export function useAdminWorkspace() {
       setGeminiModels(models);
       setGeminiQuota(quota);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to load Gemini account data";
+      const message =
+        error instanceof Error ? error.message : t`Unable to load Gemini account data`;
       setGeminiDetailsError(message);
       toast.error(message);
     } finally {
@@ -321,7 +323,7 @@ export function useAdminWorkspace() {
     try {
       setCodexQuota(await api.codexAccountQuota(account.id));
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to load Codex quota";
+      const message = error instanceof Error ? error.message : t`Unable to load Codex quota`;
       setCodexDetailsError(message);
       toast.error(message);
     } finally {
@@ -340,7 +342,7 @@ export function useAdminWorkspace() {
     });
     setCreateModelForm(emptyModelForm);
     setIsModelSheetOpen(false);
-    toast.success("Model added");
+    toast.success(t`Model added`);
     await refresh();
   }
 
@@ -357,19 +359,19 @@ export function useAdminWorkspace() {
     });
     setCreateRouteForm(emptyRouteForm);
     setIsRouteSheetOpen(false);
-    toast.success("Provider route added");
+    toast.success(t`Provider route added`);
     await refresh();
   }
 
   async function toggleApiKey(key: ApiKey) {
     await api.updateApiKey(key.id, { isActive: !key.isActive });
-    toast.success(key.isActive ? "API key paused" : "API key activated");
+    toast.success(key.isActive ? t`API key paused` : t`API key activated`);
     await refresh();
   }
 
   async function toggleModel(entry: ModelCatalogEntry) {
     await api.updateModelCatalogEntry(entry.id, { enabled: !entry.enabled });
-    toast.success(entry.enabled ? "Model disabled" : "Model enabled");
+    toast.success(entry.enabled ? t`Model disabled` : t`Model enabled`);
     await refresh();
   }
 
@@ -378,13 +380,13 @@ export function useAdminWorkspace() {
     values: { displayName: string; family: string },
   ) {
     await api.updateModelCatalogEntry(entry.id, values);
-    toast.success("Model updated");
+    toast.success(t`Model updated`);
     await refresh();
   }
 
   async function toggleRoute(route: ProviderModelRoute) {
     await api.updateProviderModelRoute(route.id, { enabled: !route.enabled });
-    toast.success(route.enabled ? "Route disabled" : "Route enabled");
+    toast.success(route.enabled ? t`Route disabled` : t`Route enabled`);
     await refresh();
   }
 
@@ -394,7 +396,7 @@ export function useAdminWorkspace() {
     }
 
     await api.deleteProviderModelRoute(route.id);
-    toast.success("Provider route deleted");
+    toast.success(t`Provider route deleted`);
     await refresh();
     return true;
   }
@@ -405,14 +407,14 @@ export function useAdminWorkspace() {
     }
 
     await api.deleteApiKey(key.id);
-    toast.success("API key deleted");
+    toast.success(t`API key deleted`);
     await refresh();
     return true;
   }
 
   async function toggleAccount(account: ProviderAccount) {
     await api.updateProviderAccount(account.id, { isActive: !account.isActive });
-    toast.success(account.isActive ? "Provider paused" : "Provider activated");
+    toast.success(account.isActive ? t`Provider paused` : t`Provider activated`);
     await refresh();
   }
 
@@ -431,7 +433,7 @@ export function useAdminWorkspace() {
     }
 
     await api.deleteProviderAccount(account.id);
-    toast.success("Provider account deleted");
+    toast.success(t`Provider account deleted`);
     await refresh();
     return true;
   }

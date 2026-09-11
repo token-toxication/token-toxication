@@ -1,4 +1,6 @@
 import type { Dispatch, SetStateAction } from "react";
+import { plural, t } from "@lingui/core/macro";
+import { Trans } from "@lingui/react/macro";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -22,20 +24,36 @@ import type {
 
 export function statusBadge(status: string, active: boolean) {
   if (!active) {
-    return <Badge variant="outline">paused</Badge>;
+    return (
+      <Badge variant="outline">
+        <Trans>paused</Trans>
+      </Badge>
+    );
   }
   if (status === "healthy") {
-    return <Badge variant="secondary">healthy</Badge>;
+    return (
+      <Badge variant="secondary">
+        <Trans>healthy</Trans>
+      </Badge>
+    );
   }
   if (status === "blocked") {
-    return <Badge variant="destructive">blocked</Badge>;
+    return (
+      <Badge variant="destructive">
+        <Trans>blocked</Trans>
+      </Badge>
+    );
   }
   return <Badge variant="outline">{status}</Badge>;
 }
 
 export function routeRoleBadge(role: string) {
   if (role === "primary") {
-    return <Badge variant="secondary">primary</Badge>;
+    return (
+      <Badge variant="secondary">
+        <Trans>primary</Trans>
+      </Badge>
+    );
   }
   return <Badge variant="outline">{role}</Badge>;
 }
@@ -67,9 +85,10 @@ export function commaSeparatedValues(value: string) {
 
 export function formatRoutePolicy(route: ProviderModelRoute) {
   if (route.stripParams.length === 0) {
-    return "No stripped params";
+    return t`No stripped params`;
   }
-  return `strip ${route.stripParams.join(", ")}`;
+  const params = route.stripParams.join(", ");
+  return t`strip ${params}`;
 }
 
 export function statusCodeBadge(status: number) {
@@ -83,7 +102,7 @@ export function statusCodeBadge(status: number) {
 }
 
 export function formatLogModel(log: RequestLog) {
-  const publicModel = log.model || "unknown";
+  const publicModel = log.model || t`unknown`;
   if (!log.upstreamModel || log.upstreamModel === publicModel) {
     return publicModel;
   }
@@ -93,13 +112,13 @@ export function formatLogModel(log: RequestLog) {
 export function formatRequestSummary(log: RequestLog) {
   const summary = log.requestSummary;
   if (!summary) {
-    return "No request summary";
+    return t`No request summary`;
   }
-  const stream = summary.stream ? "stream" : "non-stream";
-  const keys = summary.topLevelKeys.length > 0 ? summary.topLevelKeys.join(", ") : "no keys";
+  const stream = summary.stream ? t`stream` : t`non-stream`;
+  const keys = summary.topLevelKeys.length > 0 ? summary.topLevelKeys.join(", ") : t`no keys`;
   const stripped =
-    summary.strippedParams.length > 0 ? ` · stripped ${summary.strippedParams.join(", ")}` : "";
-  return `${formatNumber(summary.bodyBytes)} bytes · ${stream} · keys ${keys}${stripped}`;
+    summary.strippedParams.length > 0 ? t` · stripped ${summary.strippedParams.join(", ")}` : "";
+  return t`${formatNumber(summary.bodyBytes)} bytes · ${stream} · keys ${keys}${stripped}`;
 }
 
 export function providerPresetForForm(form: CreateAccountForm, presets: ProviderPreset[]) {
@@ -309,14 +328,17 @@ export function formatChartInterval(startedAt: string, durationSeconds: number) 
 }
 
 export function formatRequestCount(value: number) {
-  return `${formatNumber(value)} ${value === 1 ? "request" : "requests"}`;
+  return plural(value, {
+    one: "# request",
+    other: "# requests",
+  });
 }
 
 export function formatGeminiTier(tier: GeminiAccountQuotaResponse["currentTier"]) {
   if (!tier) {
-    return "unknown";
+    return t`unknown`;
   }
-  return tier.name || tier.id || "unknown";
+  return tier.name || tier.id || t`unknown`;
 }
 
 export function quotaPercent(value: number | null | undefined) {
@@ -336,27 +358,27 @@ export function codexUsedPercent(value: number | null | undefined) {
 
 export function formatCodexWindow(seconds: number | null | undefined) {
   if (seconds == null || !Number.isFinite(seconds) || seconds <= 0) {
-    return "unknown";
+    return t`unknown`;
   }
   if (seconds >= 86_400) {
     const days = Math.round(seconds / 86_400);
     if (Math.abs(seconds - days * 86_400) <= 120) {
-      return `${days} ${days === 1 ? "day" : "days"}`;
+      return plural(days, { one: "# day", other: "# days" });
     }
-    return `${(seconds / 86_400).toFixed(1)} days`;
+    return t`${(seconds / 86_400).toFixed(1)} days`;
   }
   if (seconds >= 3_600) {
     const hours = Math.round(seconds / 3_600);
     if (Math.abs(seconds - hours * 3_600) <= 60) {
-      return `${hours} ${hours === 1 ? "hour" : "hours"}`;
+      return plural(hours, { one: "# hour", other: "# hours" });
     }
-    return `${(seconds / 3_600).toFixed(1)} hours`;
+    return t`${(seconds / 3_600).toFixed(1)} hours`;
   }
   if (seconds >= 60) {
     const minutes = Math.round(seconds / 60);
-    return `${minutes} ${minutes === 1 ? "minute" : "minutes"}`;
+    return plural(minutes, { one: "# minute", other: "# minutes" });
   }
-  return `${seconds} ${seconds === 1 ? "second" : "seconds"}`;
+  return plural(seconds, { one: "# second", other: "# seconds" });
 }
 
 export function formatQuotaReset(value: string | null | undefined) {
@@ -368,28 +390,40 @@ export function codexQuotaStatus(
   limitReached: boolean | null | undefined,
 ) {
   if (limitReached === true || allowed === false) {
-    return <Badge variant="destructive">limited</Badge>;
+    return (
+      <Badge variant="destructive">
+        <Trans>limited</Trans>
+      </Badge>
+    );
   }
   if (allowed === true) {
-    return <Badge variant="secondary">available</Badge>;
+    return (
+      <Badge variant="secondary">
+        <Trans>available</Trans>
+      </Badge>
+    );
   }
-  return <Badge variant="outline">unknown</Badge>;
+  return (
+    <Badge variant="outline">
+      <Trans>unknown</Trans>
+    </Badge>
+  );
 }
 
 export function formatCodexCredits(credits: NonNullable<CodexAccountQuotaResponse["credits"]>) {
   if (credits.unlimited) {
-    return "Unlimited";
+    return t`Unlimited`;
   }
   if (credits.balance) {
-    return `Balance ${credits.balance}`;
+    return t`Balance ${credits.balance}`;
   }
   if (credits.hasCredits === true) {
-    return "Available";
+    return t`Available`;
   }
   if (credits.hasCredits === false) {
-    return "None";
+    return t`None`;
   }
-  return "unknown";
+  return t`unknown`;
 }
 
 export function formatCodexSpendControl(
@@ -400,29 +434,29 @@ export function formatCodexSpendControl(
     | undefined,
 ) {
   if (!limit) {
-    return reached ? "Reached" : "unknown";
+    return reached ? t`Reached` : t`unknown`;
   }
   const amount =
     limit.used && limit.limit
       ? `${limit.used} / ${limit.limit}`
       : limit.remaining
-        ? `${limit.remaining} remaining`
-        : "Configured";
-  return reached ? `${amount}, reached` : amount;
+        ? t`${limit.remaining} remaining`
+        : t`Configured`;
+  return reached ? t`${amount}, reached` : amount;
 }
 
 export function formatOptionalNumber(value: number | null | undefined) {
-  return value == null ? "unknown" : formatNumber(value);
+  return value == null ? t`unknown` : formatNumber(value);
 }
 
 export function humanizeIdentifier(value: string) {
   const text = value.replaceAll("_", " ").trim();
-  return text ? `${text.charAt(0).toUpperCase()}${text.slice(1)}` : "Unknown";
+  return text ? `${text.charAt(0).toUpperCase()}${text.slice(1)}` : t`Unknown`;
 }
 
 export function formatDate(value: string | null | undefined) {
   if (!value) {
-    return "never";
+    return t`never`;
   }
   return new Intl.DateTimeFormat(undefined, {
     month: "short",
@@ -434,5 +468,5 @@ export function formatDate(value: string | null | undefined) {
 
 export async function copyText(value: string) {
   await navigator.clipboard.writeText(value);
-  toast.success("Copied");
+  toast.success(t`Copied`);
 }

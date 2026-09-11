@@ -1,4 +1,5 @@
 import type React from "react";
+import { Trans, useLingui } from "@lingui/react/macro";
 import { Link, useNavigate, useParams } from "react-router";
 import { KeyRoundIcon, PlusIcon, Trash2Icon } from "lucide-react";
 
@@ -45,16 +46,22 @@ export function ApiKeysView({
   onCreate: () => void;
   onToggle: (key: ApiKey) => void;
 }) {
+  const { t } = useLingui();
+
   return (
     <Card>
       <CardHeader className="flex-row items-start justify-between gap-4">
         <div className="flex flex-col gap-1">
-          <CardTitle>API Keys</CardTitle>
-          <CardDescription>Client credentials, limits, and service permissions.</CardDescription>
+          <CardTitle>
+            <Trans>API Keys</Trans>
+          </CardTitle>
+          <CardDescription>
+            <Trans>Client credentials, limits, and service permissions.</Trans>
+          </CardDescription>
         </div>
         <Button type="button" onClick={onCreate}>
           <PlusIcon data-icon="inline-start" />
-          Create
+          <Trans>Create</Trans>
         </Button>
       </CardHeader>
       <CardContent>
@@ -62,12 +69,24 @@ export function ApiKeysView({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Preview</TableHead>
-                <TableHead>Permissions</TableHead>
-                <TableHead>Limits</TableHead>
-                <TableHead>Last used</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead>
+                  <Trans>Name</Trans>
+                </TableHead>
+                <TableHead>
+                  <Trans>Preview</Trans>
+                </TableHead>
+                <TableHead>
+                  <Trans>Permissions</Trans>
+                </TableHead>
+                <TableHead>
+                  <Trans>Limits</Trans>
+                </TableHead>
+                <TableHead>
+                  <Trans>Last used</Trans>
+                </TableHead>
+                <TableHead className="text-right">
+                  <Trans>Actions</Trans>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -82,24 +101,36 @@ export function ApiKeysView({
                         {key.name}
                       </Link>
                       <span className="text-xs text-muted-foreground">
-                        {key.description || "No description"}
+                        {key.description || t`No description`}
                       </span>
                     </div>
                   </TableCell>
                   <TableCell className="font-mono text-xs">{key.keyPreview}</TableCell>
                   <TableCell>
-                    {key.permissions.length === 0 ? "All" : key.permissions.join(", ")}
+                    {key.permissions.length === 0 ? t`All` : key.permissions.join(", ")}
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-col gap-1 text-xs text-muted-foreground">
-                      <span>{key.rateLimitPerMinute || "No"} rpm</span>
-                      <span>{key.concurrencyLimit || "No"} concurrent</span>
+                      <span>
+                        {key.rateLimitPerMinute ? (
+                          <Trans>{key.rateLimitPerMinute} rpm</Trans>
+                        ) : (
+                          <Trans>No rpm</Trans>
+                        )}
+                      </span>
+                      <span>
+                        {key.concurrencyLimit ? (
+                          <Trans>{key.concurrencyLimit} concurrent</Trans>
+                        ) : (
+                          <Trans>No concurrent</Trans>
+                        )}
+                      </span>
                     </div>
                   </TableCell>
                   <TableCell>{formatDate(key.lastUsedAt)}</TableCell>
                   <TableCell className="text-right">
                     <Button type="button" variant="outline" size="sm" onClick={() => onToggle(key)}>
-                      {key.isActive ? "Active" : "Paused"}
+                      {key.isActive ? t`Active` : t`Paused`}
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -108,8 +139,8 @@ export function ApiKeysView({
                 <TableRow>
                   <TableCell colSpan={6}>
                     <EmptyNotice
-                      title="No API keys"
-                      body="Create a key before connecting a client."
+                      title={t`No API keys`}
+                      body={t`Create a key before connecting a client.`}
                     />
                   </TableCell>
                 </TableRow>
@@ -119,7 +150,10 @@ export function ApiKeysView({
         </div>
         <div className="grid gap-3 md:hidden">
           {apiKeys.length === 0 ? (
-            <EmptyNotice title="No API keys" body="Create a key before connecting a client." />
+            <EmptyNotice
+              title={t`No API keys`}
+              body={t`Create a key before connecting a client.`}
+            />
           ) : (
             apiKeys.map((key) => (
               <div key={key.id} className="flex flex-col gap-3 rounded-md border p-3">
@@ -136,16 +170,28 @@ export function ApiKeysView({
                     </div>
                   </div>
                   <Button type="button" variant="outline" size="sm" onClick={() => onToggle(key)}>
-                    {key.isActive ? "Active" : "Paused"}
+                    {key.isActive ? t`Active` : t`Paused`}
                   </Button>
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
                   <span>
-                    {key.permissions.length === 0 ? "All services" : key.permissions.join(", ")}
+                    {key.permissions.length === 0 ? t`All services` : key.permissions.join(", ")}
                   </span>
                   <span>{formatDate(key.lastUsedAt)}</span>
-                  <span>{key.rateLimitPerMinute || "No"} rpm</span>
-                  <span>{key.concurrencyLimit || "No"} concurrent</span>
+                  <span>
+                    {key.rateLimitPerMinute ? (
+                      <Trans>{key.rateLimitPerMinute} rpm</Trans>
+                    ) : (
+                      <Trans>No rpm</Trans>
+                    )}
+                  </span>
+                  <span>
+                    {key.concurrencyLimit ? (
+                      <Trans>{key.concurrencyLimit} concurrent</Trans>
+                    ) : (
+                      <Trans>No concurrent</Trans>
+                    )}
+                  </span>
                 </div>
               </div>
             ))
@@ -165,6 +211,7 @@ export function ApiKeyDetailView({
   onToggle: (key: ApiKey) => Promise<void>;
   onDelete: (key: ApiKey) => Promise<boolean>;
 }) {
+  const { t } = useLingui();
   const { keyId } = useParams();
   const navigate = useNavigate();
   const key = apiKeys.find((item) => item.id === keyId);
@@ -172,10 +219,10 @@ export function ApiKeyDetailView({
   if (!key) {
     return (
       <MissingRecordView
-        title="API key not found"
-        body="This API key may have been deleted or the link is incomplete."
+        title={t`API key not found`}
+        body={t`This API key may have been deleted or the link is incomplete.`}
         to={adminPaths.keys()}
-        label="Back to API keys"
+        label={t`Back to API keys`}
       />
     );
   }
@@ -193,74 +240,110 @@ export function ApiKeyDetailView({
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
         <div className="flex min-w-0 flex-col gap-2">
           <Button asChild type="button" variant="ghost" size="sm" className="w-fit">
-            <Link to={adminPaths.keys()}>API Keys</Link>
+            <Link to={adminPaths.keys()}>
+              <Trans>API Keys</Trans>
+            </Link>
           </Button>
           <div>
-            <div className="text-sm text-muted-foreground">API Key</div>
+            <div className="text-sm text-muted-foreground">
+              <Trans>API Key</Trans>
+            </div>
             <h1 className="truncate text-2xl font-semibold">{selectedKey.name}</h1>
             <p className="mt-1 font-mono text-sm text-muted-foreground">{selectedKey.keyPreview}</p>
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="outline" onClick={() => void onToggle(key)}>
-            {selectedKey.isActive ? "Disable" : "Enable"}
+            {selectedKey.isActive ? t`Disable` : t`Enable`}
           </Button>
           <Button type="button" variant="destructive" onClick={() => void handleDelete()}>
             <Trash2Icon data-icon="inline-start" />
-            Delete
+            <Trans>Delete</Trans>
           </Button>
         </div>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Credential details</CardTitle>
+          <CardTitle>
+            <Trans>Credential details</Trans>
+          </CardTitle>
           <CardDescription>
-            Stored metadata and request limits for this client credential.
+            <Trans>Stored metadata and request limits for this client credential.</Trans>
           </CardDescription>
         </CardHeader>
         <CardContent>
           <dl className="grid gap-5 text-sm sm:grid-cols-2 xl:grid-cols-3">
             <div>
-              <dt className="text-xs text-muted-foreground">Description</dt>
-              <dd className="mt-1">{selectedKey.description || "No description"}</dd>
+              <dt className="text-xs text-muted-foreground">
+                <Trans>Description</Trans>
+              </dt>
+              <dd className="mt-1">{selectedKey.description || t`No description`}</dd>
             </div>
             <div>
-              <dt className="text-xs text-muted-foreground">Permissions</dt>
+              <dt className="text-xs text-muted-foreground">
+                <Trans>Permissions</Trans>
+              </dt>
               <dd className="mt-1">
                 {selectedKey.permissions.length === 0
-                  ? "All services"
+                  ? t`All services`
                   : selectedKey.permissions.join(", ")}
               </dd>
             </div>
             <div>
-              <dt className="text-xs text-muted-foreground">Status</dt>
-              <dd className="mt-1">{selectedKey.isActive ? "Active" : "Paused"}</dd>
+              <dt className="text-xs text-muted-foreground">
+                <Trans>Status</Trans>
+              </dt>
+              <dd className="mt-1">{selectedKey.isActive ? t`Active` : t`Paused`}</dd>
             </div>
             <div>
-              <dt className="text-xs text-muted-foreground">Rate limit</dt>
-              <dd className="mt-1">{selectedKey.rateLimitPerMinute || "No"} rpm</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-muted-foreground">Concurrency limit</dt>
-              <dd className="mt-1">{selectedKey.concurrencyLimit || "No"} concurrent requests</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-muted-foreground">Daily cost limit</dt>
+              <dt className="text-xs text-muted-foreground">
+                <Trans>Rate limit</Trans>
+              </dt>
               <dd className="mt-1">
-                {selectedKey.dailyCostLimit ? `$${selectedKey.dailyCostLimit}` : "No limit"}
+                {selectedKey.rateLimitPerMinute ? (
+                  <Trans>{selectedKey.rateLimitPerMinute} rpm</Trans>
+                ) : (
+                  <Trans>No rpm</Trans>
+                )}
               </dd>
             </div>
             <div>
-              <dt className="text-xs text-muted-foreground">Created</dt>
+              <dt className="text-xs text-muted-foreground">
+                <Trans>Concurrency limit</Trans>
+              </dt>
+              <dd className="mt-1">
+                {selectedKey.concurrencyLimit ? (
+                  <Trans>{selectedKey.concurrencyLimit} concurrent requests</Trans>
+                ) : (
+                  <Trans>No concurrent requests</Trans>
+                )}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted-foreground">
+                <Trans>Daily cost limit</Trans>
+              </dt>
+              <dd className="mt-1">
+                {selectedKey.dailyCostLimit ? `$${selectedKey.dailyCostLimit}` : t`No limit`}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted-foreground">
+                <Trans>Created</Trans>
+              </dt>
               <dd className="mt-1">{formatDate(selectedKey.createdAt)}</dd>
             </div>
             <div>
-              <dt className="text-xs text-muted-foreground">Last used</dt>
+              <dt className="text-xs text-muted-foreground">
+                <Trans>Last used</Trans>
+              </dt>
               <dd className="mt-1">{formatDate(selectedKey.lastUsedAt)}</dd>
             </div>
             <div>
-              <dt className="text-xs text-muted-foreground">Expires</dt>
+              <dt className="text-xs text-muted-foreground">
+                <Trans>Expires</Trans>
+              </dt>
               <dd className="mt-1">{formatDate(selectedKey.expiresAt)}</dd>
             </div>
           </dl>
@@ -283,15 +366,21 @@ export function CreateKeySheet({
   onOpenChange: (open: boolean) => void;
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
 }) {
+  const { t } = useLingui();
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="sm:max-w-md">
         <SheetHeader>
-          <SheetTitle>Create API key</SheetTitle>
-          <SheetDescription>Issue a client key with optional routing limits.</SheetDescription>
+          <SheetTitle>
+            <Trans>Create API key</Trans>
+          </SheetTitle>
+          <SheetDescription>
+            <Trans>Issue a client key with optional routing limits.</Trans>
+          </SheetDescription>
         </SheetHeader>
         <form className="flex flex-col gap-4 px-4" onSubmit={onSubmit}>
-          <Field label="Name" htmlFor="key-name">
+          <Field label={t`Name`} htmlFor="key-name">
             <Input
               id="key-name"
               value={form.name}
@@ -299,7 +388,7 @@ export function CreateKeySheet({
               required
             />
           </Field>
-          <Field label="Description" htmlFor="key-description">
+          <Field label={t`Description`} htmlFor="key-description">
             <Textarea
               id="key-description"
               value={form.description}
@@ -308,7 +397,7 @@ export function CreateKeySheet({
               }
             />
           </Field>
-          <Field label="Permissions" htmlFor="key-permissions">
+          <Field label={t`Permissions`} htmlFor="key-permissions">
             <Select
               value={form.permissions}
               onValueChange={(value) => setForm((current) => ({ ...current, permissions: value }))}
@@ -318,15 +407,21 @@ export function CreateKeySheet({
               </SelectTrigger>
               <SelectContent>
                 <SelectGroup>
-                  <SelectItem value="all">All services</SelectItem>
-                  <SelectItem value="claude">Claude only</SelectItem>
-                  <SelectItem value="openai">OpenAI-compatible only</SelectItem>
+                  <SelectItem value="all">
+                    <Trans>All services</Trans>
+                  </SelectItem>
+                  <SelectItem value="claude">
+                    <Trans>Claude only</Trans>
+                  </SelectItem>
+                  <SelectItem value="openai">
+                    <Trans>OpenAI-compatible only</Trans>
+                  </SelectItem>
                 </SelectGroup>
               </SelectContent>
             </Select>
           </Field>
           <div className="grid gap-3 sm:grid-cols-3">
-            <Field label="RPM" htmlFor="key-rpm">
+            <Field label={t`RPM`} htmlFor="key-rpm">
               <Input
                 id="key-rpm"
                 inputMode="numeric"
@@ -336,7 +431,7 @@ export function CreateKeySheet({
                 }
               />
             </Field>
-            <Field label="Concurrency" htmlFor="key-concurrency">
+            <Field label={t`Concurrency`} htmlFor="key-concurrency">
               <Input
                 id="key-concurrency"
                 inputMode="numeric"
@@ -346,7 +441,7 @@ export function CreateKeySheet({
                 }
               />
             </Field>
-            <Field label="Daily USD" htmlFor="key-cost">
+            <Field label={t`Daily USD`} htmlFor="key-cost">
               <Input
                 id="key-cost"
                 inputMode="decimal"
@@ -360,7 +455,7 @@ export function CreateKeySheet({
           <SheetFooter>
             <Button type="submit">
               <KeyRoundIcon data-icon="inline-start" />
-              Create key
+              <Trans>Create key</Trans>
             </Button>
           </SheetFooter>
         </form>

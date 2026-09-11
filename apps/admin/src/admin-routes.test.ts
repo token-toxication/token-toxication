@@ -2,6 +2,8 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createMemoryRouter, matchRoutes, MemoryRouter, Route, Routes } from "react-router";
 import { describe, expect, it } from "vite-plus/test";
+import { I18nProvider } from "@lingui/react";
+import { i18n } from "./i18n";
 
 import { ApiKeyDetailView, ApiKeysView } from "./admin-ui/api-keys";
 import type { ApiKey } from "./types";
@@ -41,13 +43,17 @@ describe("admin routes", () => {
   it("generates encoded API key links from durable record identifiers", () => {
     const markup = renderToStaticMarkup(
       createElement(
-        MemoryRouter,
-        { initialEntries: [adminPaths.keys()] },
-        createElement(ApiKeysView, {
-          apiKeys: [apiKey],
-          onCreate: () => undefined,
-          onToggle: () => undefined,
-        }),
+        I18nProvider,
+        { i18n },
+        createElement(
+          MemoryRouter,
+          { initialEntries: [adminPaths.keys()] },
+          createElement(ApiKeysView, {
+            apiKeys: [apiKey],
+            onCreate: () => undefined,
+            onToggle: () => undefined,
+          }),
+        ),
       ),
     );
 
@@ -63,19 +69,23 @@ describe("admin routes", () => {
   it("renders a collection back link when a durable record is missing", () => {
     const markup = renderToStaticMarkup(
       createElement(
-        MemoryRouter,
-        { initialEntries: [adminPaths.key("deleted-key")] },
+        I18nProvider,
+        { i18n },
         createElement(
-          Routes,
-          null,
-          createElement(Route, {
-            path: "/keys/:keyId",
-            element: createElement(ApiKeyDetailView, {
-              apiKeys: [],
-              onToggle: async () => undefined,
-              onDelete: async () => false,
+          MemoryRouter,
+          { initialEntries: [adminPaths.key("deleted-key")] },
+          createElement(
+            Routes,
+            null,
+            createElement(Route, {
+              path: "/keys/:keyId",
+              element: createElement(ApiKeyDetailView, {
+                apiKeys: [],
+                onToggle: async () => undefined,
+                onDelete: async () => false,
+              }),
             }),
-          }),
+          ),
         ),
       ),
     );
