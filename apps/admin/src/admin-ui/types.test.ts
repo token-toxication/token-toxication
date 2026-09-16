@@ -12,6 +12,7 @@ const route: ProviderModelRoute = {
   wireApi: "openai-responses",
   role: "backup",
   enabled: false,
+  weight: 25,
   status: "healthy",
   stripParams: ["temperature", "top_p"],
   createdAt: "2026-09-16T00:00:00Z",
@@ -24,6 +25,7 @@ const form: ProviderRouteForm = {
   wireApi: "openai-responses",
   role: "primary",
   enabled: true,
+  weight: "250",
   stripParams: " top_p, temperature, top_p ",
 };
 
@@ -36,6 +38,7 @@ describe("provider route editing", () => {
       wireApi: "openai-responses",
       role: "backup",
       enabled: false,
+      weight: "25",
       stripParams: "temperature, top_p",
     });
   });
@@ -54,6 +57,7 @@ describe("provider route editing", () => {
       wireApi: "openai-responses",
       role: "primary",
       enabled: true,
+      weight: 250,
       stripParams: ["temperature", "top_p"],
     });
   });

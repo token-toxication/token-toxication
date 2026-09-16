@@ -109,6 +109,7 @@ describe("dshModelOptions", () => {
       expect(dshModelEntryYaml(model, "chat")).toContain("input: [text, image]");
       expect(dshModelEntryYaml(model, "chat")).not.toContain("reasoningEfforts");
       expect(dshModelEntryYaml(model, "chat")).not.toContain("thinkingFormat");
+      expect(dshModelEntryYaml(model, "chat")).toContain("supportsPromptCacheKey: true");
       expect(dshDefaultModelYaml(model)).not.toContain("reasoningEffort");
     },
   );
@@ -190,6 +191,13 @@ describe("DeepSeek Harness settings snippet", () => {
       dshModels,
     });
   }
+
+  it("enables a stable session body field for generated Chat providers", () => {
+    const snippets = snippetsFor("deepseek-v4-pro");
+
+    expect(snippets.dsh).toContain("token-toxication-chat:");
+    expect(snippets.dsh).toContain("supportsPromptCacheKey: true");
+  });
 
   it("emits one provider route per routed protocol with the relay base URLs", () => {
     const snippets = snippetsFor("deepseek-v4-pro");

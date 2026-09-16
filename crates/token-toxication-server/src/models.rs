@@ -72,7 +72,6 @@ pub struct ProviderAccount {
     pub auth_mode: String,
     pub wire_api: String,
     pub is_active: bool,
-    pub priority: i32,
     pub status: String,
     pub last_error: Option<String>,
     pub created_at: DateTime<Utc>,
@@ -99,8 +98,6 @@ pub struct CreateProviderAccountRequest {
     pub api_key: String,
     #[serde(default = "default_active")]
     pub is_active: bool,
-    #[serde(default)]
-    pub priority: i32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -113,7 +110,6 @@ pub struct UpdateProviderAccountRequest {
     pub wire_api: Option<String>,
     pub api_key: Option<String>,
     pub is_active: Option<bool>,
-    pub priority: Option<i32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -230,8 +226,6 @@ pub struct AntigravityOAuthStartRequest {
     pub account_id: Option<String>,
     #[serde(default)]
     pub name: String,
-    #[serde(default)]
-    pub priority: i32,
     pub redirect_uri: String,
 }
 
@@ -467,6 +461,7 @@ pub struct ProviderModelRoute {
     pub wire_api: String,
     pub role: String,
     pub enabled: bool,
+    pub weight: u32,
     pub status: String,
     pub last_error: Option<String>,
     pub last_status_code: Option<u16>,
@@ -487,6 +482,8 @@ pub struct CreateProviderModelRouteRequest {
     pub role: String,
     #[serde(default = "default_active")]
     pub enabled: bool,
+    #[serde(default = "default_route_weight")]
+    pub weight: u32,
     #[serde(default)]
     pub strip_params: Vec<String>,
 }
@@ -500,6 +497,7 @@ pub struct UpdateProviderModelRouteRequest {
     pub wire_api: Option<String>,
     pub role: Option<String>,
     pub enabled: Option<bool>,
+    pub weight: Option<u32>,
     pub strip_params: Option<Vec<String>>,
 }
 
@@ -604,7 +602,27 @@ pub struct MetricsResponse {
     pub healthy_accounts: u64,
     pub total_accounts: u64,
     pub usage: UsageSummary,
+    pub session_affinity: Vec<SessionAffinityMetric>,
+    pub route_selections: Vec<RouteSelectionMetric>,
     pub timestamp: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionAffinityMetric {
+    pub client: String,
+    pub wire_api: String,
+    pub status: String,
+    pub count: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RouteSelectionMetric {
+    pub wire_api: String,
+    pub role: String,
+    pub affinity: String,
+    pub count: u64,
 }
 
 pub fn default_provider() -> String {
@@ -621,4 +639,8 @@ pub fn default_active() -> bool {
 
 pub fn default_route_role() -> String {
     "primary".to_string()
+}
+
+pub fn default_route_weight() -> u32 {
+    100
 }

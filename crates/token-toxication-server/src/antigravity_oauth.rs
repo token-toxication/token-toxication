@@ -57,7 +57,6 @@ struct AntigravityOAuthAttempt {
     opener_origin: String,
     account_id: Option<String>,
     name: String,
-    priority: i32,
     created_at: DateTime<Utc>,
 }
 
@@ -103,7 +102,6 @@ pub async fn begin_antigravity_oauth(
         opener_origin,
         account_id: input.account_id.filter(|value| !value.trim().is_empty()),
         name: input.name.trim().to_string(),
-        priority: input.priority,
         created_at,
     };
 
@@ -261,7 +259,6 @@ async fn finish_antigravity_oauth(
                 wire_api: Some("gemini-generate-content".to_string()),
                 api_key: Some(credential),
                 is_active: Some(true),
-                priority: Some(attempt.priority),
             },
         )
         .await?
@@ -278,7 +275,6 @@ async fn finish_antigravity_oauth(
             wire_api: "gemini-generate-content".to_string(),
             api_key: credential,
             is_active: true,
-            priority: attempt.priority,
         })
         .await?
     };

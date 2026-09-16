@@ -17,8 +17,9 @@ use crate::models::{
     ProviderModelRouteListResponse, ProviderModelRouteResponse, ProviderPreset,
     ProviderPresetListResponse, RequestLog, RequestLogListResponse, RequestSummary, RequestTrend,
     RequestTrendBucket, RoutableModelCatalogEntry, RoutableModelCatalogListResponse,
-    UpdateApiKeyRequest, UpdateModelCatalogEntryRequest, UpdateProviderAccountRequest,
-    UpdateProviderModelRouteRequest, UsageSummary,
+    RouteSelectionMetric, SessionAffinityMetric, UpdateApiKeyRequest,
+    UpdateModelCatalogEntryRequest, UpdateProviderAccountRequest, UpdateProviderModelRouteRequest,
+    UsageSummary,
 };
 
 #[derive(OpenApi)]
@@ -109,6 +110,8 @@ use crate::models::{
         LoginRequest,
         LoginResponse,
         MetricsResponse,
+        RouteSelectionMetric,
+        SessionAffinityMetric,
         ModelCatalogEntry,
         ModelCatalogEntryResponse,
         ModelCatalogListResponse,

@@ -56,6 +56,7 @@ use crate::{
     provider_catalog::provider_presets,
     relay_attempt::{RelayAttempt, RelayAttemptLog, TokenUsage, authenticate_relay_api_key},
     routing::{RouteFailure, classify_transport_failure, classify_upstream_application_failure},
+    session_affinity::{SessionAffinity, client_kind, extract as extract_session_affinity},
 };
 
 const DEFAULT_ANTHROPIC_VERSION: &str = "2023-06-01";
@@ -130,12 +131,15 @@ pub async fn health(State(state): State<AppState>) -> Json<HealthResponse> {
 
 pub async fn metrics(State(state): State<AppState>) -> Result<Json<MetricsResponse>, AppError> {
     let dashboard = state.db.dashboard().await?;
+    let (session_affinity, route_selections) = state.relay_metrics.snapshot();
     Ok(Json(MetricsResponse {
         active_api_keys: dashboard.active_api_keys,
         total_api_keys: dashboard.total_api_keys,
         healthy_accounts: dashboard.healthy_accounts,
         total_accounts: dashboard.total_accounts,
         usage: dashboard.usage,
+        session_affinity,
+        route_selections,
         timestamp: Utc::now(),
     }))
 }
@@ -344,8 +348,10 @@ async fn relay_json_endpoint(
         .get("model")
         .and_then(Value::as_str)
         .ok_or_else(|| AppError::BadRequest("request model is required".into()))?;
+    let affinity =
+        relay_session_affinity(&state, wire_api.account_value(), &headers, &request_json);
     let attempt = authenticated_attempt
-        .select(wire_api.account_value(), model)
+        .select(wire_api.account_value(), model, affinity.as_ref())
         .await?;
     let upstream_model_id = attempt.selection().upstream_model_id.clone();
     let strip_params = attempt.selection().strip_params.clone();
@@ -514,8 +520,18 @@ async fn relay_gemini_endpoint(
     let mut request_json: Value = serde_json::from_slice(&body)
         .map_err(|error| AppError::BadRequest(format!("invalid JSON body: {error}")))?;
     validate_gemini_generate_content_request(&request_json)?;
+    let affinity = relay_session_affinity(
+        &state,
+        WireApi::GeminiGenerateContent.account_value(),
+        &headers,
+        &request_json,
+    );
     let attempt = authenticated_attempt
-        .select(WireApi::GeminiGenerateContent.account_value(), &model)
+        .select(
+            WireApi::GeminiGenerateContent.account_value(),
+            &model,
+            affinity.as_ref(),
+        )
         .await?;
     let upstream_model_id = attempt.selection().upstream_model_id.clone();
     let public_path = gemini_public_path(&attempt.selection().public_model_id, method);
@@ -976,6 +992,7 @@ pub async fn create_provider_model_route(
         &input.provider_account_id,
         &input.upstream_model_id,
     )?;
+    validate_route_weight(input.weight)?;
     let route = state
         .db
         .create_provider_model_route(input)
@@ -1009,12 +1026,46 @@ pub async fn update_provider_model_route(
             "public model, provider account, and upstream model cannot be empty".into(),
         ));
     }
+    if let Some(weight) = input.weight {
+        validate_route_weight(weight)?;
+    }
     let route = state
         .db
         .update_provider_model_route(&id, input)
         .await
         .map_err(map_write_or_not_found)?;
     Ok(Json(ProviderModelRouteResponse { data: route }))
+}
+
+fn validate_route_weight(weight: u32) -> Result<(), AppError> {
+    if !(1..=10_000).contains(&weight) {
+        return Err(AppError::BadRequest(
+            "provider model route weight must be between 1 and 10000".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn relay_session_affinity(
+    state: &AppState,
+    wire_api: &str,
+    headers: &HeaderMap,
+    body: &Value,
+) -> Option<SessionAffinity> {
+    let affinity = extract_session_affinity(wire_api, headers, body);
+    let client = affinity
+        .as_ref()
+        .map(|value| value.client_kind)
+        .unwrap_or_else(|| client_kind(headers, wire_api));
+    let status = match affinity.as_ref() {
+        Some(value) if value.conflict => "conflict",
+        Some(_) => "present",
+        None => "missing",
+    };
+    state
+        .relay_metrics
+        .record_affinity(client, wire_api, status);
+    affinity
 }
 
 pub async fn delete_provider_model_route(
@@ -1953,6 +2004,7 @@ mod tests {
             websocket_http: crate::websocket_transport::build_client(Duration::from_secs(3))
                 .unwrap(),
             antigravity_oauth: AntigravityOAuthStore::default(),
+            relay_metrics: Default::default(),
             relay_stream_idle_timeout: Duration::from_secs(5),
             relay_stream_max_duration: Duration::from_secs(900),
             shutdown: crate::server::ShutdownSignal::for_test(),
@@ -2033,7 +2085,6 @@ mod tests {
                 wire_api: wire_api.to_string(),
                 api_key: provider_secret,
                 is_active: true,
-                priority: 0,
             })
             .await
             .expect("create provider account");
@@ -2053,6 +2104,7 @@ mod tests {
                 wire_api: wire_api.to_string(),
                 role: "primary".to_string(),
                 enabled: true,
+                weight: 100,
                 strip_params: Vec::new(),
             })
             .await
@@ -2090,6 +2142,90 @@ mod tests {
 
         assert_eq!(error.status(), StatusCode::UNAUTHORIZED);
         assert_eq!(error.to_string(), "missing API key");
+
+        drop(state);
+        remove_test_database(&database_path);
+    }
+
+    #[tokio::test]
+    async fn provider_route_api_defaults_and_validates_weight_boundaries() {
+        let database_path = test_database_path();
+        let db = Db::open(&database_path).await.expect("open test database");
+        let account = db
+            .create_provider_account(CreateProviderAccountRequest {
+                name: "weighted provider".to_string(),
+                provider: "openai".to_string(),
+                base_url: "https://example.com".to_string(),
+                auth_mode: "bearer".to_string(),
+                wire_api: "openai-responses".to_string(),
+                api_key: "synthetic-provider-key".to_string(),
+                is_active: true,
+            })
+            .await
+            .expect("create provider account");
+        db.create_model_catalog_entry(CreateModelCatalogEntryRequest {
+            id: "weighted-model".to_string(),
+            display_name: String::new(),
+            family: "openai".to_string(),
+            enabled: true,
+        })
+        .await
+        .expect("create model");
+        let state = test_state(db, database_path.clone());
+
+        let defaulted: CreateProviderModelRouteRequest = serde_json::from_value(json!({
+            "publicModelId": "weighted-model",
+            "providerAccountId": account.id,
+            "upstreamModelId": "weighted-upstream",
+            "wireApi": "openai-responses",
+            "role": "primary",
+            "enabled": true
+        }))
+        .expect("deserialize default weight");
+        assert_eq!(defaulted.weight, 100);
+
+        let (_, Json(created)) = create_provider_model_route(State(state.clone()), Json(defaulted))
+            .await
+            .expect("create route with default weight");
+        assert_eq!(created.data.weight, 100);
+
+        for weight in [0, 10_001] {
+            let error = create_provider_model_route(
+                State(state.clone()),
+                Json(CreateProviderModelRouteRequest {
+                    public_model_id: "weighted-model".to_string(),
+                    provider_account_id: account.id.clone(),
+                    upstream_model_id: format!("invalid-{weight}"),
+                    wire_api: "openai-responses".to_string(),
+                    role: "primary".to_string(),
+                    enabled: true,
+                    weight,
+                    strip_params: Vec::new(),
+                }),
+            )
+            .await
+            .expect_err("out-of-range route weight must fail");
+            assert_eq!(error.status(), StatusCode::BAD_REQUEST);
+        }
+
+        for weight in [1, 10_000] {
+            let (_, Json(created)) = create_provider_model_route(
+                State(state.clone()),
+                Json(CreateProviderModelRouteRequest {
+                    public_model_id: "weighted-model".to_string(),
+                    provider_account_id: account.id.clone(),
+                    upstream_model_id: format!("valid-{weight}"),
+                    wire_api: "openai-responses".to_string(),
+                    role: "primary".to_string(),
+                    enabled: true,
+                    weight,
+                    strip_params: Vec::new(),
+                }),
+            )
+            .await
+            .expect("boundary route weight must succeed");
+            assert_eq!(created.data.weight, weight);
+        }
 
         drop(state);
         remove_test_database(&database_path);

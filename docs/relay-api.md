@@ -19,7 +19,7 @@ Model discovery is available at `/anthropic/v1/models`, `/openai/v1/models`, and
 | Endpoint | Description |
 | --- | --- |
 | `/health` | Service status, version, uptime, and timestamp |
-| `/metrics` | JSON totals for API keys, provider health, and usage |
+| `/metrics` | JSON totals for API keys, provider health, usage, bounded session-affinity counters, and route-selection counters |
 | `/openapi.json` | OpenAPI document for the admin and relay APIs |
 
 ## Authentication
@@ -31,6 +31,14 @@ Relay API keys use the configured prefix, `tokentoxication-` by default. Send a 
 - `x-goog-api-key: <key>`
 - `api-key: <key>`
 - Gemini's `?key=<key>` query parameter
+
+## Session affinity
+
+Send `Token-Toxication-Session-ID` when the client does not already expose a supported native session identifier. The value is used only to choose a stable eligible route; it is not forwarded as an upstream authentication credential or written to request logs.
+
+The explicit header wins over native values. A request with affinity uses weighted rendezvous hashing within the Primary tier, or within the Backup tier only when no Primary is eligible. A request without affinity uses weighted random selection and may reach a different account on each request.
+
+The relay never retries the current request on a different route. OpenAI `previous_response_id` values are forwarded unchanged and are not used as the affinity key.
 
 ## Request examples
 
@@ -64,6 +72,7 @@ curl http://localhost:3000/openai/v1/chat/completions \
 ```bash
 curl http://localhost:3000/openai/v1/responses \
   -H 'Authorization: Bearer tokentoxication-...' \
+  -H 'Token-Toxication-Session-ID: example-session' \
   -H 'content-type: application/json' \
   -d '{"model": "gpt-5", "input": "hello"}'
 ```

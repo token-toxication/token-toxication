@@ -10,9 +10,11 @@ pub mod models;
 pub mod openapi;
 pub mod provider_catalog;
 pub(crate) mod relay_attempt;
+pub mod relay_metrics;
 pub mod routes;
 pub mod routing;
 pub mod server;
+pub mod session_affinity;
 pub mod static_assets;
 pub mod websocket_transport;
 
@@ -44,6 +46,7 @@ pub struct AppState {
     pub gemini_http: aioduct::TokioClient,
     pub websocket_http: aioduct::TokioClient,
     pub antigravity_oauth: antigravity_oauth::AntigravityOAuthStore,
+    pub relay_metrics: relay_metrics::RelayMetrics,
     pub relay_stream_idle_timeout: Duration,
     pub relay_stream_max_duration: Duration,
     pub shutdown: server::ShutdownSignal,

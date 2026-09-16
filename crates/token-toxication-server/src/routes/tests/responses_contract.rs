@@ -111,6 +111,7 @@ async fn coding_models_preserve_payloads_and_auth_boundaries() {
                 wire_api: None,
                 role: None,
                 enabled: None,
+                weight: None,
                 strip_params: Some(vec!["remove_for_route".to_string()]),
             },
         )

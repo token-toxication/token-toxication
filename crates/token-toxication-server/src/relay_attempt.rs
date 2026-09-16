@@ -14,7 +14,11 @@ use crate::{
     db::ProviderRouteSelection,
     error::AppError,
     models::{ApiKeyRecord, RequestLog, RequestSummary},
-    routing::{RouteFailure, classify_response_failure, classify_transport_failure},
+    routing::{
+        RouteFailure, RoutingScope, classify_response_failure, classify_transport_failure,
+        select_route,
+    },
+    session_affinity::SessionAffinity,
 };
 
 #[derive(Clone)]
@@ -233,13 +237,31 @@ impl AuthenticatedRelayAttempt {
         self,
         wire_api: &str,
         model: &str,
+        affinity: Option<&SessionAffinity>,
     ) -> Result<RelayAttempt, AppError> {
-        let selection = self
+        let candidates = self
             .state
             .db
-            .select_provider_account_for_wire(wire_api, Some(model))
-            .await?
+            .list_provider_route_candidates(wire_api, model)
+            .await?;
+        let scope = RoutingScope {
+            api_key_id: &self.api_key_id,
+            public_model_id: model,
+            wire_api,
+        };
+        let mut rng = rand::rng();
+        let selection = select_route(&candidates, affinity, &scope, &mut rng)
+            .cloned()
             .ok_or_else(|| AppError::Forbidden("no active provider account is available".into()))?;
+        self.state.relay_metrics.record_selection(
+            wire_api,
+            &selection.role,
+            if affinity.is_some() {
+                "weighted_rendezvous"
+            } else {
+                "weighted_random"
+            },
+        );
 
         Ok(RelayAttempt {
             state: self.state,

@@ -356,7 +356,7 @@ async fn websocket_binds_account_and_preserves_tool_and_steering_continuations()
         assert!(
             matches!(connect_async(&url).await, Err(tungstenite::Error::Http(response)) if response.status() == StatusCode::UNAUTHORIZED)
         );
-        let mut request = url.into_client_request().unwrap();
+        let mut request = url.as_str().into_client_request().unwrap();
         request.headers_mut().insert(
             header::AUTHORIZATION,
             HeaderValue::from_str(&format!("Bearer {}", seed.relay_secret)).unwrap(),
@@ -369,6 +369,9 @@ async fn websocket_binds_account_and_preserves_tool_and_steering_continuations()
             "x-openai-internal-untrusted",
             HeaderValue::from_static("do-not-forward"),
         );
+        request
+            .headers_mut()
+            .insert("session-id", HeaderValue::from_static("stable-session"));
         let (mut client, _) = connect_async(request).await.unwrap();
         let base = json!({"type":"response.create","model":"public-coding","input":[{"type":"additional_tools","role":"developer","tools":[]}],"client_metadata":{"ws_request_header_x_openai_internal_codex_responses_lite":"true","ws_request_header_authorization":"synthetic-private-identity"},"max_output_tokens":100});
         client
@@ -397,6 +400,37 @@ async fn websocket_binds_account_and_preserves_tool_and_steering_continuations()
             .unwrap()
             .unwrap();
         assert!(second.to_text().unwrap().contains("resp_2"));
+
+        let mut reconnect_request = url.as_str().into_client_request().unwrap();
+        reconnect_request.headers_mut().insert(
+            header::AUTHORIZATION,
+            HeaderValue::from_str(&format!("Bearer {}", seed.relay_secret)).unwrap(),
+        );
+        reconnect_request
+            .headers_mut()
+            .insert("session-id", HeaderValue::from_static("stable-session"));
+        let (mut reconnected, _) = connect_async(reconnect_request).await.unwrap();
+        let mut reconnected_event = base.clone();
+        reconnected_event["previous_response_id"] = json!("resp_2");
+        reconnected
+            .send(tungstenite::Message::Text(
+                reconnected_event.to_string().into(),
+            ))
+            .await
+            .unwrap();
+        let reconnected_response = tokio::time::timeout(Duration::from_secs(3), reconnected.next())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        assert!(
+            reconnected_response
+                .to_text()
+                .unwrap()
+                .contains("response.completed")
+        );
+        reconnected.close(None).await.unwrap();
+
         next["previous_response_id"] = json!("another-connection-response");
         client
             .send(tungstenite::Message::Text(next.to_string().into()))
@@ -414,7 +448,7 @@ async fn websocket_binds_account_and_preserves_tool_and_steering_continuations()
                 .contains("invalid WebSocket continuation")
         );
         let captures = captures.lock().await;
-        assert_eq!(captures.len(), 2);
+        assert_eq!(captures.len(), 3);
         assert_eq!(captures[0]["model"], "private-coding");
         assert_eq!(
             captures[0].get("max_output_tokens").is_some(),
@@ -430,8 +464,9 @@ async fn websocket_binds_account_and_preserves_tool_and_steering_continuations()
             captures[1]["input"][1]["content"][0]["text"],
             "synthetic-private-steering"
         );
+        assert_eq!(captures[2]["previous_response_id"], "resp_2");
         let handshakes = handshakes.lock().await;
-        assert_eq!(handshakes.len(), 1);
+        assert_eq!(handshakes.len(), 2);
         assert_eq!(
             handshakes[0][header::AUTHORIZATION],
             "Bearer synthetic-provider-key"
@@ -445,7 +480,7 @@ async fn websocket_binds_account_and_preserves_tool_and_steering_continuations()
             (auth_mode == "codex-oauth").then_some("synthetic-account")
         );
         let logs = state.db.list_request_logs(10).await.unwrap();
-        assert_eq!(logs.len(), 2);
+        assert_eq!(logs.len(), 3);
         for log in &logs {
             assert_eq!(
                 (log.input_tokens, log.output_tokens, log.cached_input_tokens),

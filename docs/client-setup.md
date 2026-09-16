@@ -16,6 +16,16 @@ The admin **Client Setup** page generates copy-ready configuration from enabled,
 
 Pi setup replaces its complete models file. Back up an existing `~/.pi/agent/models.json` before applying the generated content.
 
+## Session affinity
+
+The relay recognizes the stable session fields emitted by the generated Client Setup targets:
+
+- Codex and opencode: `session-id`, with Responses metadata and `prompt_cache_key` fallbacks.
+- Pi and DeepSeek Harness: the provider-specific session headers/body fields produced by pi-ai.
+- Claude Code: `X-Claude-Code-Session-Id` or the session component in `metadata.user_id`.
+
+Custom clients should send `Token-Toxication-Session-ID` exactly as written (without an `X-` prefix). The explicit header has highest precedence. Missing affinity does not reject a request, but selection becomes weighted random and the server emits a rate-limited warning for recognizable Client Setup clients.
+
 ## Codex
 
 1. Configure an enabled public model and an enabled OpenAI Responses provider route.
@@ -168,6 +178,9 @@ can continue after its terminal event, using the same connection and account.
 Steering is delivered by the client at its tool boundary, not by inventing a new
 upstream steering event. Disconnecting cancels the upstream connection. There is
 no cross-connection resume, account failover, or automatic relay replay.
+
+The handshake headers and first `response.create` frame are the only affinity inputs.
+Reconnects rely on the client sending the same session identifier again.
 
 Upstream connection establishment and TLS use aioduct 0.2.5 with an HTTP/1.1-only
 upgrade client that disables redirects and retries. WebSocket frames remain handled

@@ -82,6 +82,7 @@ async fn run_server(config: Config) -> Result<(), MainError> {
         gemini_http,
         websocket_http,
         antigravity_oauth: Default::default(),
+        relay_metrics: Default::default(),
         relay_stream_idle_timeout,
         relay_stream_max_duration,
         shutdown: shutdown.clone(),

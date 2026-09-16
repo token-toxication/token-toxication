@@ -17,7 +17,6 @@ export type CreateAccountForm = {
   wireApi: string;
   apiKey: string;
   isActive: boolean;
-  priority: string;
 };
 
 export type ModelCatalogForm = {
@@ -34,6 +33,7 @@ export type ProviderRouteForm = {
   wireApi: string;
   role: string;
   enabled: boolean;
+  weight: string;
   stripParams: string;
 };
 
@@ -88,7 +88,6 @@ export const emptyAccountForm: CreateAccountForm = {
   wireApi: "anthropic-messages",
   apiKey: "",
   isActive: true,
-  priority: "0",
 };
 
 export function accountFormFromAccount(account: ProviderAccount): CreateAccountForm {
@@ -100,7 +99,6 @@ export function accountFormFromAccount(account: ProviderAccount): CreateAccountF
     wireApi: account.wireApi,
     apiKey: "",
     isActive: account.isActive,
-    priority: String(account.priority),
   };
 }
 
@@ -118,6 +116,7 @@ export const emptyRouteForm: ProviderRouteForm = {
   wireApi: "openai-chat",
   role: "primary",
   enabled: true,
+  weight: "100",
   stripParams: "",
 };
 
@@ -129,6 +128,7 @@ export function routeFormFromRoute(route: ProviderModelRoute): ProviderRouteForm
     wireApi: route.wireApi,
     role: route.role,
     enabled: route.enabled,
+    weight: String(route.weight),
     stripParams: route.stripParams.join(", "),
   };
 }

@@ -462,6 +462,9 @@ export function ModelDetailView({
                         <Trans>Role</Trans>
                       </TableHead>
                       <TableHead>
+                        <Trans>Weight</Trans>
+                      </TableHead>
+                      <TableHead>
                         <Trans>Status</Trans>
                       </TableHead>
                     </TableRow>
@@ -486,6 +489,7 @@ export function ModelDetailView({
                           </Link>
                         </TableCell>
                         <TableCell>{routeRoleBadge(route.role)}</TableCell>
+                        <TableCell>{route.weight}</TableCell>
                         <TableCell>{statusBadge(route.status, route.enabled)}</TableCell>
                       </TableRow>
                     ))}
@@ -570,6 +574,7 @@ function ProviderRouteEditor({
     draft.wireApi !== initialForm.wireApi ||
     draft.role !== initialForm.role ||
     draft.enabled !== initialForm.enabled ||
+    draft.weight !== initialForm.weight ||
     draft.stripParams !== initialForm.stripParams;
 
   async function handleDelete() {
@@ -686,6 +691,12 @@ function ProviderRouteEditor({
                   <Trans>Role</Trans>
                 </dt>
                 <dd className="mt-1">{routeRoleBadge(route.role)}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted-foreground">
+                  <Trans>Weight</Trans>
+                </dt>
+                <dd className="mt-1">{route.weight}</dd>
               </div>
               <div>
                 <dt className="text-xs text-muted-foreground">
@@ -973,23 +984,39 @@ function RouteFormFields({
           </Select>
         </Field>
       </div>
-      <Field label={t`Strip request params`} htmlFor={`${idPrefix}-strip-params`}>
-        <Input
-          id={`${idPrefix}-strip-params`}
-          value={form.stripParams}
-          onChange={(event) =>
-            setForm((current) => ({ ...current, stripParams: event.target.value }))
-          }
-          placeholder="temperature, top_p"
-        />
-      </Field>
+      <div className="grid gap-3 sm:grid-cols-[140px_1fr]">
+        <Field label={t`Weight`} htmlFor={`${idPrefix}-weight`}>
+          <Input
+            id={`${idPrefix}-weight`}
+            type="number"
+            min={1}
+            max={10000}
+            value={form.weight}
+            onChange={(event) => setForm((current) => ({ ...current, weight: event.target.value }))}
+            required
+          />
+        </Field>
+        <Field label={t`Strip request params`} htmlFor={`${idPrefix}-strip-params`}>
+          <Input
+            id={`${idPrefix}-strip-params`}
+            value={form.stripParams}
+            onChange={(event) =>
+              setForm((current) => ({ ...current, stripParams: event.target.value }))
+            }
+            placeholder="temperature, top_p"
+          />
+        </Field>
+      </div>
       <div className="flex items-center justify-between gap-3 rounded-md border p-3">
         <div className="flex flex-col gap-1">
           <Label htmlFor={`${idPrefix}-enabled`}>
             <Trans>Enabled</Trans>
           </Label>
           <span className="text-xs text-muted-foreground">
-            <Trans>Enabled primary routes must be unique for a model and protocol.</Trans>
+            <Trans>
+              Weight applies among healthy routes with the same role. Primary routes are preferred
+              over backups.
+            </Trans>
           </span>
         </div>
         <Switch

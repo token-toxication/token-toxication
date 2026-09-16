@@ -13,9 +13,9 @@ The application ships as a Rust server with an embedded React admin interface an
 | Capability | Description |
 | --- | --- |
 | Multi-protocol relay | Anthropic Messages, OpenAI Chat Completions, OpenAI Responses, and Gemini GenerateContent endpoints |
-| Model routing | Exact public-to-upstream model mappings with primary and backup routes |
-| Provider management | Per-account credentials, base URLs, wire protocols, priority, and health state |
-| Reliability controls | Account blocking, route cooldowns, and automatic selection of the next eligible route |
+| Model routing | Exact public-to-upstream mappings with weighted Primary/Backup routes and session affinity |
+| Provider management | Per-account credentials, base URLs, wire protocols, and health state |
+| Reliability controls | Account blocking and route cooldowns without replaying a failed request |
 | Usage analytics | Provider-reported input, cached-input, and output token accounting |
 | Privacy-conscious logs | Operational metadata without prompts, messages, credentials, or raw upstream bodies |
 | Self-hosted administration | API-key management, provider setup, route configuration, quotas, and request logs |

@@ -162,6 +162,7 @@ fn prepare_event(
     headers: &HeaderMap,
     model: &str,
     previous: &HashSet<String>,
+    allow_external_previous: bool,
 ) -> Result<(), Stop> {
     if value.get("type").and_then(Value::as_str) != Some("response.create")
         || value.get("model").and_then(Value::as_str) != Some(model)
@@ -170,7 +171,9 @@ fn prepare_event(
         return Err(Stop::Protocol);
     }
     if let Some(id) = value.get("previous_response_id").filter(|id| !id.is_null())
-        && !id.as_str().is_some_and(|id| previous.contains(id))
+        && !id.as_str().is_some_and(|id| {
+            !id.is_empty() && id.len() <= 512 && (allow_external_previous || previous.contains(id))
+        })
     {
         return Err(Stop::Protocol);
     }
@@ -219,14 +222,18 @@ async fn relay_connection(
         return Stop::Protocol;
     };
     let mut previous = HashSet::new();
-    if prepare_event(&mut first, headers, &model, &previous).is_err() {
+    if prepare_event(&mut first, headers, &model, &previous, true).is_err() {
         return Stop::Protocol;
     }
+    let affinity = relay_session_affinity(state, "openai-responses", headers, &first);
     let authenticated = match RelayAttempt::authenticate(state, headers, None).await {
         Ok(value) => value,
         Err(_) => return Stop::Client,
     };
-    let binding = match authenticated.select("openai-responses", &model).await {
+    let binding = match authenticated
+        .select("openai-responses", &model, affinity.as_ref())
+        .await
+    {
         Ok(value) => value,
         Err(_) => return Stop::Protocol,
     };
@@ -338,7 +345,7 @@ async fn relay_connection(
                         if active.is_some() || previous.len() >= MAX_RESPONSES { return Stop::Protocol; }
                         if authenticate_relay_api_key(state, headers, None).await.is_err() { return Stop::Client; }
                         let mut value: Value = match serde_json::from_str(&text) { Ok(value) => value, Err(_) => return Stop::Protocol };
-                        if prepare_event(&mut value, headers, &model, &previous).is_err() { return Stop::Protocol; }
+                        if prepare_event(&mut value, headers, &model, &previous, false).is_err() { return Stop::Protocol; }
                         *active = Some(start_response(&binding, &mut value, &endpoint));
                         if !matches!(timeout(idle, upstream.send(tungstenite::Message::Text(value.to_string().into()))).await, Ok(Ok(()))) { return Stop::Upstream; }
                     }

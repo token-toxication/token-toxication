@@ -1052,7 +1052,6 @@ mod tests {
                 })
                 .to_string(),
                 is_active: true,
-                priority: 0,
             })
             .await
             .expect("create Codex account");

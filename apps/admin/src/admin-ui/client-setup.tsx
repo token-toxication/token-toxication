@@ -63,6 +63,7 @@ const dshWireApis: Record<DshProtocol, string> = {
 export function dshModelEntryYaml(model: DshModelOption, protocol: DshProtocol) {
   const entryIndent = "          ";
   const lines = [`- id: ${JSON.stringify(model.id)}`];
+  const compat: string[] = [];
   if (model.displayName && model.displayName !== model.id) {
     lines.push(`${entryIndent}name: ${JSON.stringify(model.displayName)}`);
   }
@@ -80,9 +81,18 @@ export function dshModelEntryYaml(model: DshModelOption, protocol: DshProtocol) 
       lines.push(`${entryIndent}  ${effort.id}:${wireValue}`);
     }
     if (reasoning.thinkingFormat) {
-      lines.push(`${entryIndent}compat:`);
-      lines.push(`${entryIndent}  thinkingFormat: ${reasoning.thinkingFormat}`);
+      compat.push(`thinkingFormat: ${reasoning.thinkingFormat}`);
     }
+  }
+  if (protocol === "chat") {
+    // DSH passes its session ID to pi-ai, but custom OpenAI-compatible providers
+    // do not receive pi-ai's OpenAI-only session headers. Emitting the standard
+    // prompt cache key gives the relay a stable native-body affinity source.
+    compat.push("supportsPromptCacheKey: true");
+  }
+  if (compat.length > 0) {
+    lines.push(`${entryIndent}compat:`);
+    lines.push(...compat.map((value) => `${entryIndent}  ${value}`));
   }
   return lines.join("\n");
 }

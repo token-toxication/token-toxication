@@ -458,12 +458,6 @@ export function AccountDetailView({
               </div>
               <div>
                 <dt className="text-xs text-muted-foreground">
-                  <Trans>Priority</Trans>
-                </dt>
-                <dd className="mt-1">{account.priority}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-muted-foreground">
                   <Trans>Status</Trans>
                 </dt>
                 <dd className="mt-1">{statusBadge(account.status, account.isActive)}</dd>
@@ -508,6 +502,9 @@ export function AccountDetailView({
                         <Trans>Role</Trans>
                       </TableHead>
                       <TableHead>
+                        <Trans>Weight</Trans>
+                      </TableHead>
+                      <TableHead>
                         <Trans>Status</Trans>
                       </TableHead>
                     </TableRow>
@@ -532,6 +529,7 @@ export function AccountDetailView({
                           </Link>
                         </TableCell>
                         <TableCell>{routeRoleBadge(route.role)}</TableCell>
+                        <TableCell>{route.weight}</TableCell>
                         <TableCell>{statusBadge(route.status, route.enabled)}</TableCell>
                       </TableRow>
                     ))}
@@ -1151,21 +1149,11 @@ export function CreateAccountSheet({
               <Trans>Leave the credential blank to keep the current value.</Trans>
             </p>
           ) : null}
-          <div className="grid gap-3 sm:grid-cols-[1fr_120px]">
+          <div>
             <SettingRow
               label={t`Upstream path`}
               value={upstreamPathForWireApi(form.wireApi, form.authMode)}
             />
-            <Field label={t`Priority`} htmlFor="account-priority">
-              <Input
-                id="account-priority"
-                inputMode="numeric"
-                value={form.priority}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, priority: event.target.value }))
-                }
-              />
-            </Field>
           </div>
           <div className="flex items-center justify-between gap-3 rounded-md border p-3">
             <div className="flex flex-col gap-1">

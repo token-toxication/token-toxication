@@ -35,6 +35,8 @@ pub struct ProviderRouteSelection {
     pub route_id: String,
     pub public_model_id: String,
     pub upstream_model_id: String,
+    pub role: String,
+    pub weight: u32,
     pub strip_params: Vec<String>,
 }
 
@@ -131,6 +133,7 @@ impl Db {
                 wire_api TEXT NOT NULL,
                 role TEXT NOT NULL DEFAULT 'primary',
                 enabled INTEGER NOT NULL DEFAULT 1,
+                weight INTEGER NOT NULL DEFAULT 100,
                 status TEXT NOT NULL DEFAULT 'healthy',
                 last_error TEXT,
                 last_status_code INTEGER,
@@ -179,6 +182,12 @@ impl Db {
         ensure_column(
             &conn,
             "provider_model_routes",
+            "weight",
+            "INTEGER NOT NULL DEFAULT 100",
+        )?;
+        ensure_column(
+            &conn,
+            "provider_model_routes",
             "strip_params",
             "TEXT NOT NULL DEFAULT '[]'",
         )?;
@@ -199,9 +208,7 @@ impl Db {
                 ON provider_model_routes(public_model_id, wire_api, enabled, role);
             CREATE INDEX IF NOT EXISTS idx_provider_model_routes_health
                 ON provider_model_routes(enabled, status, cooldown_until);
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_provider_model_routes_primary
-                ON provider_model_routes(public_model_id, wire_api)
-                WHERE enabled = 1 AND role = 'primary';
+            DROP INDEX IF EXISTS idx_provider_model_routes_primary;
             "#,
         )?;
 
@@ -433,7 +440,6 @@ impl Db {
             auth_mode,
             wire_api: normalize_wire_api(&input.wire_api, &input.provider),
             is_active: input.is_active,
-            priority: input.priority,
             status: "healthy".to_string(),
             last_error: None,
             created_at: now,
@@ -444,8 +450,8 @@ impl Db {
         conn.execute(
             "INSERT INTO provider_accounts
              (id, name, provider, base_url, auth_mode, wire_api, api_key, is_active,
-              priority, status, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+              status, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![
                 &account.id,
                 &account.name,
@@ -455,7 +461,6 @@ impl Db {
                 &account.wire_api,
                 input.api_key,
                 bool_to_i64(account.is_active),
-                account.priority,
                 &account.status,
                 account.created_at.to_rfc3339(),
             ],
@@ -467,9 +472,9 @@ impl Db {
         let conn = self.conn.lock().await;
         let mut stmt = conn.prepare(
             "SELECT id, name, provider, base_url, auth_mode, wire_api, api_key, is_active,
-                    priority, status, last_error, created_at, last_used_at
+                    status, last_error, created_at, last_used_at
              FROM provider_accounts
-             ORDER BY priority DESC, created_at DESC",
+             ORDER BY created_at DESC",
         )?;
         rows_to_accounts(&mut stmt, params![])
     }
@@ -571,7 +576,7 @@ impl Db {
         let conn = self.conn.lock().await;
         let mut stmt = conn.prepare(
             "SELECT id, public_model_id, provider_account_id, upstream_model_id, wire_api,
-                    role, enabled, status, last_error, last_status_code, cooldown_until,
+                    role, enabled, weight, status, last_error, last_status_code, cooldown_until,
                     last_used_at, strip_params, created_at
              FROM provider_model_routes
              ORDER BY public_model_id ASC,
@@ -595,6 +600,7 @@ impl Db {
             wire_api: normalize_wire_api(&input.wire_api, ""),
             role: normalize_route_role(&input.role),
             enabled: input.enabled,
+            weight: input.weight,
             status: "healthy".to_string(),
             last_error: None,
             last_status_code: None,
@@ -607,8 +613,8 @@ impl Db {
         conn.execute(
             "INSERT INTO provider_model_routes
              (id, public_model_id, provider_account_id, upstream_model_id, wire_api, role,
-              enabled, status, strip_params, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+              enabled, weight, status, strip_params, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
             params![
                 &route.id,
                 &route.public_model_id,
@@ -617,6 +623,7 @@ impl Db {
                 &route.wire_api,
                 &route.role,
                 bool_to_i64(route.enabled),
+                route.weight,
                 &route.status,
                 serde_json::to_string(&route.strip_params).unwrap_or_else(|_| "[]".into()),
                 route.created_at.to_rfc3339(),
@@ -657,6 +664,7 @@ impl Db {
                 .map(|value| normalize_route_role(&value))
                 .unwrap_or(current.role),
             enabled: input.enabled.unwrap_or(current.enabled),
+            weight: input.weight.unwrap_or(current.weight),
             status: current.status,
             last_error: current.last_error,
             last_status_code: current.last_status_code,
@@ -672,8 +680,8 @@ impl Db {
         conn.execute(
             "UPDATE provider_model_routes
              SET public_model_id = ?1, provider_account_id = ?2, upstream_model_id = ?3,
-                 wire_api = ?4, role = ?5, enabled = ?6, strip_params = ?7
-             WHERE id = ?8",
+                 wire_api = ?4, role = ?5, enabled = ?6, strip_params = ?7, weight = ?8
+             WHERE id = ?9",
             params![
                 &route.public_model_id,
                 &route.provider_account_id,
@@ -682,6 +690,7 @@ impl Db {
                 &route.role,
                 bool_to_i64(route.enabled),
                 serde_json::to_string(&route.strip_params).unwrap_or_else(|_| "[]".into()),
+                route.weight,
                 &route.id,
             ],
         )?;
@@ -695,7 +704,7 @@ impl Db {
         let conn = self.conn.lock().await;
         let mut stmt = conn.prepare(
             "SELECT id, public_model_id, provider_account_id, upstream_model_id, wire_api,
-                    role, enabled, status, last_error, last_status_code, cooldown_until,
+                    role, enabled, weight, status, last_error, last_status_code, cooldown_until,
                     last_used_at, strip_params, created_at
              FROM provider_model_routes
              WHERE id = ?1",
@@ -766,8 +775,6 @@ impl Db {
                AND (r.cooldown_until IS NULL OR r.cooldown_until <= ?1)
              ORDER BY m.id ASC,
                       CASE r.role WHEN 'primary' THEN 0 WHEN 'backup' THEN 1 ELSE 2 END,
-                      a.priority DESC,
-                      COALESCE(r.last_used_at, a.last_used_at, '') ASC,
                       r.created_at ASC",
         )?;
         let rows = stmt.query_map(params![now], |row| {
@@ -783,29 +790,18 @@ impl Db {
         rows.collect()
     }
 
-    pub async fn select_provider_account(
-        &self,
-        model: Option<&str>,
-    ) -> Result<Option<ProviderRouteSelection>, rusqlite::Error> {
-        self.select_provider_account_for_wire("anthropic-messages", model)
-            .await
-    }
-
-    pub async fn select_provider_account_for_wire(
+    pub async fn list_provider_route_candidates(
         &self,
         wire_api: &str,
-        model: Option<&str>,
-    ) -> Result<Option<ProviderRouteSelection>, rusqlite::Error> {
-        let Some(model) = model else {
-            return Ok(None);
-        };
+        model: &str,
+    ) -> Result<Vec<ProviderRouteSelection>, rusqlite::Error> {
         let wire_api = normalize_wire_api(wire_api, "");
         let conn = self.conn.lock().await;
         let now = Utc::now().to_rfc3339();
         let mut stmt = conn.prepare(
             "SELECT a.id, a.name, a.provider, a.base_url, a.auth_mode, a.wire_api, a.api_key,
-                    a.is_active, a.priority, a.status, a.last_error, a.created_at, a.last_used_at,
-                    r.id, r.public_model_id, r.upstream_model_id, r.strip_params
+                    a.is_active, a.status, a.last_error, a.created_at, a.last_used_at,
+                    r.id, r.public_model_id, r.upstream_model_id, r.role, r.weight, r.strip_params
              FROM model_catalog m
              JOIN provider_model_routes r ON r.public_model_id = m.id
              JOIN provider_accounts a ON a.id = r.provider_account_id
@@ -818,13 +814,10 @@ impl Db {
                AND r.status != 'blocked'
                AND (r.cooldown_until IS NULL OR r.cooldown_until <= ?3)
              ORDER BY CASE r.role WHEN 'primary' THEN 0 WHEN 'backup' THEN 1 ELSE 2 END,
-                      a.priority DESC,
-                      COALESCE(r.last_used_at, a.last_used_at, '') ASC,
-                      r.created_at ASC
-             LIMIT 1",
+                      r.created_at ASC",
         )?;
-        stmt.query_row(params![wire_api, model, now], route_selection_from_row)
-            .optional()
+        let rows = stmt.query_map(params![wire_api, model, now], route_selection_from_row)?;
+        rows.collect()
     }
 
     pub async fn update_provider_account(
@@ -862,7 +855,6 @@ impl Db {
             auth_mode,
             wire_api,
             is_active: input.is_active.unwrap_or(current.is_active),
-            priority: input.priority.unwrap_or(current.priority),
             status: "healthy".to_string(),
             last_error: None,
             created_at: current.created_at,
@@ -873,8 +865,8 @@ impl Db {
         if let Some(api_key) = input.api_key {
             conn.execute(
                 "UPDATE provider_accounts SET name = ?1, provider = ?2, base_url = ?3,
-                 auth_mode = ?4, wire_api = ?5, api_key = ?6, is_active = ?7, priority = ?8,
-                 status = 'healthy', last_error = NULL WHERE id = ?9",
+                 auth_mode = ?4, wire_api = ?5, api_key = ?6, is_active = ?7,
+                 status = 'healthy', last_error = NULL WHERE id = ?8",
                 params![
                     &account.name,
                     &account.provider,
@@ -883,15 +875,14 @@ impl Db {
                     &account.wire_api,
                     api_key,
                     bool_to_i64(account.is_active),
-                    account.priority,
                     &account.id,
                 ],
             )?;
         } else {
             conn.execute(
                 "UPDATE provider_accounts SET name = ?1, provider = ?2, base_url = ?3,
-                 auth_mode = ?4, wire_api = ?5, is_active = ?6, priority = ?7,
-                 status = 'healthy', last_error = NULL WHERE id = ?8",
+                 auth_mode = ?4, wire_api = ?5, is_active = ?6,
+                 status = 'healthy', last_error = NULL WHERE id = ?7",
                 params![
                     &account.name,
                     &account.provider,
@@ -899,7 +890,6 @@ impl Db {
                     &account.auth_mode,
                     &account.wire_api,
                     bool_to_i64(account.is_active),
-                    account.priority,
                     &account.id,
                 ],
             )?;
@@ -914,7 +904,7 @@ impl Db {
         let conn = self.conn.lock().await;
         let mut stmt = conn.prepare(
             "SELECT id, name, provider, base_url, auth_mode, wire_api, api_key, is_active,
-                    priority, status, last_error, created_at, last_used_at
+                    status, last_error, created_at, last_used_at
              FROM provider_accounts WHERE id = ?1",
         )?;
         stmt.query_row(params![id], account_from_row)
@@ -929,7 +919,7 @@ impl Db {
         let conn = self.conn.lock().await;
         let mut stmt = conn.prepare(
             "SELECT id, name, provider, base_url, auth_mode, wire_api, api_key, is_active,
-                    priority, status, last_error, created_at, last_used_at
+                    status, last_error, created_at, last_used_at
              FROM provider_accounts WHERE id = ?1",
         )?;
         stmt.query_row(params![id], account_from_row).optional()
@@ -1191,11 +1181,10 @@ fn account_from_row(row: &rusqlite::Row<'_>) -> Result<ProviderAccountRecord, ru
             auth_mode: row.get(4)?,
             wire_api: row.get(5)?,
             is_active: row.get::<_, i64>(7)? == 1,
-            priority: row.get(8)?,
-            status: row.get(9)?,
-            last_error: row.get(10)?,
-            created_at: parse_time(row.get::<_, String>(11)?.as_str()),
-            last_used_at: parse_time_opt(row.get::<_, Option<String>>(12)?.as_deref()),
+            status: row.get(8)?,
+            last_error: row.get(9)?,
+            created_at: parse_time(row.get::<_, String>(10)?.as_str()),
+            last_used_at: parse_time_opt(row.get::<_, Option<String>>(11)?.as_deref()),
         },
         api_key: row.get(6)?,
     })
@@ -1214,7 +1203,7 @@ fn model_catalog_from_row(row: &rusqlite::Row<'_>) -> Result<ModelCatalogEntry, 
 fn provider_model_route_from_row(
     row: &rusqlite::Row<'_>,
 ) -> Result<ProviderModelRoute, rusqlite::Error> {
-    let strip_params: String = row.get(12)?;
+    let strip_params: String = row.get(13)?;
     Ok(ProviderModelRoute {
         id: row.get(0)?,
         public_model_id: row.get(1)?,
@@ -1223,25 +1212,28 @@ fn provider_model_route_from_row(
         wire_api: row.get(4)?,
         role: row.get(5)?,
         enabled: row.get::<_, i64>(6)? == 1,
-        status: row.get(7)?,
-        last_error: row.get(8)?,
-        last_status_code: row.get::<_, Option<i64>>(9)?.map(|value| value as u16),
-        cooldown_until: parse_time_opt(row.get::<_, Option<String>>(10)?.as_deref()),
-        last_used_at: parse_time_opt(row.get::<_, Option<String>>(11)?.as_deref()),
+        weight: row.get::<_, i64>(7)? as u32,
+        status: row.get(8)?,
+        last_error: row.get(9)?,
+        last_status_code: row.get::<_, Option<i64>>(10)?.map(|value| value as u16),
+        cooldown_until: parse_time_opt(row.get::<_, Option<String>>(11)?.as_deref()),
+        last_used_at: parse_time_opt(row.get::<_, Option<String>>(12)?.as_deref()),
         strip_params: serde_json::from_str(&strip_params).unwrap_or_default(),
-        created_at: parse_time(row.get::<_, String>(13)?.as_str()),
+        created_at: parse_time(row.get::<_, String>(14)?.as_str()),
     })
 }
 
 fn route_selection_from_row(
     row: &rusqlite::Row<'_>,
 ) -> Result<ProviderRouteSelection, rusqlite::Error> {
-    let strip_params: String = row.get(16)?;
+    let strip_params: String = row.get(17)?;
     Ok(ProviderRouteSelection {
         account: account_from_row(row)?,
-        route_id: row.get(13)?,
-        public_model_id: row.get(14)?,
-        upstream_model_id: row.get(15)?,
+        route_id: row.get(12)?,
+        public_model_id: row.get(13)?,
+        upstream_model_id: row.get(14)?,
+        role: row.get(15)?,
+        weight: row.get::<_, i64>(16)? as u32,
         strip_params: serde_json::from_str(&strip_params).unwrap_or_default(),
     })
 }
@@ -1696,7 +1688,6 @@ mod tests {
                 wire_api: "openai-chat".to_string(),
                 api_key: "backup-key".to_string(),
                 is_active: true,
-                priority: 100,
             })
             .await
             .expect("create backup account");
@@ -1709,7 +1700,6 @@ mod tests {
                 wire_api: "openai-chat".to_string(),
                 api_key: "primary-key".to_string(),
                 is_active: true,
-                priority: 0,
             })
             .await
             .expect("create primary account");
@@ -1728,6 +1718,7 @@ mod tests {
             wire_api: "openai-chat".to_string(),
             role: "backup".to_string(),
             enabled: true,
+            weight: 100,
             strip_params: Vec::new(),
         })
         .await
@@ -1739,15 +1730,18 @@ mod tests {
             wire_api: "openai-chat".to_string(),
             role: "primary".to_string(),
             enabled: true,
+            weight: 100,
             strip_params: Vec::new(),
         })
         .await
         .expect("create primary route");
 
         let selected = db
-            .select_provider_account_for_wire("openai-chat", Some("MiniMax-M3"))
+            .list_provider_route_candidates("openai-chat", "MiniMax-M3")
             .await
-            .expect("select provider")
+            .expect("list candidates")
+            .into_iter()
+            .next()
             .expect("selected provider");
 
         assert_eq!(selected.account.account.provider, "minimax");
@@ -1758,11 +1752,107 @@ mod tests {
         assert_eq!(selected.public_model_id, "MiniMax-M3");
         assert_eq!(selected.upstream_model_id, "MiniMax-M3");
         assert!(
-            db.select_provider_account_for_wire("openai-chat", Some("minimax-m3"))
+            db.list_provider_route_candidates("openai-chat", "minimax-m3")
                 .await
-                .expect("select lowercase")
-                .is_none()
+                .expect("list lowercase candidates")
+                .is_empty()
         );
+
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[tokio::test]
+    async fn multiple_primary_routes_persist_weights_and_update_in_place() {
+        let path =
+            std::env::temp_dir().join(format!("token-toxication-{}.sqlite3", Uuid::new_v4()));
+        let db = Db::open(&path).await.expect("open test database");
+        let first = db
+            .create_provider_account(CreateProviderAccountRequest {
+                name: "First".to_string(),
+                provider: "openai".to_string(),
+                base_url: "https://first.example.com".to_string(),
+                auth_mode: "bearer".to_string(),
+                wire_api: "openai-responses".to_string(),
+                api_key: "first-key".to_string(),
+                is_active: true,
+            })
+            .await
+            .expect("create first account");
+        let second = db
+            .create_provider_account(CreateProviderAccountRequest {
+                name: "Second".to_string(),
+                provider: "openai".to_string(),
+                base_url: "https://second.example.com".to_string(),
+                auth_mode: "bearer".to_string(),
+                wire_api: "openai-responses".to_string(),
+                api_key: "second-key".to_string(),
+                is_active: true,
+            })
+            .await
+            .expect("create second account");
+        db.create_model_catalog_entry(CreateModelCatalogEntryRequest {
+            id: "gpt-test".to_string(),
+            display_name: String::new(),
+            family: "openai".to_string(),
+            enabled: true,
+        })
+        .await
+        .expect("create model");
+
+        let first_route = db
+            .create_provider_model_route(CreateProviderModelRouteRequest {
+                public_model_id: "gpt-test".to_string(),
+                provider_account_id: first.id,
+                upstream_model_id: "gpt-test".to_string(),
+                wire_api: "openai-responses".to_string(),
+                role: "primary".to_string(),
+                enabled: true,
+                weight: 100,
+                strip_params: Vec::new(),
+            })
+            .await
+            .expect("create first primary");
+        db.create_provider_model_route(CreateProviderModelRouteRequest {
+            public_model_id: "gpt-test".to_string(),
+            provider_account_id: second.id,
+            upstream_model_id: "gpt-test".to_string(),
+            wire_api: "openai-responses".to_string(),
+            role: "primary".to_string(),
+            enabled: true,
+            weight: 300,
+            strip_params: Vec::new(),
+        })
+        .await
+        .expect("create second primary");
+
+        let candidates = db
+            .list_provider_route_candidates("openai-responses", "gpt-test")
+            .await
+            .expect("list candidates");
+        assert_eq!(candidates.len(), 2);
+        assert_eq!(
+            candidates.iter().map(|route| route.weight).sum::<u32>(),
+            400
+        );
+
+        let updated = db
+            .update_provider_model_route(
+                &first_route.id,
+                UpdateProviderModelRouteRequest {
+                    public_model_id: None,
+                    provider_account_id: None,
+                    upstream_model_id: None,
+                    wire_api: None,
+                    role: None,
+                    enabled: None,
+                    weight: Some(250),
+                    strip_params: None,
+                },
+            )
+            .await
+            .expect("update weight");
+        assert_eq!(updated.id, first_route.id);
+        assert_eq!(updated.weight, 250);
 
         let _ = std::fs::remove_file(path);
     }
@@ -1782,7 +1872,6 @@ mod tests {
                 wire_api: "openai-chat".to_string(),
                 api_key: "primary-key".to_string(),
                 is_active: true,
-                priority: 100,
             })
             .await
             .expect("create primary account");
@@ -1795,7 +1884,6 @@ mod tests {
                 wire_api: "openai-chat".to_string(),
                 api_key: "backup-key".to_string(),
                 is_active: true,
-                priority: 0,
             })
             .await
             .expect("create backup account");
@@ -1814,6 +1902,7 @@ mod tests {
             wire_api: "openai-chat".to_string(),
             role: "primary".to_string(),
             enabled: true,
+            weight: 100,
             strip_params: Vec::new(),
         })
         .await
@@ -1825,6 +1914,7 @@ mod tests {
             wire_api: "openai-chat".to_string(),
             role: "backup".to_string(),
             enabled: true,
+            weight: 100,
             strip_params: Vec::new(),
         })
         .await
@@ -1835,9 +1925,11 @@ mod tests {
             .expect("mark primary blocked");
 
         let selected = db
-            .select_provider_account_for_wire("openai-chat", Some("deepseek-v4-pro"))
+            .list_provider_route_candidates("openai-chat", "deepseek-v4-pro")
             .await
-            .expect("select provider")
+            .expect("list candidates")
+            .into_iter()
+            .next()
             .expect("selected provider");
 
         assert_eq!(selected.account.account.name, "Backup");
@@ -1861,7 +1953,6 @@ mod tests {
                 wire_api: "openai-chat".to_string(),
                 api_key: "primary-key".to_string(),
                 is_active: true,
-                priority: 100,
             })
             .await
             .expect("create primary account");
@@ -1874,7 +1965,6 @@ mod tests {
                 wire_api: "openai-chat".to_string(),
                 api_key: "backup-key".to_string(),
                 is_active: true,
-                priority: 0,
             })
             .await
             .expect("create backup account");
@@ -1894,6 +1984,7 @@ mod tests {
                 wire_api: "openai-chat".to_string(),
                 role: "primary".to_string(),
                 enabled: true,
+                weight: 100,
                 strip_params: vec!["temperature".to_string()],
             })
             .await
@@ -1905,15 +1996,18 @@ mod tests {
             wire_api: "openai-chat".to_string(),
             role: "backup".to_string(),
             enabled: true,
+            weight: 100,
             strip_params: Vec::new(),
         })
         .await
         .expect("create backup route");
 
         let selected = db
-            .select_provider_account_for_wire("openai-chat", Some("deepseek-v4-flash"))
+            .list_provider_route_candidates("openai-chat", "deepseek-v4-flash")
             .await
-            .expect("select primary")
+            .expect("list primary candidates")
+            .into_iter()
+            .next()
             .expect("primary selected");
         assert_eq!(selected.route_id, primary_route.id);
         assert_eq!(selected.strip_params, vec!["temperature"]);
@@ -1929,9 +2023,11 @@ mod tests {
         .expect("mark route cooling down");
 
         let selected = db
-            .select_provider_account_for_wire("openai-chat", Some("deepseek-v4-flash"))
+            .list_provider_route_candidates("openai-chat", "deepseek-v4-flash")
             .await
-            .expect("select backup")
+            .expect("list backup candidates")
+            .into_iter()
+            .next()
             .expect("backup selected");
 
         assert_eq!(selected.account.account.name, "Backup");
@@ -2011,7 +2107,6 @@ mod tests {
                 wire_api: "openai-responses".to_string(),
                 api_key: "refresh-token".to_string(),
                 is_active: true,
-                priority: 0,
             })
             .await
             .expect("create Codex account");
@@ -2033,7 +2128,6 @@ mod tests {
                     wire_api: None,
                     api_key: None,
                     is_active: None,
-                    priority: None,
                 },
             )
             .await
@@ -2060,7 +2154,6 @@ mod tests {
                 wire_api: "openai-responses".to_string(),
                 api_key: "refresh-token-1".to_string(),
                 is_active: true,
-                priority: 0,
             })
             .await
             .expect("create first Codex account");
@@ -2073,7 +2166,6 @@ mod tests {
                 wire_api: "openai-responses".to_string(),
                 api_key: "refresh-token-2".to_string(),
                 is_active: true,
-                priority: 0,
             })
             .await
             .expect("create second Codex account");
@@ -2086,7 +2178,6 @@ mod tests {
                 wire_api: "openai-responses".to_string(),
                 api_key: "api-key".to_string(),
                 is_active: true,
-                priority: 0,
             })
             .await
             .expect("create bearer account");
@@ -2207,7 +2298,6 @@ mod tests {
                 wire_api: "openai-chat".to_string(),
                 api_key: "deepseek-key".to_string(),
                 is_active: true,
-                priority: 10,
             })
             .await
             .expect("create deepseek account");
@@ -2220,7 +2310,6 @@ mod tests {
                 wire_api: "openai-responses".to_string(),
                 api_key: "openai-key".to_string(),
                 is_active: true,
-                priority: 0,
             })
             .await
             .expect("create duplicate account");
@@ -2233,7 +2322,6 @@ mod tests {
                 wire_api: "openai-responses".to_string(),
                 api_key: "openai-key".to_string(),
                 is_active: false,
-                priority: 100,
             })
             .await
             .expect("create inactive account");
@@ -2268,6 +2356,7 @@ mod tests {
             wire_api: "openai-chat".to_string(),
             role: "primary".to_string(),
             enabled: true,
+            weight: 100,
             strip_params: Vec::new(),
         })
         .await
@@ -2279,6 +2368,7 @@ mod tests {
             wire_api: "openai-chat".to_string(),
             role: "backup".to_string(),
             enabled: true,
+            weight: 100,
             strip_params: Vec::new(),
         })
         .await
@@ -2290,6 +2380,7 @@ mod tests {
             wire_api: "openai-responses".to_string(),
             role: "backup".to_string(),
             enabled: true,
+            weight: 100,
             strip_params: Vec::new(),
         })
         .await
@@ -2301,6 +2392,7 @@ mod tests {
             wire_api: "openai-responses".to_string(),
             role: "primary".to_string(),
             enabled: true,
+            weight: 100,
             strip_params: Vec::new(),
         })
         .await
@@ -2330,6 +2422,7 @@ mod tests {
                     wire_api: "openai-chat".to_string(),
                     role: "primary".to_string(),
                     enabled: route_enabled,
+                    weight: 100,
                     strip_params: Vec::new(),
                 })
                 .await

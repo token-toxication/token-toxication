@@ -48,6 +48,7 @@ export function providerRouteRequestFromForm(
     wireApi: form.wireApi,
     role: form.role,
     enabled: form.enabled,
+    weight: numberFromInput(form.weight),
     stripParams: commaSeparatedValues(form.stripParams),
   };
 }
@@ -248,7 +249,6 @@ export function useAdminWorkspace() {
     if (!editingAccount && isAntigravityAccountAuth(createAccountForm.authMode)) {
       await launchAntigravityOAuth({
         name: createAccountForm.name,
-        priority: numberFromInput(createAccountForm.priority),
       });
       return;
     }
@@ -261,7 +261,6 @@ export function useAdminWorkspace() {
         wireApi: createAccountForm.wireApi,
         apiKey: createAccountForm.apiKey.trim() || undefined,
         isActive: createAccountForm.isActive,
-        priority: numberFromInput(createAccountForm.priority),
       });
       toast.success(t`Provider account updated`);
     } else {
@@ -273,7 +272,6 @@ export function useAdminWorkspace() {
         wireApi: createAccountForm.wireApi,
         apiKey: createAccountForm.apiKey,
         isActive: createAccountForm.isActive,
-        priority: numberFromInput(createAccountForm.priority),
       });
       toast.success(t`Provider account created`);
     }
@@ -281,15 +279,7 @@ export function useAdminWorkspace() {
     await refresh();
   }
 
-  async function launchAntigravityOAuth({
-    accountId,
-    name,
-    priority,
-  }: {
-    accountId?: string;
-    name: string;
-    priority: number;
-  }) {
+  async function launchAntigravityOAuth({ accountId, name }: { accountId?: string; name: string }) {
     const popup = window.open(
       "about:blank",
       "token-toxication-antigravity-oauth",
@@ -303,7 +293,6 @@ export function useAdminWorkspace() {
       const response = await api.startAntigravityOAuth({
         accountId,
         name,
-        priority,
         redirectUri: `${window.location.origin}/oauth-callback`,
       });
       popup.location.replace(response.authorizationUrl);
@@ -317,7 +306,6 @@ export function useAdminWorkspace() {
     await launchAntigravityOAuth({
       accountId: account.id,
       name: account.name,
-      priority: account.priority,
     });
   }
 

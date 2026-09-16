@@ -8,17 +8,23 @@ Every relay request resolves through three records:
 
 | Record | Responsibility |
 | --- | --- |
-| Provider account | Owns the upstream base URL, credential, authentication mode, wire protocol, priority, and account health |
+| Provider account | Owns the upstream base URL, credential, authentication mode, wire protocol, and account health |
 | Catalog model | Defines the exact, case-preserving model ID exposed to clients |
-| Provider model route | Maps a public model to one account and upstream model ID, with a primary or backup role |
+| Provider model route | Maps a public model to one account and upstream model ID, with a primary or backup role and a positive weight |
 
 There is no global upstream URL. Each account owns its connection settings, and each route can remove configured top-level request fields before forwarding.
 
 Routing policy uses the top-level model ID and configured `stripParams`. It does not inspect nested prompts, messages, or input content. Provider adapters handle protocol-specific transformations separately.
 
-Eligible primary routes are selected before backup routes. Within the same role, higher-priority accounts are preferred and least-recently-used routes rotate first.
+Eligible primary routes are selected before backup routes. Within the selected role, requests with a session identifier use weighted rendezvous hashing, so the same API key, public model, protocol, and session remain on the same eligible route. Requests without a session identifier use weighted random selection. Route weights range from 1 to 10,000 and default to 100.
+
+The explicit affinity header is `Token-Toxication-Session-ID`. It takes precedence over protocol-native identifiers. OpenAI-compatible requests also recognize `session-id`, `session_id`, `client_metadata.session_id`, `client_metadata.thread_id`, `prompt_cache_key`, and finally `x-client-request-id`. Anthropic requests recognize `X-Claude-Code-Session-Id` and Claude Code's `metadata.user_id` session representation. Gemini requests recognize `sessionId` and `session_id`.
+
+Changing route eligibility or weight can remap a session. Route IDs remain stable when a route is edited, minimizing unnecessary remapping.
 
 Each request receives one upstream attempt. A failure does not trigger another provider in the same request; later requests skip accounts or routes that are blocked or cooling down.
+
+For Codex subscription continuation, `previous_response_id` is forwarded unchanged. The relay does not maintain a response-ID registry. Continuation therefore depends on the client sending a stable session identifier that keeps the request on the same route and account.
 
 ### Wire protocols
 
