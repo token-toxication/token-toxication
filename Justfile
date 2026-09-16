@@ -53,6 +53,20 @@ sdk-generate: openapi-generate
 ui-install:
     cd apps/admin && vp install
 
+# Verify that every translatable admin string is present in the locale catalogs.
+ui-i18n-check:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    snapshot="$(mktemp -d)"
+    trap 'rm -rf "$snapshot"' EXIT
+    cp -R apps/admin/src/locales/. "$snapshot/"
+    cd apps/admin
+    vp exec lingui extract --clean
+    if ! diff -ru "$snapshot" src/locales; then
+        echo "Lingui catalogs are stale. Commit the extracted catalog changes." >&2
+        exit 1
+    fi
+
 # Run Vite+ frontend checks
 ui-check:
     cd apps/admin && vp check
@@ -76,4 +90,4 @@ ui-dev:
 # ---------- CI ----------
 
 # Run the full local CI pipeline
-ci: fmt-check clippy test sdk-generate ui-check ui-test ui-build
+ci: fmt-check clippy test sdk-generate ui-i18n-check ui-check ui-test ui-build

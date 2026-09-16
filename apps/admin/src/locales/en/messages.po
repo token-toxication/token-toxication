@@ -14,21 +14,21 @@ msgstr ""
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
 #. placeholder {0}: summary.strippedParams.join(", ")
-#: src/admin-ui/helpers.tsx:121
+#: src/admin-ui/helpers.tsx:120
 msgid " · stripped {0}"
 msgstr " · stripped {0}"
 
 #. placeholder {0}: routeCountForAccount(routes, account.id)
 #. placeholder {0}: routeCountForModel(routes, model.id)
-#: src/admin-ui/accounts.tsx:260
-#: src/admin-ui/models.tsx:193
+#: src/admin-ui/accounts.tsx:284
+#: src/admin-ui/models.tsx:212
 msgid "{0, plural, one {# route} other {# routes}}"
 msgstr "{0, plural, one {# route} other {# routes}}"
 
 #. placeholder {0}: codexModels.length
 #. placeholder {0}: piModels.length
-#: src/admin-ui/client-setup.tsx:338
-#: src/admin-ui/client-setup.tsx:394
+#: src/admin-ui/client-setup.tsx:419
+#: src/admin-ui/client-setup.tsx:475
 msgid "{0, plural, one {# routed model} other {# routed models}}"
 msgstr "{0, plural, one {# routed model} other {# routed models}}"
 
@@ -44,12 +44,12 @@ msgid "{0} × {intervalMinutes} min"
 msgstr "{0} × {intervalMinutes} min"
 
 #. placeholder {0}: formatNumber(summary.bodyBytes)
-#: src/admin-ui/helpers.tsx:123
+#: src/admin-ui/helpers.tsx:121
 msgid "{0} bytes · {stream} · keys {keys}{stripped}"
 msgstr "{0} bytes · {stream} · keys {keys}{stripped}"
 
 #. placeholder {0}: formatCacheHitRate(log.cachedInputTokens, log.inputTokens)
-#: src/admin-ui/logs.tsx:383
+#: src/admin-ui/logs.tsx:385
 msgid "{0} cache hit"
 msgstr "{0} cache hit"
 
@@ -65,29 +65,29 @@ msgid "{0} concurrent requests"
 msgstr "{0} concurrent requests"
 
 #. placeholder {0}: selectedPreset.label
-#: src/admin-ui/accounts.tsx:988
+#: src/admin-ui/accounts.tsx:1097
 msgid "{0} credential"
 msgstr "{0} credential"
 
 #. placeholder {0}: (seconds / 86_400).toFixed(1)
-#: src/admin-ui/helpers.tsx:366
+#: src/admin-ui/helpers.tsx:368
 msgid "{0} days"
 msgstr "{0} days"
 
 #. placeholder {0}: (seconds / 3_600).toFixed(1)
-#: src/admin-ui/helpers.tsx:373
+#: src/admin-ui/helpers.tsx:375
 msgid "{0} hours"
 msgstr "{0} hours"
 
 #. placeholder {0}: formatNumber(log.inputTokens)
 #. placeholder {1}: formatNumber(log.cachedInputTokens)
 #. placeholder {2}: formatNumber(log.outputTokens)
-#: src/admin-ui/logs.tsx:444
+#: src/admin-ui/logs.tsx:446
 msgid "{0} input · {1} cached · {2} output"
 msgstr "{0} input · {1} cached · {2} output"
 
 #. placeholder {0}: limit.remaining
-#: src/admin-ui/helpers.tsx:441
+#: src/admin-ui/helpers.tsx:443
 msgid "{0} remaining"
 msgstr "{0} remaining"
 
@@ -100,7 +100,7 @@ msgid "{0} rpm"
 msgstr "{0} rpm"
 
 #. placeholder {0}: formatNumber(log.inputTokens + log.outputTokens)
-#: src/admin-ui/logs.tsx:380
+#: src/admin-ui/logs.tsx:382
 msgid "{0} tokens"
 msgstr "{0} tokens"
 
@@ -125,46 +125,46 @@ msgstr "{0}: {1}"
 
 #. placeholder {0}: log.latencyMs
 #: src/admin-ui/logs.tsx:79
-#: src/admin-ui/logs.tsx:241
-#: src/admin-ui/logs.tsx:315
-#: src/admin-ui/logs.tsx:376
+#: src/admin-ui/logs.tsx:243
+#: src/admin-ui/logs.tsx:317
+#: src/admin-ui/logs.tsx:378
 msgid "{0}ms"
 msgstr "{0}ms"
 
-#: src/admin-ui/helpers.tsx:443
+#: src/admin-ui/helpers.tsx:445
 msgid "{amount}, reached"
 msgstr "{amount}, reached"
 
-#: src/admin-ui/helpers.tsx:364
+#: src/admin-ui/helpers.tsx:366
 msgid "{days, plural, one {# day} other {# days}}"
 msgstr "{days, plural, one {# day} other {# days}}"
 
-#: src/admin-ui/helpers.tsx:371
+#: src/admin-ui/helpers.tsx:373
 msgid "{hours, plural, one {# hour} other {# hours}}"
 msgstr "{hours, plural, one {# hour} other {# hours}}"
 
-#: src/admin-ui/helpers.tsx:377
+#: src/admin-ui/helpers.tsx:379
 msgid "{minutes, plural, one {# minute} other {# minutes}}"
 msgstr "{minutes, plural, one {# minute} other {# minutes}}"
 
-#: src/admin-ui/client-setup.tsx:453
+#: src/admin-ui/client-setup.tsx:534
 msgid "{routeLabel} route required"
 msgstr "{routeLabel} route required"
 
-#: src/admin-ui/helpers.tsx:379
+#: src/admin-ui/helpers.tsx:381
 msgid "{seconds, plural, one {# second} other {# seconds}}"
 msgstr "{seconds, plural, one {# second} other {# seconds}}"
 
-#: src/admin-ui/helpers.tsx:329
+#: src/admin-ui/helpers.tsx:331
 msgid "{value, plural, one {# request} other {# requests}}"
 msgstr "{value, plural, one {# request} other {# requests}}"
 
-#: src/admin-ui/accounts.tsx:532
+#: src/admin-ui/accounts.tsx:582
 #: src/admin-ui/dashboard.tsx:114
 msgid "Account"
 msgstr "Account"
 
-#: src/admin-ui/accounts.tsx:139
+#: src/admin-ui/accounts.tsx:156
 #: src/admin-ui/api-keys.tsx:88
 msgid "Actions"
 msgstr "Actions"
@@ -187,85 +187,85 @@ msgstr "active upstream accounts"
 msgid "Add a provider account to relay traffic."
 msgstr "Add a provider account to relay traffic."
 
-#: src/admin-ui/accounts.tsx:450
+#: src/admin-ui/accounts.tsx:488
 msgid "Add a provider route from a Catalog Model to make this account schedulable."
 msgstr "Add a provider route from a Catalog Model to make this account schedulable."
 
-#: src/admin-ui/models.tsx:399
+#: src/admin-ui/models.tsx:448
 msgid "Add a route from the model catalog to make this Catalog Model routable."
 msgstr "Add a route from the model catalog to make this Catalog Model routable."
 
-#: src/admin-ui/models.tsx:275
+#: src/admin-ui/models.tsx:310
 msgid "Add a route to make a catalog model reachable."
 msgstr "Add a route to make a catalog model reachable."
 
-#: src/admin-ui/accounts.tsx:1085
+#: src/admin-ui/accounts.tsx:1186
 msgid "Add account"
 msgstr "Add account"
 
-#: src/admin-ui/accounts.tsx:125
+#: src/admin-ui/accounts.tsx:129
 msgid "Add Account"
 msgstr "Add Account"
 
-#: src/admin-ui/accounts.tsx:225
-#: src/admin-ui/accounts.tsx:237
+#: src/admin-ui/accounts.tsx:249
+#: src/admin-ui/accounts.tsx:261
 msgid "Add an account to make the relay schedulable."
 msgstr "Add an account to make the relay schedulable."
 
-#: src/admin-ui/client-setup.tsx:384
+#: src/admin-ui/client-setup.tsx:465
 msgid "Add an eligible OpenAI Chat or Responses route to generate an opencode config."
 msgstr "Add an eligible OpenAI Chat or Responses route to generate an opencode config."
 
-#: src/admin-ui/client-setup.tsx:419
+#: src/admin-ui/client-setup.tsx:500
 msgid "Add an eligible OpenAI Chat, OpenAI Responses, or Anthropic Messages route to generate a DeepSeek Harness config."
 msgstr "Add an eligible OpenAI Chat, OpenAI Responses, or Anthropic Messages route to generate a DeepSeek Harness config."
 
-#: src/admin-ui/client-setup.tsx:403
+#: src/admin-ui/client-setup.tsx:484
 msgid "Add an eligible OpenAI Responses route to generate a Pi provider config."
 msgstr "Add an eligible OpenAI Responses route to generate a Pi provider config."
 
-#: src/admin-ui/client-setup.tsx:355
+#: src/admin-ui/client-setup.tsx:436
 msgid "Add an enabled OpenAI Responses route to generate a Codex static catalog."
 msgstr "Add an enabled OpenAI Responses route to generate a Codex static catalog."
 
-#: src/admin-ui/models.tsx:592
+#: src/admin-ui/models.tsx:753
 msgid "Add catalog model"
 msgstr "Add catalog model"
 
-#: src/admin-ui/client-setup.tsx:273
+#: src/admin-ui/client-setup.tsx:307
 msgid "Add exact model names in Model Catalog, then bind them to provider routes. Client setup will populate from that catalog."
 msgstr "Add exact model names in Model Catalog, then bind them to provider routes. Client setup will populate from that catalog."
 
-#: src/admin-ui/models.tsx:159
-#: src/admin-ui/models.tsx:171
+#: src/admin-ui/models.tsx:178
+#: src/admin-ui/models.tsx:190
 msgid "Add exact public model names before creating provider routes."
 msgstr "Add exact public model names before creating provider routes."
 
-#: src/admin-ui/models.tsx:643
+#: src/admin-ui/models.tsx:809
 msgid "Add model"
 msgstr "Add model"
 
-#: src/admin-ui/models.tsx:99
+#: src/admin-ui/models.tsx:108
 msgid "Add Model"
 msgstr "Add Model"
 
-#: src/admin-ui/accounts.tsx:894
+#: src/admin-ui/accounts.tsx:1001
 msgid "Add provider account"
 msgstr "Add provider account"
 
-#: src/admin-ui/models.tsx:673
+#: src/admin-ui/models.tsx:840
 msgid "Add provider model route"
 msgstr "Add provider model route"
 
-#: src/admin-ui/models.tsx:807
+#: src/admin-ui/models.tsx:857
 msgid "Add route"
 msgstr "Add route"
 
-#: src/admin-ui/models.tsx:95
+#: src/admin-ui/models.tsx:104
 msgid "Add Route"
 msgstr "Add Route"
 
-#: src/App.tsx:299
+#: src/App.tsx:300
 msgid "Admin"
 msgstr "Admin"
 
@@ -273,15 +273,15 @@ msgstr "Admin"
 msgid "Admin API"
 msgstr "Admin API"
 
-#: src/App.tsx:186
+#: src/App.tsx:187
 msgid "Admin sign in"
 msgstr "Admin sign in"
 
-#: src/admin-ui/models.tsx:627
+#: src/admin-ui/models.tsx:792
 msgid "Advertise when routed"
 msgstr "Advertise when routed"
 
-#: src/admin-ui/models.tsx:119
+#: src/admin-ui/models.tsx:128
 msgid "all"
 msgstr "all"
 
@@ -295,11 +295,11 @@ msgstr "All"
 msgid "All services"
 msgstr "All services"
 
-#: src/admin-ui/use-admin-workspace.ts:270
+#: src/admin-ui/use-admin-workspace.ts:289
 msgid "Allow popups to sign in with Antigravity"
 msgstr "Allow popups to sign in with Antigravity"
 
-#: src/admin-ui/client-setup.tsx:260
+#: src/admin-ui/client-setup.tsx:292
 msgid "Anthropic base"
 msgstr "Anthropic base"
 
@@ -307,11 +307,11 @@ msgstr "Anthropic base"
 msgid "Anthropic Messages"
 msgstr "Anthropic Messages"
 
-#: src/admin-ui/use-admin-workspace.ts:133
+#: src/admin-ui/use-admin-workspace.ts:163
 msgid "Antigravity account connected"
 msgstr "Antigravity account connected"
 
-#: src/admin-ui/use-admin-workspace.ts:136
+#: src/admin-ui/use-admin-workspace.ts:166
 msgid "Antigravity sign-in failed"
 msgstr "Antigravity sign-in failed"
 
@@ -321,15 +321,15 @@ msgstr "Antigravity sign-in failed"
 msgid "API Key"
 msgstr "API Key"
 
-#: src/admin-ui/use-admin-workspace.ts:370
+#: src/admin-ui/use-admin-workspace.ts:377
 msgid "API key activated"
 msgstr "API key activated"
 
-#: src/admin-ui/use-admin-workspace.ts:187
+#: src/admin-ui/use-admin-workspace.ts:217
 msgid "API key created"
 msgstr "API key created"
 
-#: src/admin-ui/use-admin-workspace.ts:412
+#: src/admin-ui/use-admin-workspace.ts:429
 msgid "API key deleted"
 msgstr "API key deleted"
 
@@ -337,11 +337,11 @@ msgstr "API key deleted"
 msgid "API key not found"
 msgstr "API key not found"
 
-#: src/admin-ui/use-admin-workspace.ts:370
+#: src/admin-ui/use-admin-workspace.ts:377
 msgid "API key paused"
 msgstr "API key paused"
 
-#: src/App.tsx:454
+#: src/App.tsx:456
 msgid "API key secret"
 msgstr "API key secret"
 
@@ -355,20 +355,20 @@ msgstr "API Keys"
 msgid "Appearance"
 msgstr "Appearance"
 
-#: src/admin-ui/accounts.tsx:568
-#: src/admin-ui/accounts.tsx:768
+#: src/admin-ui/accounts.tsx:626
+#: src/admin-ui/accounts.tsx:857
 msgid "Auth"
 msgstr "Auth"
 
-#: src/admin-ui/accounts.tsx:964
+#: src/admin-ui/accounts.tsx:1073
 msgid "Auth mode"
 msgstr "Auth mode"
 
-#: src/admin-ui/helpers.tsx:400
+#: src/admin-ui/helpers.tsx:402
 msgid "available"
 msgstr "available"
 
-#: src/admin-ui/helpers.tsx:419
+#: src/admin-ui/helpers.tsx:421
 msgid "Available"
 msgstr "Available"
 
@@ -376,8 +376,8 @@ msgstr "Available"
 msgid "Back to API keys"
 msgstr "Back to API keys"
 
-#: src/admin-ui/models.tsx:320
-#: src/admin-ui/models.tsx:469
+#: src/admin-ui/models.tsx:355
+#: src/admin-ui/models.tsx:531
 msgid "Back to model catalog"
 msgstr "Back to model catalog"
 
@@ -385,7 +385,7 @@ msgstr "Back to model catalog"
 msgid "Back to overview"
 msgstr "Back to overview"
 
-#: src/admin-ui/accounts.tsx:347
+#: src/admin-ui/accounts.tsx:371
 msgid "Back to provider accounts"
 msgstr "Back to provider accounts"
 
@@ -393,33 +393,33 @@ msgstr "Back to provider accounts"
 msgid "Back to request log"
 msgstr "Back to request log"
 
-#: src/admin-ui/models.tsx:773
+#: src/admin-ui/models.tsx:980
 msgid "Backup"
 msgstr "Backup"
 
 #. placeholder {0}: credits.balance
-#: src/admin-ui/helpers.tsx:416
+#: src/admin-ui/helpers.tsx:418
 msgid "Balance {0}"
 msgstr "Balance {0}"
 
-#: src/admin-ui/accounts.tsx:136
-#: src/admin-ui/accounts.tsx:998
+#: src/admin-ui/accounts.tsx:147
+#: src/admin-ui/accounts.tsx:1107
 msgid "Base URL"
 msgstr "Base URL"
 
-#: src/admin-ui/models.tsx:674
+#: src/admin-ui/models.tsx:843
 msgid "Bind a public model to an upstream provider model."
 msgstr "Bind a public model to an upstream provider model."
 
-#: src/admin-ui/models.tsx:511
+#: src/admin-ui/models.tsx:625
 msgid "Binding details"
 msgstr "Binding details"
 
-#: src/admin-ui/models.tsx:393
+#: src/admin-ui/models.tsx:441
 msgid "Bindings that make this Catalog Model reachable."
 msgstr "Bindings that make this Catalog Model reachable."
 
-#: src/admin-ui/client-setup.tsx:372
+#: src/admin-ui/client-setup.tsx:453
 msgid "Binds each model to the AI SDK matching its configured OpenAI route."
 msgstr "Binds each model to the AI SDK matching its configured OpenAI route."
 
@@ -427,8 +427,8 @@ msgstr "Binds each model to the AI SDK matching its configured OpenAI route."
 msgid "blocked"
 msgstr "blocked"
 
-#: src/admin-ui/logs.tsx:188
-#: src/admin-ui/logs.tsx:288
+#: src/admin-ui/logs.tsx:190
+#: src/admin-ui/logs.tsx:290
 msgid "Cache hit"
 msgstr "Cache hit"
 
@@ -436,42 +436,42 @@ msgstr "Cache hit"
 msgid "Cache hit rate"
 msgstr "Cache hit rate"
 
-#: src/admin-ui/models.tsx:356
+#: src/admin-ui/models.tsx:396
 msgid "Catalog details"
 msgstr "Catalog details"
 
 #: src/admin-routes.tsx:14
-#: src/admin-ui/accounts.tsx:457
-#: src/admin-ui/models.tsx:344
-#: src/admin-ui/models.tsx:517
+#: src/admin-ui/accounts.tsx:496
+#: src/admin-ui/models.tsx:382
+#: src/admin-ui/models.tsx:653
 msgid "Catalog Model"
 msgstr "Catalog Model"
 
-#: src/admin-ui/accounts.tsx:443
+#: src/admin-ui/accounts.tsx:481
 msgid "Catalog Model bindings that use this Provider Account."
 msgstr "Catalog Model bindings that use this Provider Account."
 
-#: src/admin-ui/models.tsx:317
+#: src/admin-ui/models.tsx:352
 msgid "Catalog Model not found"
 msgstr "Catalog Model not found"
 
-#: src/admin-ui/client-setup.tsx:262
+#: src/admin-ui/client-setup.tsx:294
 msgid "Catalog models"
 msgstr "Catalog models"
 
-#: src/admin-ui/client-setup.tsx:306
+#: src/admin-ui/client-setup.tsx:340
 msgid "Chat or Responses"
 msgstr "Chat or Responses"
 
-#: src/admin-ui/client-setup.tsx:263
+#: src/admin-ui/client-setup.tsx:295
 msgid "Chat routed"
 msgstr "Chat routed"
 
-#: src/admin-ui/client-setup.tsx:315
+#: src/admin-ui/client-setup.tsx:349
 msgid "Chat, Responses, or Messages"
 msgstr "Chat, Responses, or Messages"
 
-#: src/admin-ui/client-setup.tsx:361
+#: src/admin-ui/client-setup.tsx:442
 msgid "Claude Code environment"
 msgstr "Claude Code environment"
 
@@ -487,16 +487,16 @@ msgstr "Client credentials, limits, and service permissions."
 msgid "Client key"
 msgstr "Client key"
 
-#: src/admin-ui/client-setup.tsx:245
+#: src/admin-ui/client-setup.tsx:276
 msgid "Client keys should start with tokentoxication-."
 msgstr "Client keys should start with tokentoxication-."
 
-#: src/App.tsx:483
+#: src/App.tsx:485
 msgid "Client setup"
 msgstr "Client setup"
 
 #: src/admin-routes.tsx:16
-#: src/admin-ui/client-setup.tsx:225
+#: src/admin-ui/client-setup.tsx:250
 msgid "Client Setup"
 msgstr "Client Setup"
 
@@ -506,21 +506,21 @@ msgstr "Client Setup"
 msgid "Close"
 msgstr "Close"
 
-#: src/admin-ui/accounts.tsx:750
+#: src/admin-ui/accounts.tsx:834
 msgid "Codex account"
 msgstr "Codex account"
 
-#: src/admin-ui/accounts.tsx:995
+#: src/admin-ui/accounts.tsx:1104
 msgid "Codex account API base"
 msgstr "Codex account API base"
 
-#: src/admin-ui/client-setup.tsx:345
+#: src/admin-ui/client-setup.tsx:426
 msgid "Codex default configuration"
 msgstr "Codex default configuration"
 
-#: src/admin-ui/accounts.tsx:167
-#: src/admin-ui/accounts.tsx:173
-#: src/admin-ui/accounts.tsx:271
+#: src/admin-ui/accounts.tsx:185
+#: src/admin-ui/accounts.tsx:192
+#: src/admin-ui/accounts.tsx:295
 msgid "Codex quota"
 msgstr "Codex quota"
 
@@ -528,7 +528,7 @@ msgstr "Codex quota"
 msgid "Codex Responses"
 msgstr "Codex Responses"
 
-#: src/admin-ui/client-setup.tsx:335
+#: src/admin-ui/client-setup.tsx:416
 msgid "Codex static model catalog"
 msgstr "Codex static model catalog"
 
@@ -548,31 +548,31 @@ msgstr "Concurrency"
 msgid "Concurrency limit"
 msgstr "Concurrency limit"
 
-#: src/admin-ui/helpers.tsx:442
+#: src/admin-ui/helpers.tsx:444
 msgid "Configured"
 msgstr "Configured"
 
-#: src/admin-ui/accounts.tsx:983
+#: src/admin-ui/accounts.tsx:1092
 msgid "Configured in Model Catalog"
 msgstr "Configured in Model Catalog"
 
-#: src/admin-ui/accounts.tsx:411
+#: src/admin-ui/accounts.tsx:442
 msgid "Configured upstream identity and scheduling state."
 msgstr "Configured upstream identity and scheduling state."
 
-#: src/admin-ui/accounts.tsx:410
+#: src/admin-ui/accounts.tsx:439
 msgid "Connection"
 msgstr "Connection"
 
-#: src/admin-ui/helpers.tsx:469
+#: src/admin-ui/helpers.tsx:471
 msgid "Copied"
 msgstr "Copied"
 
-#: src/admin-ui/client-setup.tsx:499
+#: src/admin-ui/client-setup.tsx:580
 msgid "Copy"
 msgstr "Copy"
 
-#: src/App.tsx:472
+#: src/App.tsx:474
 msgid "Copy secret"
 msgstr "Copy secret"
 
@@ -593,7 +593,7 @@ msgstr "Create API key"
 msgid "Create key"
 msgstr "Create key"
 
-#: src/admin-ui/accounts.tsx:432
+#: src/admin-ui/accounts.tsx:467
 #: src/admin-ui/api-keys.tsx:333
 msgid "Created"
 msgstr "Created"
@@ -602,7 +602,7 @@ msgstr "Created"
 msgid "Credential details"
 msgstr "Credential details"
 
-#: src/admin-ui/accounts.tsx:788
+#: src/admin-ui/accounts.tsx:883
 msgid "Credits"
 msgstr "Credits"
 
@@ -610,7 +610,7 @@ msgstr "Credits"
 msgid "Current service assumptions exposed by the frontend."
 msgstr "Current service assumptions exposed by the frontend."
 
-#: src/admin-ui/accounts.tsx:921
+#: src/admin-ui/accounts.tsx:1029
 msgid "Custom"
 msgstr "Custom"
 
@@ -626,21 +626,21 @@ msgstr "Daily USD"
 msgid "Dark"
 msgstr "Dark"
 
-#: src/App.tsx:327
+#: src/App.tsx:328
 msgid "Dashboard unavailable"
 msgstr "Dashboard unavailable"
 
-#: src/admin-ui/client-setup.tsx:410
+#: src/admin-ui/client-setup.tsx:491
 msgid "DeepSeek Harness provider"
 msgstr "DeepSeek Harness provider"
 
-#: src/admin-ui/models.tsx:612
+#: src/admin-ui/models.tsx:776
 msgid "Defaults to model ID"
 msgstr "Defaults to model ID"
 
-#: src/admin-ui/accounts.tsx:402
+#: src/admin-ui/accounts.tsx:430
 #: src/admin-ui/api-keys.tsx:261
-#: src/admin-ui/models.tsx:504
+#: src/admin-ui/models.tsx:617
 msgid "Delete"
 msgstr "Delete"
 
@@ -649,28 +649,28 @@ msgstr "Delete"
 msgid "Description"
 msgstr "Description"
 
-#: src/admin-ui/accounts.tsx:394
+#: src/admin-ui/accounts.tsx:422
 #: src/admin-ui/api-keys.tsx:257
-#: src/admin-ui/models.tsx:349
-#: src/admin-ui/models.tsx:500
+#: src/admin-ui/models.tsx:388
+#: src/admin-ui/models.tsx:613
 msgid "Disable"
 msgstr "Disable"
 
-#: src/admin-ui/accounts.tsx:214
-#: src/admin-ui/accounts.tsx:305
+#: src/admin-ui/accounts.tsx:238
+#: src/admin-ui/accounts.tsx:329
 msgid "Disabled"
 msgstr "Disabled"
 
-#: src/admin-ui/models.tsx:629
+#: src/admin-ui/models.tsx:795
 msgid "Disabled models are hidden from client model lists."
 msgstr "Disabled models are hidden from client model lists."
 
-#: src/admin-ui/models.tsx:361
-#: src/admin-ui/models.tsx:605
+#: src/admin-ui/models.tsx:404
+#: src/admin-ui/models.tsx:769
 msgid "Display name"
 msgstr "Display name"
 
-#: src/admin-ui/models.tsx:129
+#: src/admin-ui/models.tsx:141
 msgid "Display Name"
 msgstr "Display Name"
 
@@ -678,44 +678,40 @@ msgstr "Display Name"
 msgid "Each point counts completed requests in one interval. Hover or focus for details."
 msgstr "Each point counts completed requests in one interval. Hover or focus for details."
 
-#: src/admin-ui/accounts.tsx:398
+#: src/admin-ui/accounts.tsx:426
 msgid "Edit"
 msgstr "Edit"
 
-#: src/admin-ui/accounts.tsx:894
+#: src/admin-ui/accounts.tsx:1001
 msgid "Edit provider account"
 msgstr "Edit provider account"
 
-#: src/admin-ui/accounts.tsx:394
+#: src/admin-ui/accounts.tsx:422
 #: src/admin-ui/api-keys.tsx:257
-#: src/admin-ui/models.tsx:349
-#: src/admin-ui/models.tsx:500
+#: src/admin-ui/models.tsx:388
+#: src/admin-ui/models.tsx:613
 msgid "Enable"
 msgstr "Enable"
 
-#: src/admin-ui/accounts.tsx:214
-#: src/admin-ui/accounts.tsx:305
-#: src/admin-ui/models.tsx:791
+#: src/admin-ui/accounts.tsx:238
+#: src/admin-ui/accounts.tsx:329
+#: src/admin-ui/models.tsx:1013
 msgid "Enabled"
 msgstr "Enabled"
 
-#: src/admin-ui/models.tsx:793
-msgid "Enabled primary routes must be unique for a model and protocol."
-msgstr "Enabled primary routes must be unique for a model and protocol."
-
-#: src/App.tsx:276
+#: src/App.tsx:277
 msgid "Environment"
 msgstr "Environment"
 
-#: src/admin-ui/logs.tsx:453
+#: src/admin-ui/logs.tsx:455
 msgid "Error"
 msgstr "Error"
 
-#: src/admin-ui/models.tsx:90
+#: src/admin-ui/models.tsx:98
 msgid "Every exact model name clients may send."
 msgstr "Every exact model name clients may send."
 
-#: src/admin-ui/models.tsx:739
+#: src/admin-ui/models.tsx:943
 msgid "Exact upstream model ID"
 msgstr "Exact upstream model ID"
 
@@ -723,13 +719,13 @@ msgstr "Exact upstream model ID"
 msgid "Expires"
 msgstr "Expires"
 
-#: src/admin-ui/use-admin-workspace.ts:107
+#: src/admin-ui/use-admin-workspace.ts:137
 msgid "Failed to load dashboard"
 msgstr "Failed to load dashboard"
 
-#: src/admin-ui/models.tsx:130
-#: src/admin-ui/models.tsx:370
-#: src/admin-ui/models.tsx:615
+#: src/admin-ui/models.tsx:144
+#: src/admin-ui/models.tsx:413
+#: src/admin-ui/models.tsx:779
 msgid "Family"
 msgstr "Family"
 
@@ -737,11 +733,11 @@ msgstr "Family"
 msgid "Forwarded headers"
 msgstr "Forwarded headers"
 
-#: src/admin-ui/accounts.tsx:550
+#: src/admin-ui/accounts.tsx:600
 msgid "Gemini account"
 msgstr "Gemini account"
 
-#: src/admin-ui/accounts.tsx:997
+#: src/admin-ui/accounts.tsx:1106
 msgid "Gemini endpoint base"
 msgstr "Gemini endpoint base"
 
@@ -749,11 +745,11 @@ msgstr "Gemini endpoint base"
 msgid "Gemini GenerateContent"
 msgstr "Gemini GenerateContent"
 
-#: src/admin-ui/client-setup.tsx:227
+#: src/admin-ui/client-setup.tsx:253
 msgid "Generate copy-paste configuration for local AI coding clients."
 msgstr "Generate copy-paste configuration for local AI coding clients."
 
-#: src/admin-ui/accounts.tsx:683
+#: src/admin-ui/accounts.tsx:767
 msgid "Google did not return models for this credential."
 msgstr "Google did not return models for this credential."
 
@@ -773,7 +769,7 @@ msgstr "healthy"
 msgid "Healthy accounts"
 msgstr "Healthy accounts"
 
-#: src/admin-ui/models.tsx:512
+#: src/admin-ui/models.tsx:628
 msgid "How this Catalog Model reaches its upstream model."
 msgstr "How this Catalog Model reaches its upstream model."
 
@@ -785,32 +781,32 @@ msgstr "Intervals align to local {intervalMinutes}-minute boundaries. The rightm
 msgid "Issue a client key with optional routing limits."
 msgstr "Issue a client key with optional routing limits."
 
-#: src/components/locale-toggle.tsx:34
+#: src/components/locale-toggle.tsx:33
 msgid "Language"
 msgstr "Language"
 
 #. placeholder {0}: activeLocale.label
-#: src/components/locale-toggle.tsx:27
+#: src/components/locale-toggle.tsx:26
 msgid "Language: {0}"
 msgstr "Language: {0}"
 
-#: src/admin-ui/models.tsx:564
+#: src/admin-ui/models.tsx:722
 msgid "Last error"
 msgstr "Last error"
 
 #: src/admin-ui/api-keys.tsx:85
 #: src/admin-ui/api-keys.tsx:339
-#: src/admin-ui/models.tsx:559
+#: src/admin-ui/models.tsx:715
 msgid "Last used"
 msgstr "Last used"
 
 #: src/admin-ui/logs.tsx:76
-#: src/admin-ui/logs.tsx:182
-#: src/admin-ui/logs.tsx:282
+#: src/admin-ui/logs.tsx:184
+#: src/admin-ui/logs.tsx:284
 msgid "Latency"
 msgstr "Latency"
 
-#: src/admin-ui/accounts.tsx:1040
+#: src/admin-ui/accounts.tsx:1149
 msgid "Leave the credential blank to keep the current value."
 msgstr "Leave the credential blank to keep the current value."
 
@@ -818,20 +814,20 @@ msgstr "Leave the credential blank to keep the current value."
 msgid "Light"
 msgstr "Light"
 
-#: src/admin-ui/accounts.tsx:802
+#: src/admin-ui/accounts.tsx:898
 msgid "Limit"
 msgstr "Limit"
 
-#: src/admin-ui/helpers.tsx:393
+#: src/admin-ui/helpers.tsx:395
 msgid "limited"
 msgstr "limited"
 
-#: src/admin-ui/accounts.tsx:769
+#: src/admin-ui/accounts.tsx:860
 #: src/admin-ui/api-keys.tsx:82
 msgid "Limits"
 msgstr "Limits"
 
-#: src/App.tsx:281
+#: src/App.tsx:282
 msgid "Local"
 msgstr "Local"
 
@@ -839,84 +835,84 @@ msgstr "Local"
 msgid "Local time"
 msgstr "Local time"
 
-#: src/admin-ui/client-setup.tsx:346
+#: src/admin-ui/client-setup.tsx:427
 msgid "Merge this root-level TOML into ~/.codex/config.toml, then run codex without --profile. It does not overwrite other settings."
 msgstr "Merge this root-level TOML into ~/.codex/config.toml, then run codex without --profile. It does not overwrite other settings."
 
-#: src/admin-ui/client-setup.tsx:297
+#: src/admin-ui/client-setup.tsx:331
 msgid "Messages"
 msgstr "Messages"
 
-#: src/admin-ui/client-setup.tsx:265
+#: src/admin-ui/client-setup.tsx:297
 msgid "Messages routed"
 msgstr "Messages routed"
 
-#: src/admin-ui/accounts.tsx:647
-#: src/admin-ui/client-setup.tsx:506
-#: src/admin-ui/logs.tsx:173
-#: src/admin-ui/models.tsx:128
+#: src/admin-ui/accounts.tsx:722
+#: src/admin-ui/client-setup.tsx:587
+#: src/admin-ui/logs.tsx:175
+#: src/admin-ui/models.tsx:138
 msgid "Model"
 msgstr "Model"
 
-#: src/admin-ui/use-admin-workspace.ts:347
+#: src/admin-ui/use-admin-workspace.ts:362
 msgid "Model added"
 msgstr "Model added"
 
 #: src/admin-routes.tsx:13
-#: src/admin-ui/models.tsx:89
-#: src/admin-ui/models.tsx:341
-#: src/admin-ui/models.tsx:489
+#: src/admin-ui/models.tsx:95
+#: src/admin-ui/models.tsx:377
+#: src/admin-ui/models.tsx:599
 msgid "Model Catalog"
 msgstr "Model Catalog"
 
-#: src/admin-ui/use-admin-workspace.ts:376
+#: src/admin-ui/use-admin-workspace.ts:383
 msgid "Model disabled"
 msgstr "Model disabled"
 
-#: src/admin-ui/use-admin-workspace.ts:376
+#: src/admin-ui/use-admin-workspace.ts:383
 msgid "Model enabled"
 msgstr "Model enabled"
 
-#: src/admin-ui/accounts.tsx:595
+#: src/admin-ui/accounts.tsx:660
 msgid "Model group"
 msgstr "Model group"
 
-#: src/admin-ui/accounts.tsx:648
-#: src/admin-ui/models.tsx:596
+#: src/admin-ui/accounts.tsx:725
+#: src/admin-ui/models.tsx:760
 msgid "Model ID"
 msgstr "Model ID"
 
-#: src/admin-ui/use-admin-workspace.ts:385
+#: src/admin-ui/use-admin-workspace.ts:392
 msgid "Model updated"
 msgstr "Model updated"
 
-#: src/admin-ui/accounts.tsx:183
-#: src/admin-ui/accounts.tsx:189
-#: src/admin-ui/accounts.tsx:282
-#: src/admin-ui/accounts.tsx:384
+#: src/admin-ui/accounts.tsx:203
+#: src/admin-ui/accounts.tsx:210
+#: src/admin-ui/accounts.tsx:306
+#: src/admin-ui/accounts.tsx:412
 msgid "Models and quota"
 msgstr "Models and quota"
 
-#: src/admin-ui/accounts.tsx:551
+#: src/admin-ui/accounts.tsx:602
 msgid "Models and quota reported by this Google account."
 msgstr "Models and quota reported by this Google account."
 
-#: src/admin-ui/accounts.tsx:133
-#: src/admin-ui/accounts.tsx:926
+#: src/admin-ui/accounts.tsx:138
+#: src/admin-ui/accounts.tsx:1035
 #: src/admin-ui/api-keys.tsx:73
 #: src/admin-ui/api-keys.tsx:383
 msgid "Name"
 msgstr "Name"
 
-#: src/admin-ui/helpers.tsx:457
+#: src/admin-ui/helpers.tsx:459
 msgid "never"
 msgstr "never"
 
-#: src/admin-ui/client-setup.tsx:235
+#: src/admin-ui/client-setup.tsx:263
 msgid "Newly created keys are prefilled here once. Existing rows only show previews, so paste the original tokentoxication-* value before copying a setup block."
 msgstr "Newly created keys are prefilled here once. Existing rows only show previews, so paste the original tokentoxication-* value before copying a setup block."
 
-#: src/admin-ui/accounts.tsx:682
+#: src/admin-ui/accounts.tsx:766
 msgid "No account models returned"
 msgstr "No account models returned"
 
@@ -925,16 +921,16 @@ msgstr "No account models returned"
 msgid "No API keys"
 msgstr "No API keys"
 
-#: src/admin-ui/models.tsx:158
-#: src/admin-ui/models.tsx:170
+#: src/admin-ui/models.tsx:177
+#: src/admin-ui/models.tsx:189
 msgid "No catalog models"
 msgstr "No catalog models"
 
-#: src/admin-ui/client-setup.tsx:271
+#: src/admin-ui/client-setup.tsx:304
 msgid "No catalog models yet"
 msgstr "No catalog models yet"
 
-#: src/admin-ui/client-setup.tsx:354
+#: src/admin-ui/client-setup.tsx:435
 msgid "No Codex routes"
 msgstr "No Codex routes"
 
@@ -947,7 +943,7 @@ msgstr "No concurrent"
 msgid "No concurrent requests"
 msgstr "No concurrent requests"
 
-#: src/admin-ui/client-setup.tsx:418
+#: src/admin-ui/client-setup.tsx:499
 msgid "No DeepSeek Harness routes"
 msgstr "No DeepSeek Harness routes"
 
@@ -964,33 +960,33 @@ msgstr "no keys"
 msgid "No limit"
 msgstr "No limit"
 
-#: src/admin-ui/client-setup.tsx:383
+#: src/admin-ui/client-setup.tsx:464
 msgid "No opencode routes"
 msgstr "No opencode routes"
 
-#: src/admin-ui/client-setup.tsx:402
+#: src/admin-ui/client-setup.tsx:483
 msgid "No Pi routes"
 msgstr "No Pi routes"
 
-#: src/admin-ui/accounts.tsx:224
-#: src/admin-ui/accounts.tsx:236
+#: src/admin-ui/accounts.tsx:248
+#: src/admin-ui/accounts.tsx:260
 #: src/admin-ui/dashboard.tsx:120
 msgid "No provider accounts"
 msgstr "No provider accounts"
 
-#: src/admin-ui/accounts.tsx:449
-#: src/admin-ui/models.tsx:274
-#: src/admin-ui/models.tsx:398
+#: src/admin-ui/accounts.tsx:487
+#: src/admin-ui/models.tsx:309
+#: src/admin-ui/models.tsx:447
 msgid "No provider routes"
 msgstr "No provider routes"
 
-#: src/admin-ui/accounts.tsx:845
+#: src/admin-ui/accounts.tsx:952
 msgid "No quota windows returned"
 msgstr "No quota windows returned"
 
-#: src/admin-ui/logs.tsx:255
-#: src/admin-ui/logs.tsx:329
-#: src/admin-ui/logs.tsx:341
+#: src/admin-ui/logs.tsx:257
+#: src/admin-ui/logs.tsx:331
+#: src/admin-ui/logs.tsx:343
 msgid "No relay traffic"
 msgstr "No relay traffic"
 
@@ -1016,7 +1012,7 @@ msgstr "No stripped params"
 msgid "non-stream"
 msgstr "non-stream"
 
-#: src/admin-ui/helpers.tsx:422
+#: src/admin-ui/helpers.tsx:424
 msgid "None"
 msgstr "None"
 
@@ -1024,12 +1020,12 @@ msgstr "None"
 msgid "Not found"
 msgstr "Not found"
 
-#: src/admin-ui/client-setup.tsx:457
+#: src/admin-ui/client-setup.tsx:538
 msgid "not routed"
 msgstr "not routed"
 
-#: src/admin-ui/client-setup.tsx:348
-#: src/admin-ui/client-setup.tsx:506
+#: src/admin-ui/client-setup.tsx:429
+#: src/admin-ui/client-setup.tsx:587
 msgid "not set"
 msgstr "not set"
 
@@ -1037,7 +1033,7 @@ msgstr "not set"
 msgid "Now"
 msgstr "Now"
 
-#: src/admin-ui/client-setup.tsx:259
+#: src/admin-ui/client-setup.tsx:291
 msgid "OpenAI base"
 msgstr "OpenAI base"
 
@@ -1049,7 +1045,7 @@ msgstr "OpenAI Chat"
 msgid "OpenAI-compatible only"
 msgstr "OpenAI-compatible only"
 
-#: src/admin-ui/client-setup.tsx:371
+#: src/admin-ui/client-setup.tsx:452
 msgid "opencode project config"
 msgstr "opencode project config"
 
@@ -1061,16 +1057,16 @@ msgstr "Overview"
 msgid "Page not found"
 msgstr "Page not found"
 
-#: src/App.tsx:207
+#: src/App.tsx:208
 msgid "Password"
 msgstr "Password"
 
-#: src/admin-ui/accounts.tsx:888
+#: src/admin-ui/accounts.tsx:995
 msgid "Paste the value from tokens.refresh_token or openai.refresh"
 msgstr "Paste the value from tokens.refresh_token or openai.refresh"
 
-#: src/admin-ui/logs.tsx:170
-#: src/admin-ui/logs.tsx:423
+#: src/admin-ui/logs.tsx:172
+#: src/admin-ui/logs.tsx:425
 msgid "Path"
 msgstr "Path"
 
@@ -1094,24 +1090,24 @@ msgstr "Peak / {intervalMinutes} min"
 msgid "Permissions"
 msgstr "Permissions"
 
-#: src/admin-ui/client-setup.tsx:391
+#: src/admin-ui/client-setup.tsx:472
 msgid "Pi custom provider"
 msgstr "Pi custom provider"
 
-#: src/admin-ui/accounts.tsx:767
+#: src/admin-ui/accounts.tsx:855
 msgid "Plan"
 msgstr "Plan"
 
-#: src/admin-ui/client-setup.tsx:362
+#: src/admin-ui/client-setup.tsx:443
 msgid "Points Claude Code at the Anthropic Messages namespace."
 msgstr "Points Claude Code at the Anthropic Messages namespace."
 
-#: src/admin-ui/models.tsx:222
-#: src/admin-ui/models.tsx:555
+#: src/admin-ui/models.tsx:254
+#: src/admin-ui/models.tsx:709
 msgid "Policy"
 msgstr "Policy"
 
-#: src/admin-ui/accounts.tsx:902
+#: src/admin-ui/accounts.tsx:1009
 msgid "Preset"
 msgstr "Preset"
 
@@ -1123,94 +1119,89 @@ msgstr "Preview"
 msgid "primary"
 msgstr "primary"
 
-#: src/admin-ui/accounts.tsx:715
-#: src/admin-ui/models.tsx:772
+#: src/admin-ui/accounts.tsx:799
+#: src/admin-ui/models.tsx:977
 msgid "Primary"
 msgstr "Primary"
 
-#: src/admin-ui/models.tsx:210
+#: src/admin-ui/models.tsx:231
 msgid "Primary and backup bindings from public models to upstream models."
 msgstr "Primary and backup bindings from public models to upstream models."
 
-#: src/admin-ui/accounts.tsx:424
-#: src/admin-ui/accounts.tsx:1048
-msgid "Priority"
-msgstr "Priority"
-
-#: src/admin-ui/accounts.tsx:567
+#: src/admin-ui/accounts.tsx:622
 msgid "Project"
 msgstr "Project"
 
-#: src/admin-ui/accounts.tsx:135
-#: src/admin-ui/accounts.tsx:420
-#: src/admin-ui/accounts.tsx:944
-#: src/admin-ui/models.tsx:220
-#: src/admin-ui/models.tsx:543
-#: src/admin-ui/models.tsx:744
+#: src/admin-ui/accounts.tsx:144
+#: src/admin-ui/accounts.tsx:455
+#: src/admin-ui/accounts.tsx:1053
+#: src/admin-ui/models.tsx:248
+#: src/admin-ui/models.tsx:685
+#: src/admin-ui/models.tsx:948
 msgid "Protocol"
 msgstr "Protocol"
 
-#: src/admin-ui/accounts.tsx:134
-#: src/admin-ui/accounts.tsx:416
-#: src/admin-ui/accounts.tsx:935
+#: src/admin-ui/accounts.tsx:141
+#: src/admin-ui/accounts.tsx:449
+#: src/admin-ui/accounts.tsx:1044
 msgid "Provider"
 msgstr "Provider"
 
-#: src/admin-ui/models.tsx:705
+#: src/admin-ui/models.tsx:909
 msgid "Provider account"
 msgstr "Provider account"
 
 #: src/admin-routes.tsx:12
-#: src/admin-ui/accounts.tsx:369
+#: src/admin-ui/accounts.tsx:396
 #: src/admin-ui/logs.tsx:102
-#: src/admin-ui/models.tsx:219
-#: src/admin-ui/models.tsx:407
-#: src/admin-ui/models.tsx:528
+#: src/admin-ui/models.tsx:245
+#: src/admin-ui/models.tsx:459
+#: src/admin-ui/models.tsx:666
 msgid "Provider Account"
 msgstr "Provider Account"
 
-#: src/admin-ui/use-admin-workspace.ts:249
+#: src/admin-ui/use-admin-workspace.ts:276
 msgid "Provider account created"
 msgstr "Provider account created"
 
-#: src/admin-ui/use-admin-workspace.ts:438
+#: src/admin-ui/use-admin-workspace.ts:455
 msgid "Provider account deleted"
 msgstr "Provider account deleted"
 
-#: src/admin-ui/accounts.tsx:344
+#: src/admin-ui/accounts.tsx:368
 msgid "Provider account not found"
 msgstr "Provider account not found"
 
-#: src/admin-ui/use-admin-workspace.ts:237
+#: src/admin-ui/use-admin-workspace.ts:265
 msgid "Provider account updated"
 msgstr "Provider account updated"
 
 #: src/admin-routes.tsx:11
-#: src/admin-ui/accounts.tsx:120
-#: src/admin-ui/accounts.tsx:366
+#: src/admin-ui/accounts.tsx:121
+#: src/admin-ui/accounts.tsx:391
 msgid "Provider Accounts"
 msgstr "Provider Accounts"
 
-#: src/admin-ui/use-admin-workspace.ts:419
+#: src/admin-ui/use-admin-workspace.ts:436
 msgid "Provider activated"
 msgstr "Provider activated"
 
 #: src/admin-routes.tsx:15
-#: src/admin-ui/models.tsx:492
+#: src/admin-ui/models.tsx:604
 msgid "Provider Model Route"
 msgstr "Provider Model Route"
 
-#: src/admin-ui/models.tsx:466
+#: src/admin-ui/models.tsx:528
 msgid "Provider Model Route not found"
 msgstr "Provider Model Route not found"
 
-#: src/admin-ui/accounts.tsx:441
-#: src/admin-ui/models.tsx:208
-#: src/admin-ui/models.tsx:392
+#: src/admin-ui/accounts.tsx:478
+#: src/admin-ui/models.tsx:228
+#: src/admin-ui/models.tsx:438
 msgid "Provider Model Routes"
 msgstr "Provider Model Routes"
 
-#: src/admin-ui/use-admin-workspace.ts:419
+#: src/admin-ui/use-admin-workspace.ts:436
 msgid "Provider paused"
 msgstr "Provider paused"
 
@@ -1218,43 +1209,43 @@ msgstr "Provider paused"
 msgid "Provider pool"
 msgstr "Provider pool"
 
-#: src/admin-ui/use-admin-workspace.ts:364
+#: src/admin-ui/use-admin-workspace.ts:371
 msgid "Provider route added"
 msgstr "Provider route added"
 
-#: src/admin-ui/use-admin-workspace.ts:401
+#: src/admin-ui/use-admin-workspace.ts:418
 msgid "Provider route deleted"
 msgstr "Provider route deleted"
 
-#: src/admin-ui/use-admin-workspace.ts:403
+#: src/admin-ui/use-admin-workspace.ts:409
 msgid "Provider route updated"
 msgstr "Provider route updated"
 
-#: src/admin-ui/models.tsx:677
+#: src/admin-ui/models.tsx:881
 msgid "Public model"
 msgstr "Public model"
 
-#: src/admin-ui/models.tsx:217
+#: src/admin-ui/models.tsx:239
 msgid "Public Model"
 msgstr "Public Model"
 
-#: src/admin-ui/models.tsx:357
+#: src/admin-ui/models.tsx:399
 msgid "Public model identity and client-facing metadata."
 msgstr "Public model identity and client-facing metadata."
 
-#: src/admin-ui/accounts.tsx:378
+#: src/admin-ui/accounts.tsx:406
 msgid "Quota"
 msgstr "Quota"
 
-#: src/admin-ui/accounts.tsx:570
+#: src/admin-ui/accounts.tsx:630
 msgid "Quota source"
 msgstr "Quota source"
 
-#: src/admin-ui/accounts.tsx:582
+#: src/admin-ui/accounts.tsx:643
 msgid "Quota summary unavailable"
 msgstr "Quota summary unavailable"
 
-#: src/admin-ui/accounts.tsx:779
+#: src/admin-ui/accounts.tsx:873
 msgid "Quota unavailable"
 msgstr "Quota unavailable"
 
@@ -1262,11 +1253,11 @@ msgstr "Quota unavailable"
 msgid "Rate limit"
 msgstr "Rate limit"
 
-#: src/admin-ui/accounts.tsx:884
+#: src/admin-ui/accounts.tsx:991
 msgid "Raw refresh token"
 msgstr "Raw refresh token"
 
-#: src/admin-ui/helpers.tsx:435
+#: src/admin-ui/helpers.tsx:437
 msgid "Reached"
 msgstr "Reached"
 
@@ -1274,45 +1265,45 @@ msgstr "Reached"
 msgid "Recent requests"
 msgstr "Recent requests"
 
-#: src/admin-ui/accounts.tsx:390
+#: src/admin-ui/accounts.tsx:418
 msgid "Reconnect"
 msgstr "Reconnect"
 
-#: src/admin-ui/accounts.tsx:199
-#: src/admin-ui/accounts.tsx:205
-#: src/admin-ui/accounts.tsx:293
+#: src/admin-ui/accounts.tsx:221
+#: src/admin-ui/accounts.tsx:228
+#: src/admin-ui/accounts.tsx:317
 msgid "Reconnect Antigravity"
 msgstr "Reconnect Antigravity"
 
-#: src/App.tsx:293
+#: src/App.tsx:294
 msgid "Refresh"
 msgstr "Refresh"
 
-#: src/App.tsx:328
+#: src/App.tsx:329
 msgid "Refresh the admin data to load the overview."
 msgstr "Refresh the admin data to load the overview."
 
-#: src/admin-ui/models.tsx:593
+#: src/admin-ui/models.tsx:756
 msgid "Register an exact public model name clients may send."
 msgstr "Register an exact public model name clients may send."
 
-#: src/admin-ui/accounts.tsx:898
+#: src/admin-ui/accounts.tsx:1005
 msgid "Register an upstream credential for relay scheduling."
 msgstr "Register an upstream credential for relay scheduling."
 
-#: src/admin-ui/client-setup.tsx:248
+#: src/admin-ui/client-setup.tsx:280
 msgid "Relay API key"
 msgstr "Relay API key"
 
-#: src/App.tsx:244
+#: src/App.tsx:245
 msgid "Relay control plane"
 msgstr "Relay control plane"
 
-#: src/admin-ui/accounts.tsx:775
+#: src/admin-ui/accounts.tsx:867
 msgid "Relay endpoint"
 msgstr "Relay endpoint"
 
-#: src/App.tsx:180
+#: src/App.tsx:181
 msgid "Relay operations console"
 msgstr "Relay operations console"
 
@@ -1324,13 +1315,13 @@ msgstr "Relay result and accounting for this completed attempt."
 msgid "Relay status, latency, model, sanitized routing metadata, and token accounting."
 msgstr "Relay status, latency, model, sanitized routing metadata, and token accounting."
 
-#: src/admin-ui/accounts.tsx:597
-#: src/admin-ui/accounts.tsx:649
+#: src/admin-ui/accounts.tsx:666
+#: src/admin-ui/accounts.tsx:728
 msgid "Remaining"
 msgstr "Remaining"
 
-#: src/admin-ui/logs.tsx:176
-#: src/admin-ui/logs.tsx:276
+#: src/admin-ui/logs.tsx:178
+#: src/admin-ui/logs.tsx:278
 msgid "Request"
 msgstr "Request"
 
@@ -1363,9 +1354,9 @@ msgstr "Request Log not found"
 msgid "Request summary"
 msgstr "Request summary"
 
-#: src/admin-ui/logs.tsx:256
-#: src/admin-ui/logs.tsx:330
-#: src/admin-ui/logs.tsx:342
+#: src/admin-ui/logs.tsx:258
+#: src/admin-ui/logs.tsx:332
+#: src/admin-ui/logs.tsx:344
 msgid "Requests appear here after clients call the relay."
 msgstr "Requests appear here after clients call the relay."
 
@@ -1377,59 +1368,59 @@ msgstr "Requests per {intervalMinutes} minutes"
 msgid "Requests today"
 msgstr "Requests today"
 
-#: src/admin-ui/accounts.tsx:598
-#: src/admin-ui/accounts.tsx:650
-#: src/admin-ui/accounts.tsx:805
+#: src/admin-ui/accounts.tsx:669
+#: src/admin-ui/accounts.tsx:731
+#: src/admin-ui/accounts.tsx:907
 msgid "Reset"
 msgstr "Reset"
 
-#: src/admin-ui/accounts.tsx:771
+#: src/admin-ui/accounts.tsx:862
 msgid "Reset credits"
 msgstr "Reset credits"
 
-#: src/admin-ui/client-setup.tsx:288
+#: src/admin-ui/client-setup.tsx:322
 msgid "Responses"
 msgstr "Responses"
 
-#: src/admin-ui/client-setup.tsx:264
+#: src/admin-ui/client-setup.tsx:296
 msgid "Responses routed"
 msgstr "Responses routed"
 
-#: src/admin-ui/accounts.tsx:459
-#: src/admin-ui/models.tsx:221
-#: src/admin-ui/models.tsx:408
-#: src/admin-ui/models.tsx:547
-#: src/admin-ui/models.tsx:762
+#: src/admin-ui/accounts.tsx:502
+#: src/admin-ui/models.tsx:251
+#: src/admin-ui/models.tsx:462
+#: src/admin-ui/models.tsx:691
+#: src/admin-ui/models.tsx:966
 msgid "Role"
 msgstr "Role"
 
-#: src/admin-ui/client-setup.tsx:505
+#: src/admin-ui/client-setup.tsx:586
 msgid "Route"
 msgstr "Route"
 
-#: src/admin-ui/accounts.tsx:983
+#: src/admin-ui/accounts.tsx:1092
 msgid "Route binding"
 msgstr "Route binding"
 
-#: src/admin-ui/use-admin-workspace.ts:391
+#: src/admin-ui/use-admin-workspace.ts:398
 msgid "Route disabled"
 msgstr "Route disabled"
 
-#: src/admin-ui/use-admin-workspace.ts:391
+#: src/admin-ui/use-admin-workspace.ts:398
 msgid "Route enabled"
 msgstr "Route enabled"
 
-#: src/admin-ui/client-setup.tsx:457
+#: src/admin-ui/client-setup.tsx:538
 msgid "routed"
 msgstr "routed"
 
-#: src/admin-ui/accounts.tsx:137
-#: src/admin-ui/models.tsx:131
+#: src/admin-ui/accounts.tsx:150
+#: src/admin-ui/models.tsx:147
 msgid "Routes"
 msgstr "Routes"
 
 #: src/admin-ui/logs.tsx:121
-#: src/admin-ui/logs.tsx:405
+#: src/admin-ui/logs.tsx:407
 msgid "Routing details"
 msgstr "Routing details"
 
@@ -1441,41 +1432,43 @@ msgstr "Routing health and availability."
 msgid "RPM"
 msgstr "RPM"
 
-#: src/admin-ui/client-setup.tsx:336
+#: src/admin-ui/client-setup.tsx:417
 msgid "Run this once to snapshot every routed Responses model. Re-run it after changing the model catalog."
 msgstr "Run this once to snapshot every routed Responses model. Re-run it after changing the model catalog."
 
+#: src/admin-ui/models.tsx:648
 #: src/admin-ui/settings.tsx:14
 #: src/admin-ui/settings.tsx:24
 msgid "Runtime"
 msgstr "Runtime"
 
-#: src/admin-ui/accounts.tsx:1084
-#: src/admin-ui/models.tsx:384
+#: src/admin-ui/accounts.tsx:1185
+#: src/admin-ui/models.tsx:429
+#: src/admin-ui/models.tsx:642
 msgid "Save changes"
 msgstr "Save changes"
 
-#: src/admin-ui/accounts.tsx:1061
+#: src/admin-ui/accounts.tsx:1161
 msgid "Schedulable"
 msgstr "Schedulable"
 
-#: src/admin-ui/models.tsx:108
+#: src/admin-ui/models.tsx:117
 msgid "Search model, display name, or family"
 msgstr "Search model, display name, or family"
 
-#: src/admin-ui/accounts.tsx:716
+#: src/admin-ui/accounts.tsx:800
 msgid "Secondary"
 msgstr "Secondary"
 
-#: src/admin-ui/models.tsx:721
+#: src/admin-ui/models.tsx:925
 msgid "Select account"
 msgstr "Select account"
 
-#: src/admin-ui/models.tsx:694
+#: src/admin-ui/models.tsx:898
 msgid "Select model"
 msgstr "Select model"
 
-#: src/admin-ui/client-setup.tsx:411
+#: src/admin-ui/client-setup.tsx:492
 msgid "Set TOKEN_TOXICATION_API_KEY in the harness process environment, then merge these llm-pi-ai provider routes and the default model into ~/.dsh/settings.yaml. Keep existing keys; the harness applies changes on the next request."
 msgstr "Set TOKEN_TOXICATION_API_KEY in the harness process environment, then merge these llm-pi-ai provider routes and the default model into ~/.dsh/settings.yaml. Keep existing keys; the harness applies changes on the next request."
 
@@ -1483,46 +1476,46 @@ msgstr "Set TOKEN_TOXICATION_API_KEY in the harness process environment, then me
 msgid "Settings"
 msgstr "Settings"
 
-#: src/App.tsx:219
+#: src/App.tsx:220
 msgid "Sign in"
 msgstr "Sign in"
 
-#: src/admin-ui/accounts.tsx:1082
+#: src/admin-ui/accounts.tsx:1183
 msgid "Sign in with Antigravity"
 msgstr "Sign in with Antigravity"
 
-#: src/App.tsx:305
+#: src/App.tsx:306
 msgid "Sign out"
 msgstr "Sign out"
 
-#: src/admin-ui/use-admin-workspace.ts:154
+#: src/admin-ui/use-admin-workspace.ts:184
 msgid "Sign-in failed"
 msgstr "Sign-in failed"
 
-#: src/admin-ui/use-admin-workspace.ts:151
+#: src/admin-ui/use-admin-workspace.ts:181
 msgid "Signed in"
 msgstr "Signed in"
 
-#: src/admin-ui/use-admin-workspace.ts:167
+#: src/admin-ui/use-admin-workspace.ts:197
 msgid "Signed out"
 msgstr "Signed out"
 
-#: src/admin-ui/accounts.tsx:792
+#: src/admin-ui/accounts.tsx:887
 msgid "Spending limit"
 msgstr "Spending limit"
 
-#: src/admin-ui/accounts.tsx:138
-#: src/admin-ui/accounts.tsx:428
-#: src/admin-ui/accounts.tsx:460
-#: src/admin-ui/accounts.tsx:806
+#: src/admin-ui/accounts.tsx:153
+#: src/admin-ui/accounts.tsx:461
+#: src/admin-ui/accounts.tsx:508
+#: src/admin-ui/accounts.tsx:910
 #: src/admin-ui/api-keys.tsx:295
-#: src/admin-ui/logs.tsx:179
-#: src/admin-ui/logs.tsx:279
-#: src/admin-ui/models.tsx:132
-#: src/admin-ui/models.tsx:223
-#: src/admin-ui/models.tsx:380
-#: src/admin-ui/models.tsx:409
-#: src/admin-ui/models.tsx:551
+#: src/admin-ui/logs.tsx:181
+#: src/admin-ui/logs.tsx:281
+#: src/admin-ui/models.tsx:150
+#: src/admin-ui/models.tsx:257
+#: src/admin-ui/models.tsx:424
+#: src/admin-ui/models.tsx:468
+#: src/admin-ui/models.tsx:703
 msgid "Status"
 msgstr "Status"
 
@@ -1530,7 +1523,7 @@ msgstr "Status"
 msgid "Storage"
 msgstr "Storage"
 
-#: src/App.tsx:463
+#: src/App.tsx:465
 msgid "Store this value now"
 msgstr "Store this value now"
 
@@ -1546,11 +1539,11 @@ msgstr "stream"
 msgid "strip {params}"
 msgstr "strip {params}"
 
-#: src/admin-ui/models.tsx:779
+#: src/admin-ui/models.tsx:999
 msgid "Strip request params"
 msgstr "Strip request params"
 
-#: src/admin-ui/accounts.tsx:751
+#: src/admin-ui/accounts.tsx:836
 msgid "Subscription quota reported by this Codex account."
 msgstr "Subscription quota reported by this Codex account."
 
@@ -1558,7 +1551,7 @@ msgstr "Subscription quota reported by this Codex account."
 msgid "System"
 msgstr "System"
 
-#: src/admin-ui/accounts.tsx:846
+#: src/admin-ui/accounts.tsx:953
 msgid "The relay returned no Codex quota windows."
 msgstr "The relay returned no Codex quota windows."
 
@@ -1574,15 +1567,15 @@ msgstr "This admin location does not exist."
 msgid "This API key may have been deleted or the link is incomplete."
 msgstr "This API key may have been deleted or the link is incomplete."
 
-#: src/admin-ui/models.tsx:318
+#: src/admin-ui/models.tsx:353
 msgid "This Catalog Model may have been deleted or the link is incomplete."
 msgstr "This Catalog Model may have been deleted or the link is incomplete."
 
-#: src/admin-ui/accounts.tsx:345
+#: src/admin-ui/accounts.tsx:369
 msgid "This provider account may have been deleted or the link is incomplete."
 msgstr "This provider account may have been deleted or the link is incomplete."
 
-#: src/admin-ui/models.tsx:467
+#: src/admin-ui/models.tsx:529
 msgid "This Provider Model Route may have been deleted or the link is incomplete."
 msgstr "This Provider Model Route may have been deleted or the link is incomplete."
 
@@ -1590,23 +1583,23 @@ msgstr "This Provider Model Route may have been deleted or the link is incomplet
 msgid "This Request Log may have aged out of the current log collection or the link is incomplete."
 msgstr "This Request Log may have aged out of the current log collection or the link is incomplete."
 
-#: src/App.tsx:457
+#: src/App.tsx:459
 msgid "This secret is shown once."
 msgstr "This secret is shown once."
 
-#: src/admin-ui/accounts.tsx:569
+#: src/admin-ui/accounts.tsx:629
 msgid "Tier"
 msgstr "Tier"
 
-#: src/admin-ui/logs.tsx:167
-#: src/admin-ui/logs.tsx:417
+#: src/admin-ui/logs.tsx:169
+#: src/admin-ui/logs.tsx:419
 msgid "Time"
 msgstr "Time"
 
 #: src/admin-ui/logs.tsx:84
-#: src/admin-ui/logs.tsx:185
-#: src/admin-ui/logs.tsx:285
-#: src/admin-ui/logs.tsx:441
+#: src/admin-ui/logs.tsx:187
+#: src/admin-ui/logs.tsx:287
+#: src/admin-ui/logs.tsx:443
 msgid "Tokens"
 msgstr "Tokens"
 
@@ -1614,98 +1607,98 @@ msgstr "Tokens"
 msgid "Tokens today"
 msgstr "Tokens today"
 
-#: src/admin-ui/accounts.tsx:561
+#: src/admin-ui/accounts.tsx:614
 msgid "Unable to load account data"
 msgstr "Unable to load account data"
 
-#: src/admin-ui/use-admin-workspace.ts:328
+#: src/admin-ui/use-admin-workspace.ts:343
 msgid "Unable to load Codex quota"
 msgstr "Unable to load Codex quota"
 
-#: src/admin-ui/use-admin-workspace.ts:312
+#: src/admin-ui/use-admin-workspace.ts:327
 msgid "Unable to load Gemini account data"
 msgstr "Unable to load Gemini account data"
 
-#: src/admin-ui/accounts.tsx:761
+#: src/admin-ui/accounts.tsx:848
 msgid "Unable to load quota"
 msgstr "Unable to load quota"
 
-#: src/admin-ui/use-admin-workspace.ts:284
+#: src/admin-ui/use-admin-workspace.ts:301
 msgid "Unable to start Antigravity sign-in"
 msgstr "Unable to start Antigravity sign-in"
 
-#: src/admin-ui/client-setup.tsx:244
+#: src/admin-ui/client-setup.tsx:273
 msgid "Unexpected key prefix"
 msgstr "Unexpected key prefix"
 
-#: src/admin-ui/accounts.tsx:567
-#: src/admin-ui/accounts.tsx:568
-#: src/admin-ui/accounts.tsx:570
-#: src/admin-ui/accounts.tsx:624
-#: src/admin-ui/accounts.tsx:664
-#: src/admin-ui/accounts.tsx:767
-#: src/admin-ui/accounts.tsx:768
-#: src/admin-ui/accounts.tsx:826
+#: src/admin-ui/accounts.tsx:623
+#: src/admin-ui/accounts.tsx:627
+#: src/admin-ui/accounts.tsx:630
+#: src/admin-ui/accounts.tsx:697
+#: src/admin-ui/accounts.tsx:747
+#: src/admin-ui/accounts.tsx:855
+#: src/admin-ui/accounts.tsx:858
+#: src/admin-ui/accounts.tsx:932
 #: src/admin-ui/helpers.tsx:105
-#: src/admin-ui/helpers.tsx:337
 #: src/admin-ui/helpers.tsx:339
-#: src/admin-ui/helpers.tsx:359
-#: src/admin-ui/helpers.tsx:406
-#: src/admin-ui/helpers.tsx:424
-#: src/admin-ui/helpers.tsx:435
-#: src/admin-ui/helpers.tsx:447
+#: src/admin-ui/helpers.tsx:341
+#: src/admin-ui/helpers.tsx:361
+#: src/admin-ui/helpers.tsx:408
+#: src/admin-ui/helpers.tsx:426
+#: src/admin-ui/helpers.tsx:437
+#: src/admin-ui/helpers.tsx:449
 msgid "unknown"
 msgstr "unknown"
 
-#: src/admin-ui/helpers.tsx:452
+#: src/admin-ui/helpers.tsx:454
 msgid "Unknown"
 msgstr "Unknown"
 
-#: src/admin-ui/helpers.tsx:413
+#: src/admin-ui/helpers.tsx:415
 msgid "Unlimited"
 msgstr "Unlimited"
 
-#: src/admin-ui/accounts.tsx:724
+#: src/admin-ui/accounts.tsx:808
 msgid "Unreported"
 msgstr "Unreported"
 
 #. placeholder {0}: formatDate(route.cooldownUntil)
-#: src/admin-ui/models.tsx:263
+#: src/admin-ui/models.tsx:298
 msgid "until {0}"
 msgstr "until {0}"
 
-#: src/admin-ui/accounts.tsx:897
+#: src/admin-ui/accounts.tsx:1004
 msgid "Update routing details or replace the upstream credential."
 msgstr "Update routing details or replace the upstream credential."
 
-#: src/admin-ui/logs.tsx:432
+#: src/admin-ui/logs.tsx:434
 msgid "Upstream"
 msgstr "Upstream"
 
-#: src/admin-ui/accounts.tsx:884
+#: src/admin-ui/accounts.tsx:991
 msgid "Upstream API key"
 msgstr "Upstream API key"
 
-#: src/admin-ui/accounts.tsx:889
+#: src/admin-ui/accounts.tsx:996
 msgid "Upstream credential"
 msgstr "Upstream credential"
 
-#: src/admin-ui/accounts.tsx:121
+#: src/admin-ui/accounts.tsx:124
 msgid "Upstream credentials used by model routes."
 msgstr "Upstream credentials used by model routes."
 
-#: src/admin-ui/accounts.tsx:458
-#: src/admin-ui/models.tsx:218
-#: src/admin-ui/models.tsx:406
-#: src/admin-ui/models.tsx:539
+#: src/admin-ui/accounts.tsx:499
+#: src/admin-ui/models.tsx:242
+#: src/admin-ui/models.tsx:456
+#: src/admin-ui/models.tsx:679
 msgid "Upstream Model"
 msgstr "Upstream Model"
 
-#: src/admin-ui/models.tsx:732
+#: src/admin-ui/models.tsx:936
 msgid "Upstream model ID"
 msgstr "Upstream model ID"
 
-#: src/admin-ui/accounts.tsx:1045
+#: src/admin-ui/accounts.tsx:1154
 msgid "Upstream path"
 msgstr "Upstream path"
 
@@ -1713,32 +1706,43 @@ msgstr "Upstream path"
 msgid "usable client credentials"
 msgstr "usable client credentials"
 
-#: src/admin-ui/accounts.tsx:590
+#: src/admin-ui/accounts.tsx:653
 msgid "Usage windows"
 msgstr "Usage windows"
 
-#: src/admin-ui/client-setup.tsx:233
+#: src/admin-ui/client-setup.tsx:260
 msgid "Use a relay API key secret"
 msgstr "Use a relay API key secret"
 
-#: src/App.tsx:189
+#: src/App.tsx:190
 msgid "Use the credentials from your service environment."
 msgstr "Use the credentials from your service environment."
 
-#: src/admin-ui/accounts.tsx:1063
+#: src/admin-ui/accounts.tsx:1164
 msgid "Use this account for relay traffic"
 msgstr "Use this account for relay traffic"
 
-#: src/admin-ui/accounts.tsx:804
+#: src/admin-ui/accounts.tsx:904
 msgid "Used"
 msgstr "Used"
 
-#: src/App.tsx:196
+#: src/App.tsx:197
 msgid "Username"
 msgstr "Username"
 
-#: src/admin-ui/accounts.tsx:596
-#: src/admin-ui/accounts.tsx:803
+#: src/admin-ui/accounts.tsx:505
+#: src/admin-ui/models.tsx:465
+#: src/admin-ui/models.tsx:697
+#: src/admin-ui/models.tsx:988
+msgid "Weight"
+msgstr "Weight"
+
+#: src/admin-ui/models.tsx:1016
+msgid "Weight applies among healthy routes with the same role. Primary routes are preferred over backups."
+msgstr "Weight applies among healthy routes with the same role. Primary routes are preferred over backups."
+
+#: src/admin-ui/accounts.tsx:663
+#: src/admin-ui/accounts.tsx:901
 msgid "Window"
 msgstr "Window"
 
@@ -1746,6 +1750,6 @@ msgstr "Window"
 msgid "Window total"
 msgstr "Window total"
 
-#: src/admin-ui/client-setup.tsx:392
+#: src/admin-ui/client-setup.tsx:473
 msgid "Writes a complete Pi models.json file using the OpenAI Responses API. Back up any existing Pi configuration first."
 msgstr "Writes a complete Pi models.json file using the OpenAI Responses API. Back up any existing Pi configuration first."
