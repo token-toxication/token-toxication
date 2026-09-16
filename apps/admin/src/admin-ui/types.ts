@@ -1,4 +1,4 @@
-import type { CodexAccountQuotaWindow, ProviderAccount } from "../types";
+import type { CodexAccountQuotaWindow, ProviderAccount, ProviderModelRoute } from "../types";
 
 export type CreateKeyForm = {
   name: string;
@@ -120,3 +120,19 @@ export const emptyRouteForm: ProviderRouteForm = {
   enabled: true,
   stripParams: "",
 };
+
+export function routeFormFromRoute(route: ProviderModelRoute): ProviderRouteForm {
+  return {
+    publicModelId: route.publicModelId,
+    providerAccountId: route.providerAccountId,
+    upstreamModelId: route.upstreamModelId,
+    wireApi: route.wireApi,
+    role: route.role,
+    enabled: route.enabled,
+    stripParams: route.stripParams.join(", "),
+  };
+}
+
+export function providerRouteEditorKey(route: ProviderModelRoute) {
+  return `${route.id}:${JSON.stringify(routeFormFromRoute(route))}`;
+}

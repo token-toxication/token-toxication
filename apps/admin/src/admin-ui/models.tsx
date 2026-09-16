@@ -16,7 +16,12 @@ import {
   wireApiLabel,
 } from "./helpers";
 import { EmptyNotice, Field, MissingRecordView } from "./shared";
-import type { ModelCatalogForm, ProviderRouteForm } from "./types";
+import {
+  providerRouteEditorKey,
+  routeFormFromRoute,
+  type ModelCatalogForm,
+  type ProviderRouteForm,
+} from "./types";
 import type { ModelCatalogEntry, ProviderAccount, ProviderModelRoute } from "../types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -500,16 +505,17 @@ export function ProviderRouteDetailView({
   models,
   routes,
   onToggle,
+  onUpdate,
   onDelete,
 }: {
   accounts: readonly ProviderAccount[];
   models: readonly ModelCatalogEntry[];
   routes: readonly ProviderModelRoute[];
   onToggle: (route: ProviderModelRoute) => Promise<void>;
+  onUpdate: (route: ProviderModelRoute, form: ProviderRouteForm) => Promise<void>;
   onDelete: (route: ProviderModelRoute) => Promise<boolean>;
 }) {
   const { routeId } = useParams();
-  const navigate = useNavigate();
   const route = routes.find((item) => item.id === routeId);
 
   if (!route) {
@@ -523,13 +529,59 @@ export function ProviderRouteDetailView({
     );
   }
 
+  return (
+    <ProviderRouteEditor
+      key={providerRouteEditorKey(route)}
+      accounts={accounts}
+      models={models}
+      route={route}
+      onToggle={onToggle}
+      onUpdate={onUpdate}
+      onDelete={onDelete}
+    />
+  );
+}
+
+function ProviderRouteEditor({
+  accounts,
+  models,
+  route,
+  onToggle,
+  onUpdate,
+  onDelete,
+}: {
+  accounts: readonly ProviderAccount[];
+  models: readonly ModelCatalogEntry[];
+  route: ProviderModelRoute;
+  onToggle: (route: ProviderModelRoute) => Promise<void>;
+  onUpdate: (route: ProviderModelRoute, form: ProviderRouteForm) => Promise<void>;
+  onDelete: (route: ProviderModelRoute) => Promise<boolean>;
+}) {
+  const navigate = useNavigate();
+  const [draft, setDraft] = useState<ProviderRouteForm>(() => routeFormFromRoute(route));
   const selectedRoute = route;
   const model = models.find((item) => item.id === route.publicModelId);
   const account = accounts.find((item) => item.id === route.providerAccountId);
+  const initialForm = routeFormFromRoute(route);
+  const changed =
+    draft.publicModelId !== initialForm.publicModelId ||
+    draft.providerAccountId !== initialForm.providerAccountId ||
+    draft.upstreamModelId !== initialForm.upstreamModelId ||
+    draft.wireApi !== initialForm.wireApi ||
+    draft.role !== initialForm.role ||
+    draft.enabled !== initialForm.enabled ||
+    draft.stripParams !== initialForm.stripParams;
 
   async function handleDelete() {
     if (await onDelete(selectedRoute)) {
       void navigate(adminPaths.models());
+    }
+  }
+
+  async function handleSave(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (changed) {
+      await onUpdate(selectedRoute, draft);
     }
   }
 
@@ -571,79 +623,98 @@ export function ProviderRouteDetailView({
             <Trans>How this Catalog Model reaches its upstream model.</Trans>
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <dl className="grid gap-5 text-sm sm:grid-cols-2 xl:grid-cols-3">
-            <div>
-              <dt className="text-xs text-muted-foreground">
-                <Trans>Catalog Model</Trans>
-              </dt>
-              <dd className="mt-1">
-                <Link
-                  to={adminPaths.model(route.publicModelId)}
-                  className="font-mono text-xs underline-offset-4 hover:underline"
-                >
-                  {model?.id ?? route.publicModelId}
-                </Link>
-              </dd>
+        <CardContent className="flex flex-col gap-6">
+          <form className="flex flex-col gap-4" onSubmit={handleSave}>
+            <RouteFormFields
+              idPrefix="route-edit"
+              form={draft}
+              setForm={setDraft}
+              models={models}
+              accounts={accounts}
+            />
+            <div className="flex justify-end">
+              <Button type="submit" disabled={!changed}>
+                <Trans>Save changes</Trans>
+              </Button>
             </div>
-            <div>
-              <dt className="text-xs text-muted-foreground">
-                <Trans>Provider Account</Trans>
-              </dt>
-              <dd className="mt-1">
-                <Link
-                  to={adminPaths.account(route.providerAccountId)}
-                  className="underline-offset-4 hover:underline"
-                >
-                  {account?.name ?? route.providerAccountId}
-                </Link>
-              </dd>
+          </form>
+          <div className="border-t pt-5">
+            <div className="mb-4 text-sm font-medium">
+              <Trans>Runtime</Trans>
             </div>
-            <div>
-              <dt className="text-xs text-muted-foreground">
-                <Trans>Upstream Model</Trans>
-              </dt>
-              <dd className="mt-1 font-mono text-xs">{route.upstreamModelId}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-muted-foreground">
-                <Trans>Protocol</Trans>
-              </dt>
-              <dd className="mt-1">{wireApiLabel(route.wireApi)}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-muted-foreground">
-                <Trans>Role</Trans>
-              </dt>
-              <dd className="mt-1">{routeRoleBadge(route.role)}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-muted-foreground">
-                <Trans>Status</Trans>
-              </dt>
-              <dd className="mt-1">{statusBadge(route.status, route.enabled)}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-muted-foreground">
-                <Trans>Policy</Trans>
-              </dt>
-              <dd className="mt-1 text-xs text-muted-foreground">{formatRoutePolicy(route)}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-muted-foreground">
-                <Trans>Last used</Trans>
-              </dt>
-              <dd className="mt-1">{formatDate(route.lastUsedAt)}</dd>
-            </div>
-            {route.lastError ? (
-              <div className="sm:col-span-2 xl:col-span-3">
+            <dl className="grid gap-5 text-sm sm:grid-cols-2 xl:grid-cols-3">
+              <div>
                 <dt className="text-xs text-muted-foreground">
-                  <Trans>Last error</Trans>
+                  <Trans>Catalog Model</Trans>
                 </dt>
-                <dd className="mt-1 break-words text-destructive">{route.lastError}</dd>
+                <dd className="mt-1">
+                  <Link
+                    to={adminPaths.model(route.publicModelId)}
+                    className="font-mono text-xs underline-offset-4 hover:underline"
+                  >
+                    {model?.id ?? route.publicModelId}
+                  </Link>
+                </dd>
               </div>
-            ) : null}
-          </dl>
+              <div>
+                <dt className="text-xs text-muted-foreground">
+                  <Trans>Provider Account</Trans>
+                </dt>
+                <dd className="mt-1">
+                  <Link
+                    to={adminPaths.account(route.providerAccountId)}
+                    className="underline-offset-4 hover:underline"
+                  >
+                    {account?.name ?? route.providerAccountId}
+                  </Link>
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted-foreground">
+                  <Trans>Upstream Model</Trans>
+                </dt>
+                <dd className="mt-1 font-mono text-xs">{route.upstreamModelId}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted-foreground">
+                  <Trans>Protocol</Trans>
+                </dt>
+                <dd className="mt-1">{wireApiLabel(route.wireApi)}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted-foreground">
+                  <Trans>Role</Trans>
+                </dt>
+                <dd className="mt-1">{routeRoleBadge(route.role)}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted-foreground">
+                  <Trans>Status</Trans>
+                </dt>
+                <dd className="mt-1">{statusBadge(route.status, route.enabled)}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted-foreground">
+                  <Trans>Policy</Trans>
+                </dt>
+                <dd className="mt-1 text-xs text-muted-foreground">{formatRoutePolicy(route)}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted-foreground">
+                  <Trans>Last used</Trans>
+                </dt>
+                <dd className="mt-1">{formatDate(route.lastUsedAt)}</dd>
+              </div>
+              {route.lastError ? (
+                <div className="sm:col-span-2 xl:col-span-3">
+                  <dt className="text-xs text-muted-foreground">
+                    <Trans>Last error</Trans>
+                  </dt>
+                  <dd className="mt-1 break-words text-destructive">{route.lastError}</dd>
+                </div>
+              ) : null}
+            </dl>
+          </div>
         </CardContent>
       </Card>
     </div>
@@ -762,139 +833,13 @@ export function CreateRouteSheet({
           </SheetDescription>
         </SheetHeader>
         <form className="flex flex-col gap-4 px-4" onSubmit={onSubmit}>
-          <Field label={t`Public model`} htmlFor="route-public-model">
-            <Select
-              value={form.publicModelId || "__none"}
-              onValueChange={(value) =>
-                setForm((current) => ({
-                  ...current,
-                  publicModelId: value === "__none" ? "" : value,
-                  upstreamModelId: current.upstreamModelId || (value === "__none" ? "" : value),
-                }))
-              }
-            >
-              <SelectTrigger id="route-public-model">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  <SelectItem value="__none" disabled>
-                    <Trans>Select model</Trans>
-                  </SelectItem>
-                  {models.map((model) => (
-                    <SelectItem key={model.id} value={model.id}>
-                      {model.id}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field label={t`Provider account`} htmlFor="route-provider-account">
-            <Select
-              value={form.providerAccountId || "__none"}
-              onValueChange={(value) =>
-                setForm((current) => ({
-                  ...current,
-                  providerAccountId: value === "__none" ? "" : value,
-                }))
-              }
-            >
-              <SelectTrigger id="route-provider-account">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  <SelectItem value="__none" disabled>
-                    <Trans>Select account</Trans>
-                  </SelectItem>
-                  {accounts.map((account) => (
-                    <SelectItem key={account.id} value={account.id}>
-                      {account.name}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field label={t`Upstream model ID`} htmlFor="route-upstream-model">
-            <Input
-              id="route-upstream-model"
-              value={form.upstreamModelId}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, upstreamModelId: event.target.value }))
-              }
-              placeholder={t`Exact upstream model ID`}
-              required
-            />
-          </Field>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label={t`Protocol`} htmlFor="route-wire-api">
-              <Select
-                value={form.wireApi}
-                onValueChange={(value) => setForm((current) => ({ ...current, wireApi: value }))}
-              >
-                <SelectTrigger id="route-wire-api">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectItem value="anthropic-messages">Anthropic Messages</SelectItem>
-                    <SelectItem value="openai-responses">OpenAI Responses</SelectItem>
-                    <SelectItem value="openai-chat">OpenAI Chat</SelectItem>
-                    <SelectItem value="gemini-generate-content">Gemini GenerateContent</SelectItem>
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-            </Field>
-            <Field label={t`Role`} htmlFor="route-role">
-              <Select
-                value={form.role}
-                onValueChange={(value) => setForm((current) => ({ ...current, role: value }))}
-              >
-                <SelectTrigger id="route-role">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectItem value="primary">
-                      <Trans>Primary</Trans>
-                    </SelectItem>
-                    <SelectItem value="backup">
-                      <Trans>Backup</Trans>
-                    </SelectItem>
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-            </Field>
-          </div>
-          <Field label={t`Strip request params`} htmlFor="route-strip-params">
-            <Input
-              id="route-strip-params"
-              value={form.stripParams}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, stripParams: event.target.value }))
-              }
-              placeholder="temperature, top_p"
-            />
-          </Field>
-          <div className="flex items-center justify-between gap-3 rounded-md border p-3">
-            <div className="flex flex-col gap-1">
-              <Label htmlFor="route-enabled">
-                <Trans>Enabled</Trans>
-              </Label>
-              <span className="text-xs text-muted-foreground">
-                <Trans>Enabled primary routes must be unique for a model and protocol.</Trans>
-              </span>
-            </div>
-            <Switch
-              id="route-enabled"
-              checked={form.enabled}
-              onCheckedChange={(checked) =>
-                setForm((current) => ({ ...current, enabled: checked }))
-              }
-            />
-          </div>
+          <RouteFormFields
+            idPrefix="route"
+            form={form}
+            setForm={setForm}
+            models={models}
+            accounts={accounts}
+          />
           <SheetFooter>
             <Button type="submit">
               <RouteIcon data-icon="inline-start" />
@@ -904,5 +849,155 @@ export function CreateRouteSheet({
         </form>
       </SheetContent>
     </Sheet>
+  );
+}
+
+function RouteFormFields({
+  idPrefix,
+  form,
+  setForm,
+  models,
+  accounts,
+}: {
+  idPrefix: string;
+  form: ProviderRouteForm;
+  setForm: React.Dispatch<React.SetStateAction<ProviderRouteForm>>;
+  models: readonly ModelCatalogEntry[];
+  accounts: readonly ProviderAccount[];
+}) {
+  return (
+    <>
+      <Field label={t`Public model`} htmlFor={`${idPrefix}-public-model`}>
+        <Select
+          value={form.publicModelId || "__none"}
+          onValueChange={(value) =>
+            setForm((current) => ({
+              ...current,
+              publicModelId: value === "__none" ? "" : value,
+              upstreamModelId: current.upstreamModelId || (value === "__none" ? "" : value),
+            }))
+          }
+        >
+          <SelectTrigger id={`${idPrefix}-public-model`}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              <SelectItem value="__none" disabled>
+                <Trans>Select model</Trans>
+              </SelectItem>
+              {models.map((model) => (
+                <SelectItem key={model.id} value={model.id}>
+                  {model.id}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+      </Field>
+      <Field label={t`Provider account`} htmlFor={`${idPrefix}-provider-account`}>
+        <Select
+          value={form.providerAccountId || "__none"}
+          onValueChange={(value) =>
+            setForm((current) => ({
+              ...current,
+              providerAccountId: value === "__none" ? "" : value,
+            }))
+          }
+        >
+          <SelectTrigger id={`${idPrefix}-provider-account`}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              <SelectItem value="__none" disabled>
+                <Trans>Select account</Trans>
+              </SelectItem>
+              {accounts.map((account) => (
+                <SelectItem key={account.id} value={account.id}>
+                  {account.name}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+      </Field>
+      <Field label={t`Upstream model ID`} htmlFor={`${idPrefix}-upstream-model`}>
+        <Input
+          id={`${idPrefix}-upstream-model`}
+          value={form.upstreamModelId}
+          onChange={(event) =>
+            setForm((current) => ({ ...current, upstreamModelId: event.target.value }))
+          }
+          placeholder={t`Exact upstream model ID`}
+          required
+        />
+      </Field>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label={t`Protocol`} htmlFor={`${idPrefix}-wire-api`}>
+          <Select
+            value={form.wireApi}
+            onValueChange={(value) => setForm((current) => ({ ...current, wireApi: value }))}
+          >
+            <SelectTrigger id={`${idPrefix}-wire-api`}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectItem value="anthropic-messages">Anthropic Messages</SelectItem>
+                <SelectItem value="openai-responses">OpenAI Responses</SelectItem>
+                <SelectItem value="openai-chat">OpenAI Chat</SelectItem>
+                <SelectItem value="gemini-generate-content">Gemini GenerateContent</SelectItem>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </Field>
+        <Field label={t`Role`} htmlFor={`${idPrefix}-role`}>
+          <Select
+            value={form.role}
+            onValueChange={(value) => setForm((current) => ({ ...current, role: value }))}
+          >
+            <SelectTrigger id={`${idPrefix}-role`}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectItem value="primary">
+                  <Trans>Primary</Trans>
+                </SelectItem>
+                <SelectItem value="backup">
+                  <Trans>Backup</Trans>
+                </SelectItem>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </Field>
+      </div>
+      <Field label={t`Strip request params`} htmlFor={`${idPrefix}-strip-params`}>
+        <Input
+          id={`${idPrefix}-strip-params`}
+          value={form.stripParams}
+          onChange={(event) =>
+            setForm((current) => ({ ...current, stripParams: event.target.value }))
+          }
+          placeholder="temperature, top_p"
+        />
+      </Field>
+      <div className="flex items-center justify-between gap-3 rounded-md border p-3">
+        <div className="flex flex-col gap-1">
+          <Label htmlFor={`${idPrefix}-enabled`}>
+            <Trans>Enabled</Trans>
+          </Label>
+          <span className="text-xs text-muted-foreground">
+            <Trans>Enabled primary routes must be unique for a model and protocol.</Trans>
+          </span>
+        </div>
+        <Switch
+          id={`${idPrefix}-enabled`}
+          checked={form.enabled}
+          onCheckedChange={(checked) => setForm((current) => ({ ...current, enabled: checked }))}
+        />
+      </div>
+    </>
   );
 }

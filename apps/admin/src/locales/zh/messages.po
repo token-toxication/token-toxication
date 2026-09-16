@@ -1226,6 +1226,10 @@ msgstr "供应商路由已添加"
 msgid "Provider route deleted"
 msgstr "供应商路由已删除"
 
+#: src/admin-ui/use-admin-workspace.ts:403
+msgid "Provider route updated"
+msgstr "供应商路由已更新"
+
 #: src/admin-ui/models.tsx:677
 msgid "Public model"
 msgstr "公开模型"

@@ -1226,6 +1226,10 @@ msgstr "Provider route added"
 msgid "Provider route deleted"
 msgstr "Provider route deleted"
 
+#: src/admin-ui/use-admin-workspace.ts:403
+msgid "Provider route updated"
+msgstr "Provider route updated"
+
 #: src/admin-ui/models.tsx:677
 msgid "Public model"
 msgstr "Public model"

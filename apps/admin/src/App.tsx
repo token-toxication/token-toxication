@@ -156,6 +156,7 @@ function App() {
     toggleModel,
     updateModelDetails,
     toggleRoute,
+    updateRouteDetails,
     deleteRoute,
     deleteApiKey,
     toggleAccount,
@@ -389,6 +390,7 @@ function App() {
                         models={modelCatalog}
                         routes={modelRoutes}
                         onToggle={toggleRoute}
+                        onUpdate={updateRouteDetails}
                         onDelete={deleteRoute}
                       />
                     ),

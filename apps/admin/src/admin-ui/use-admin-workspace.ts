@@ -25,6 +25,7 @@ import {
 import type {
   ApiKey,
   CodexAccountQuotaResponse,
+  CreateProviderModelRouteRequest,
   Dashboard,
   GeminiAccountModelsResponse,
   GeminiAccountQuotaResponse,
@@ -34,7 +35,35 @@ import type {
   ProviderPreset,
   RequestLog,
   RoutableModelCatalogEntry,
+  UpdateProviderModelRouteRequest,
 } from "../types";
+
+export function providerRouteRequestFromForm(
+  form: ProviderRouteForm,
+): CreateProviderModelRouteRequest {
+  return {
+    publicModelId: form.publicModelId,
+    providerAccountId: form.providerAccountId,
+    upstreamModelId: form.upstreamModelId,
+    wireApi: form.wireApi,
+    role: form.role,
+    enabled: form.enabled,
+    stripParams: commaSeparatedValues(form.stripParams),
+  };
+}
+
+export async function updateProviderRouteAndRefresh(
+  updateProviderModelRoute: (
+    id: string,
+    payload: UpdateProviderModelRouteRequest,
+  ) => Promise<unknown>,
+  refresh: () => Promise<void>,
+  route: ProviderModelRoute,
+  form: ProviderRouteForm,
+) {
+  await updateProviderModelRoute(route.id, providerRouteRequestFromForm(form));
+  await refresh();
+}
 
 export function useAdminWorkspace() {
   const [token, setToken] = useState(() => getStoredToken());
@@ -348,15 +377,7 @@ export function useAdminWorkspace() {
 
   async function handleCreateRoute(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    await api.createProviderModelRoute({
-      publicModelId: createRouteForm.publicModelId,
-      providerAccountId: createRouteForm.providerAccountId,
-      upstreamModelId: createRouteForm.upstreamModelId,
-      wireApi: createRouteForm.wireApi,
-      role: createRouteForm.role,
-      enabled: createRouteForm.enabled,
-      stripParams: commaSeparatedValues(createRouteForm.stripParams),
-    });
+    await api.createProviderModelRoute(providerRouteRequestFromForm(createRouteForm));
     setCreateRouteForm(emptyRouteForm);
     setIsRouteSheetOpen(false);
     toast.success(t`Provider route added`);
@@ -388,6 +409,16 @@ export function useAdminWorkspace() {
     await api.updateProviderModelRoute(route.id, { enabled: !route.enabled });
     toast.success(route.enabled ? t`Route disabled` : t`Route enabled`);
     await refresh();
+  }
+
+  async function updateRouteDetails(route: ProviderModelRoute, form: ProviderRouteForm) {
+    await updateProviderRouteAndRefresh(
+      (id, payload) => api.updateProviderModelRoute(id, payload),
+      refresh,
+      route,
+      form,
+    );
+    toast.success(t`Provider route updated`);
   }
 
   async function deleteRoute(route: ProviderModelRoute) {
@@ -501,6 +532,7 @@ export function useAdminWorkspace() {
     toggleModel,
     updateModelDetails,
     toggleRoute,
+    updateRouteDetails,
     deleteRoute,
     deleteApiKey,
     toggleAccount,
