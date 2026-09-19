@@ -44,6 +44,34 @@ export function statusBadge(status: string, active: boolean) {
       </Badge>
     );
   }
+  if (status === "quota_exhausted") {
+    return (
+      <Badge variant="destructive">
+        <Trans>quota exhausted</Trans>
+      </Badge>
+    );
+  }
+  if (status === "rate_limited") {
+    return (
+      <Badge variant="outline">
+        <Trans>rate limited</Trans>
+      </Badge>
+    );
+  }
+  if (status === "partially_limited") {
+    return (
+      <Badge variant="outline">
+        <Trans>partially limited</Trans>
+      </Badge>
+    );
+  }
+  if (status === "recovering") {
+    return (
+      <Badge variant="outline">
+        <Trans>recovering</Trans>
+      </Badge>
+    );
+  }
   return <Badge variant="outline">{status}</Badge>;
 }
 

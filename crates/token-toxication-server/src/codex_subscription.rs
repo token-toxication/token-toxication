@@ -278,8 +278,20 @@ pub async fn codex_account_quota(
 
     match result {
         Ok(quota) => {
-            db.mark_provider_result(&account.account.id, "healthy", None)
+            if let Some(reset_at) = codex_quota_exhausted_until(&quota) {
+                db.record_provider_limit(
+                    &account.account.id,
+                    None,
+                    "quota_exhausted",
+                    "codex_usage_limit_reached",
+                    reset_at,
+                )
                 .await?;
+            } else {
+                db.clear_provider_quota_limits(&account.account.id).await?;
+                db.mark_provider_result(&account.account.id, "healthy", None)
+                    .await?;
+            }
             Ok(quota)
         }
         Err(error) => {
@@ -290,6 +302,31 @@ pub async fn codex_account_quota(
             Err(error)
         }
     }
+}
+
+fn codex_quota_exhausted_until(quota: &CodexAccountQuotaResponse) -> Option<Option<DateTime<Utc>>> {
+    let exhausted = quota
+        .limits
+        .iter()
+        .any(|limit| limit.allowed == Some(false) || limit.limit_reached == Some(true))
+        || quota.spend_control.as_ref().and_then(|value| value.reached) == Some(true)
+        || quota.rate_limit_reached_type.is_some();
+    exhausted.then(|| {
+        quota
+            .limits
+            .iter()
+            .flat_map(|limit| [&limit.primary_window, &limit.secondary_window])
+            .flatten()
+            .filter_map(|window| window.reset_at)
+            .chain(
+                quota
+                    .spend_control
+                    .as_ref()
+                    .and_then(|value| value.individual_limit.as_ref())
+                    .and_then(|limit| limit.reset_at),
+            )
+            .min()
+    })
 }
 
 async fn codex_account_record(
@@ -1070,6 +1107,84 @@ mod tests {
             .expect("account exists");
         assert_eq!(account.status, "healthy");
         assert!(account.last_error.is_none());
+
+        server.abort();
+        drop(db);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[tokio::test]
+    async fn exhausted_quota_check_keeps_account_out_of_healthy_state() {
+        let app = Router::new().route(
+            "/backend-api/wham/usage",
+            get(|| async {
+                Json(json!({
+                    "plan_type": "plus",
+                    "rate_limit": {
+                        "allowed": false,
+                        "limit_reached": true,
+                        "primary_window": {
+                            "used_percent": 100,
+                            "reset_after_seconds": 3600
+                        }
+                    },
+                    "rate_limit_reached_type": "usage_limit_reached"
+                }))
+            }),
+        );
+        let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
+        let address = listener.local_addr().expect("address");
+        let server = tokio::spawn(async move {
+            axum::serve(listener, app).await.expect("serve");
+        });
+        let path =
+            std::env::temp_dir().join(format!("token-toxication-{}.sqlite3", Uuid::new_v4()));
+        let db = Db::open(&path).await.expect("open test database");
+        let account = db
+            .create_provider_account(CreateProviderAccountRequest {
+                name: "Codex".to_string(),
+                provider: "codex-subscription".to_string(),
+                base_url: format!("http://{address}/backend-api"),
+                auth_mode: "codex-oauth".to_string(),
+                wire_api: "openai-responses".to_string(),
+                api_key: json!({
+                    "type": STORED_CODEX_CREDENTIAL_TYPE,
+                    "refresh": "refresh-token",
+                    "access": "access-token",
+                    "expires": Utc::now().timestamp_millis() + 60_000,
+                    "accountId": "account-1"
+                })
+                .to_string(),
+                is_active: true,
+            })
+            .await
+            .expect("create Codex account");
+
+        codex_account_quota(&db, &test_http_client(), &account.id)
+            .await
+            .expect("quota response");
+        db.mark_provider_result(&account.id, "healthy", None)
+            .await
+            .expect("record unrelated success");
+
+        let account = db
+            .get_provider_account(&account.id)
+            .await
+            .expect("load account")
+            .expect("account exists");
+        assert_eq!(account.status, "quota_exhausted");
+        assert_eq!(
+            db.due_codex_limit_account_ids(Utc::now(), 10)
+                .await
+                .expect("list due checks"),
+            Vec::<String>::new()
+        );
+        assert_eq!(
+            db.due_codex_limit_account_ids(Utc::now() + chrono::Duration::hours(2), 10)
+                .await
+                .expect("list future due checks"),
+            vec![account.id]
+        );
 
         server.abort();
         drop(db);

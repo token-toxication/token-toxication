@@ -5,11 +5,27 @@ use sha2::{Digest, Sha256};
 
 use crate::{db::ProviderRouteSelection, session_affinity::SessionAffinity};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LimitKind {
+    RateLimited,
+    QuotaExhausted,
+}
+
+impl LimitKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::RateLimited => "rate_limited",
+            Self::QuotaExhausted => "quota_exhausted",
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct RouteFailure {
     pub provider_status: Option<&'static str>,
     pub route_status: &'static str,
     pub cooldown_until: Option<DateTime<Utc>>,
+    pub limit_kind: Option<LimitKind>,
     pub error: String,
     pub status_code: Option<u16>,
 }
@@ -105,6 +121,7 @@ pub fn classify_response_failure(
             provider_status: Some("blocked"),
             route_status: "degraded",
             cooldown_until: None,
+            limit_kind: None,
             error,
             status_code: Some(status.as_u16()),
         };
@@ -120,6 +137,7 @@ pub fn classify_response_failure(
             provider_status: None,
             route_status: "cooling_down",
             cooldown_until: Some(now + cooldown),
+            limit_kind: Some(classify_limit_kind(_body)),
             error,
             status_code: Some(status.as_u16()),
         };
@@ -130,6 +148,7 @@ pub fn classify_response_failure(
             provider_status: None,
             route_status: "cooling_down",
             cooldown_until: Some(now + Duration::seconds(30)),
+            limit_kind: None,
             error,
             status_code: Some(status.as_u16()),
         };
@@ -139,6 +158,7 @@ pub fn classify_response_failure(
         provider_status: None,
         route_status: "degraded",
         cooldown_until: None,
+        limit_kind: None,
         error,
         status_code: Some(status.as_u16()),
     }
@@ -149,6 +169,7 @@ pub fn classify_transport_failure(error: String, now: DateTime<Utc>) -> RouteFai
         provider_status: None,
         route_status: "cooling_down",
         cooldown_until: Some(now + Duration::seconds(30)),
+        limit_kind: None,
         error,
         status_code: None,
     }
@@ -159,9 +180,18 @@ pub fn classify_upstream_application_failure(
     error: String,
     now: DateTime<Utc>,
 ) -> Option<RouteFailure> {
-    let (status, cooldown) = match code {
-        Some("server_error") => (StatusCode::BAD_GATEWAY, Duration::seconds(30)),
-        Some("rate_limit_exceeded") => (StatusCode::TOO_MANY_REQUESTS, Duration::seconds(60)),
+    let (status, cooldown, limit_kind) = match code {
+        Some("server_error") => (StatusCode::BAD_GATEWAY, Duration::seconds(30), None),
+        Some("rate_limit_exceeded") => (
+            StatusCode::TOO_MANY_REQUESTS,
+            Duration::seconds(60),
+            Some(LimitKind::RateLimited),
+        ),
+        Some("usage_limit_reached" | "quota_exhausted" | "insufficient_quota") => (
+            StatusCode::TOO_MANY_REQUESTS,
+            Duration::seconds(60),
+            Some(LimitKind::QuotaExhausted),
+        ),
         _ => return None,
     };
 
@@ -169,9 +199,29 @@ pub fn classify_upstream_application_failure(
         provider_status: None,
         route_status: "cooling_down",
         cooldown_until: Some(now + cooldown),
+        limit_kind,
         error,
         status_code: Some(status.as_u16()),
     })
+}
+
+fn classify_limit_kind(body: &[u8]) -> LimitKind {
+    let code = serde_json::from_slice::<serde_json::Value>(body)
+        .ok()
+        .and_then(|value| {
+            value
+                .pointer("/error/code")
+                .or_else(|| value.pointer("/error/type"))
+                .or_else(|| value.get("code"))
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_owned)
+        });
+    match code.as_deref() {
+        Some("usage_limit_reached" | "quota_exhausted" | "insufficient_quota") => {
+            LimitKind::QuotaExhausted
+        }
+        _ => LimitKind::RateLimited,
+    }
 }
 
 fn response_error(status: StatusCode) -> String {

@@ -1,4 +1,4 @@
-use std::{io, time::Duration};
+use std::{collections::HashSet, io, time::Duration};
 
 use aioduct::{
     RequestBuilderSend, SseDecoder, SseEvent,
@@ -60,6 +60,9 @@ use crate::{
 };
 
 const DEFAULT_ANTHROPIC_VERSION: &str = "2023-06-01";
+const FAILOVER_START_BUDGET: Duration = Duration::from_secs(30);
+const STREAM_FAILOVER_BUFFER_BYTES: usize = 64 * 1024;
+const STREAM_FAILOVER_WAIT: Duration = Duration::from_secs(1);
 
 pub fn admin_routes(state: AppState) -> Router<AppState> {
     let protected = Router::new()
@@ -338,174 +341,300 @@ async fn relay_json_endpoint(
     wire_api: WireApi,
 ) -> Result<Response, AppError> {
     let authenticated_attempt = RelayAttempt::authenticate(&state, &headers, uri.query()).await?;
-    let mut request_json: Value = serde_json::from_slice(&body)
+    let original_request_json: Value = serde_json::from_slice(&body)
         .map_err(|error| AppError::BadRequest(format!("invalid JSON body: {error}")))?;
-    wire_api.validate(&request_json)?;
+    wire_api.validate(&original_request_json)?;
     if wire_api == WireApi::OpenAiResponses {
-        validate_responses_protocol(&headers, &request_json)?;
+        validate_responses_protocol(&headers, &original_request_json)?;
     }
-    let model = request_json
+    let model = original_request_json
         .get("model")
         .and_then(Value::as_str)
-        .ok_or_else(|| AppError::BadRequest("request model is required".into()))?;
-    let affinity =
-        relay_session_affinity(&state, wire_api.account_value(), &headers, &request_json);
-    let attempt = authenticated_attempt
-        .select(wire_api.account_value(), model, affinity.as_ref())
-        .await?;
-    let upstream_model_id = attempt.selection().upstream_model_id.clone();
-    let strip_params = attempt.selection().strip_params.clone();
-    let account = attempt.selection().account.clone();
-    request_json["model"] = Value::String(upstream_model_id.clone());
-    enable_stream_usage_if_supported(&mut request_json, wire_api, &account.account.provider);
-    let stripped_params = strip_upstream_params(
-        &mut request_json,
-        &strip_params,
-        wire_api,
-        &account.account.auth_mode,
+        .ok_or_else(|| AppError::BadRequest("request model is required".into()))?
+        .to_string();
+    let affinity = relay_session_affinity(
+        &state,
+        wire_api.account_value(),
+        &headers,
+        &original_request_json,
     );
-    let body = serde_json::to_vec(&request_json)
-        .map_err(|error| AppError::Internal(format!("serialize upstream request: {error}")))?;
-    let request_summary = build_request_summary(&request_json, body.len() as u64, stripped_params);
-    let base_upstream_url = upstream_url(&account.account.base_url, wire_api.upstream_path());
-    let mut log = RelayAttemptLog {
-        path: wire_api.public_path().to_string(),
-        upstream_url: Some(base_upstream_url.clone()),
-        request_summary: Some(request_summary.clone()),
-    };
-    let codex_auth = if is_codex_subscription_auth(&account.account.auth_mode) {
-        if wire_api != WireApi::OpenAiResponses {
-            return Err(AppError::BadRequest(
-                "Codex subscription providers only support openai-responses routes".into(),
-            ));
-        }
-        match codex_subscription_authorization(&state.db, &state.http, &account).await {
-            Ok(auth) => Some(auth),
-            Err(error) => {
-                let status = error.status();
-                let failure = if matches!(status, StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN)
-                {
-                    RouteFailure {
-                        provider_status: Some("blocked"),
-                        route_status: "degraded",
-                        cooldown_until: None,
-                        error: error.to_string(),
-                        status_code: Some(status.as_u16()),
-                    }
-                } else {
-                    classify_transport_failure(error.to_string(), Utc::now())
-                };
-                attempt.record_failure(&log, failure).await?;
-                return Err(error);
-            }
-        }
-    } else {
-        None
-    };
-
-    let upstream_url = codex_auth
-        .as_ref()
-        .map(|auth| auth.endpoint.clone())
-        .unwrap_or(base_upstream_url);
-    log.upstream_url = Some(upstream_url.clone());
-    let request = match state.http.post(&upstream_url) {
-        Ok(request) => request
-            .header(
-                header::CONTENT_TYPE,
-                HeaderValue::from_static("application/json"),
-            )
-            .body(body),
-        Err(error) => {
-            attempt
-                .record_failure(
-                    &log,
-                    classify_transport_failure(error.to_string(), Utc::now()),
-                )
-                .await?;
-            return Err(AppError::Upstream(error));
-        }
-    };
-    let request = apply_protocol_headers(request, wire_api, &headers);
-    let request = match codex_auth.as_ref() {
-        Some(auth) => apply_codex_subscription_auth(request, auth),
-        None => apply_provider_auth(request, &account.account.auth_mode, &account.api_key),
-    };
-    let request = match request {
-        Ok(request) => request,
-        Err(error) => {
-            attempt
-                .record_failure(
-                    &log,
-                    classify_transport_failure(error.to_string(), Utc::now()),
-                )
-                .await?;
-            return Err(error);
-        }
-    };
-
-    let response = attempt.send(request, &log).await?;
-    let status = response.status();
-    let response_headers = response.headers().clone();
-    let content_type = response
-        .headers()
-        .get(header::CONTENT_TYPE)
-        .cloned()
-        .unwrap_or_else(|| HeaderValue::from_static("application/json"));
-    let is_stream = request_json
+    let is_stream = original_request_json
         .get("stream")
         .and_then(Value::as_bool)
         .unwrap_or(false);
+    let replay_safe = request_is_replay_safe(wire_api, &original_request_json);
+    let failover_deadline = Instant::now() + FAILOVER_START_BUDGET;
+    let mut excluded_account_ids = HashSet::new();
+    let mut last_rate_limit_response = None;
 
-    if is_stream {
-        let stream_idle_timeout = state.relay_stream_idle_timeout;
-        let stream_max_duration = state.relay_stream_max_duration;
-        let shutdown = state.shutdown.clone();
-        let body_stream = stream::unfold(response.into_bytes_stream(), |mut body| async move {
-            body.next().await.map(|chunk| {
-                let chunk = chunk.map_err(std::io::Error::other);
-                (chunk, body)
-            })
-        });
-        let body_stream = record_streaming_response(
-            body_stream,
-            StreamingResponseContext {
-                attempt,
-                log,
-                status,
-                response_headers,
-                wire_api,
-                idle_timeout: stream_idle_timeout,
-                max_duration: stream_max_duration,
-                shutdown,
-            },
+    for attempt_index in 0..3 {
+        let attempt = match authenticated_attempt
+            .select_excluding(
+                wire_api.account_value(),
+                &model,
+                affinity.as_ref(),
+                &excluded_account_ids,
+            )
+            .await
+        {
+            Ok(attempt) => attempt,
+            Err(error) => {
+                if let Some((status, content_type, bytes)) = last_rate_limit_response {
+                    return response_with_bytes(status, content_type, bytes, "no-store");
+                }
+                return Err(error);
+            }
+        };
+        let upstream_model_id = attempt.selection().upstream_model_id.clone();
+        let strip_params = attempt.selection().strip_params.clone();
+        let account = attempt.selection().account.clone();
+        let mut request_json = original_request_json.clone();
+        request_json["model"] = Value::String(upstream_model_id);
+        enable_stream_usage_if_supported(&mut request_json, wire_api, &account.account.provider);
+        let stripped_params = strip_upstream_params(
+            &mut request_json,
+            &strip_params,
+            wire_api,
+            &account.account.auth_mode,
         );
-        let body = Body::from_stream(body_stream);
-        let mut relay = Response::builder()
-            .status(status)
-            .header(header::CONTENT_TYPE, content_type)
-            .body(body)
-            .map_err(|error| AppError::Internal(error.to_string()))?;
-        relay.headers_mut().insert(
-            header::CACHE_CONTROL,
-            HeaderValue::from_static("no-cache, no-transform"),
-        );
-        Ok(relay)
-    } else {
+        let body = serde_json::to_vec(&request_json)
+            .map_err(|error| AppError::Internal(format!("serialize upstream request: {error}")))?;
+        let request_summary =
+            build_request_summary(&request_json, body.len() as u64, stripped_params);
+        let base_upstream_url = upstream_url(&account.account.base_url, wire_api.upstream_path());
+        let mut log = RelayAttemptLog {
+            path: wire_api.public_path().to_string(),
+            upstream_url: Some(base_upstream_url.clone()),
+            request_summary: Some(request_summary),
+        };
+        let codex_auth = if is_codex_subscription_auth(&account.account.auth_mode) {
+            if wire_api != WireApi::OpenAiResponses {
+                return Err(AppError::BadRequest(
+                    "Codex subscription providers only support openai-responses routes".into(),
+                ));
+            }
+            match codex_subscription_authorization(&state.db, &state.http, &account).await {
+                Ok(auth) => Some(auth),
+                Err(error) => {
+                    let status = error.status();
+                    let failure =
+                        if matches!(status, StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN) {
+                            RouteFailure {
+                                provider_status: Some("blocked"),
+                                route_status: "degraded",
+                                cooldown_until: None,
+                                limit_kind: None,
+                                error: error.to_string(),
+                                status_code: Some(status.as_u16()),
+                            }
+                        } else {
+                            classify_transport_failure(error.to_string(), Utc::now())
+                        };
+                    attempt.record_failure(&log, failure).await?;
+                    return Err(error);
+                }
+            }
+        } else {
+            None
+        };
+
+        let upstream_url = codex_auth
+            .as_ref()
+            .map(|auth| auth.endpoint.clone())
+            .unwrap_or(base_upstream_url);
+        log.upstream_url = Some(upstream_url.clone());
+        let request = match state.http.post(&upstream_url) {
+            Ok(request) => request
+                .header(
+                    header::CONTENT_TYPE,
+                    HeaderValue::from_static("application/json"),
+                )
+                .body(body),
+            Err(error) => {
+                attempt
+                    .record_failure(
+                        &log,
+                        classify_transport_failure(error.to_string(), Utc::now()),
+                    )
+                    .await?;
+                return Err(AppError::Upstream(error));
+            }
+        };
+        let request = apply_protocol_headers(request, wire_api, &headers);
+        let request = match codex_auth.as_ref() {
+            Some(auth) => apply_codex_subscription_auth(request, auth),
+            None => apply_provider_auth(request, &account.account.auth_mode, &account.api_key),
+        };
+        let request = match request {
+            Ok(request) => request,
+            Err(error) => {
+                attempt
+                    .record_failure(
+                        &log,
+                        classify_transport_failure(error.to_string(), Utc::now()),
+                    )
+                    .await?;
+                return Err(error);
+            }
+        };
+
+        let response = attempt.send(request, &log).await?;
+        let status = response.status();
+        let response_headers = response.headers().clone();
+        let content_type = response
+            .headers()
+            .get(header::CONTENT_TYPE)
+            .cloned()
+            .unwrap_or_else(|| HeaderValue::from_static("application/json"));
+
+        if !status.is_success() {
+            let bytes = response.bytes().await?;
+            let usage = parse_usage(&bytes);
+            attempt
+                .record_response(&log, status, &response_headers, &bytes, usage)
+                .await?;
+            if status == StatusCode::TOO_MANY_REQUESTS
+                && attempt_index < 2
+                && replay_safe
+                && Instant::now() <= failover_deadline
+            {
+                excluded_account_ids.insert(account.account.id);
+                last_rate_limit_response = Some((status, content_type, bytes));
+                continue;
+            }
+            return response_with_bytes(status, content_type, bytes, "no-store");
+        }
+
+        if is_stream {
+            let mut upstream_stream = response.into_bytes_stream();
+            let mut buffered = Vec::new();
+            let mut buffered_bytes = 0;
+            let mut observation = StreamingResponseObservation::default();
+            let preflight_deadline = Instant::now() + STREAM_FAILOVER_WAIT;
+            while buffered_bytes < STREAM_FAILOVER_BUFFER_BYTES && !observation.has_message() {
+                let next = match time::timeout_at(preflight_deadline, upstream_stream.next()).await
+                {
+                    Ok(next) => next,
+                    Err(_) => break,
+                };
+                match next {
+                    Some(Ok(chunk)) => {
+                        buffered_bytes += chunk.len();
+                        observation.observe(&chunk);
+                        buffered.push(chunk);
+                    }
+                    Some(Err(error)) => {
+                        attempt
+                            .record_failure(
+                                &log,
+                                classify_transport_failure(error.to_string(), Utc::now()),
+                            )
+                            .await?;
+                        return Err(AppError::Upstream(error));
+                    }
+                    None => break,
+                }
+            }
+            if let Some(failure) = observation
+                .replayable_application_failure(wire_api)
+                .cloned()
+            {
+                let error = failure.log_error();
+                if let Some(route_failure) = classify_upstream_application_failure(
+                    failure.code.as_deref(),
+                    error,
+                    Utc::now(),
+                ) && route_failure.limit_kind.is_some()
+                    && attempt_index < 2
+                    && replay_safe
+                    && Instant::now() <= failover_deadline
+                {
+                    attempt
+                        .record_failure_with_usage(&log, route_failure, observation.tokens())
+                        .await?;
+                    excluded_account_ids.insert(account.account.id);
+                    last_rate_limit_response = Some((
+                        StatusCode::TOO_MANY_REQUESTS,
+                        HeaderValue::from_static("application/json"),
+                        Bytes::from_static(
+                            br#"{"error":{"type":429,"message":"all matching provider accounts are rate limited"}}"#,
+                        ),
+                    ));
+                    continue;
+                }
+            }
+
+            let buffered_stream =
+                stream::iter(buffered.into_iter().map(Ok::<Bytes, std::io::Error>));
+            let remaining_stream = stream::unfold(upstream_stream, |mut body| async move {
+                body.next().await.map(|chunk| {
+                    let chunk = chunk.map_err(std::io::Error::other);
+                    (chunk, body)
+                })
+            });
+            let body_stream = buffered_stream.chain(remaining_stream);
+            let body_stream = record_streaming_response(
+                body_stream,
+                StreamingResponseContext {
+                    attempt,
+                    log,
+                    status,
+                    response_headers,
+                    wire_api,
+                    idle_timeout: state.relay_stream_idle_timeout,
+                    max_duration: state.relay_stream_max_duration,
+                    shutdown: state.shutdown.clone(),
+                },
+            );
+            let body = Body::from_stream(body_stream);
+            let mut relay = Response::builder()
+                .status(status)
+                .header(header::CONTENT_TYPE, content_type)
+                .body(body)
+                .map_err(|error| AppError::Internal(error.to_string()))?;
+            relay.headers_mut().insert(
+                header::CACHE_CONTROL,
+                HeaderValue::from_static("no-cache, no-transform"),
+            );
+            return Ok(relay);
+        }
+
         let bytes = response.bytes().await?;
         let usage = parse_usage(&bytes);
         attempt
             .record_response(&log, status, &response_headers, &bytes, usage)
             .await?;
-        let mut relay = Response::builder()
-            .status(status)
-            .header(header::CONTENT_TYPE, content_type)
-            .body(Body::from(bytes))
-            .map_err(|error| AppError::Internal(error.to_string()))?;
-        relay
-            .headers_mut()
-            .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
-        Ok(relay)
+        return response_with_bytes(status, content_type, bytes, "no-store");
     }
+
+    Err(AppError::TooManyRequests(
+        "all matching provider accounts are rate limited".to_string(),
+    ))
+}
+
+fn request_is_replay_safe(wire_api: WireApi, request: &Value) -> bool {
+    wire_api != WireApi::OpenAiResponses
+        || request
+            .get("previous_response_id")
+            .is_none_or(Value::is_null)
+}
+
+fn response_with_bytes(
+    status: StatusCode,
+    content_type: HeaderValue,
+    bytes: Bytes,
+    cache_control: &'static str,
+) -> Result<Response, AppError> {
+    let mut relay = Response::builder()
+        .status(status)
+        .header(header::CONTENT_TYPE, content_type)
+        .body(Body::from(bytes))
+        .map_err(|error| AppError::Internal(error.to_string()))?;
+    relay.headers_mut().insert(
+        header::CACHE_CONTROL,
+        HeaderValue::from_static(cache_control),
+    );
+    Ok(relay)
 }
 
 async fn relay_gemini_endpoint(
@@ -565,6 +694,7 @@ async fn relay_gemini_endpoint(
                         provider_status: Some("blocked"),
                         route_status: "degraded",
                         cooldown_until: None,
+                        limit_kind: None,
                         error: error.to_string(),
                         status_code: Some(status.as_u16()),
                     }
@@ -1697,7 +1827,10 @@ struct StreamingResponseObservation {
     decoder: SseDecoder,
     buffer: BytesMut,
     usage: UsageUpdate,
+    has_message: bool,
+    message_count: usize,
     application_failure: Option<StreamingApplicationFailure>,
+    replayable_application_failure: Option<StreamingApplicationFailure>,
 }
 
 impl Default for StreamingResponseObservation {
@@ -1708,7 +1841,10 @@ impl Default for StreamingResponseObservation {
             decoder: SseDecoder::with_max_payload_size(0),
             buffer: BytesMut::new(),
             usage: UsageUpdate::default(),
+            has_message: false,
+            message_count: 0,
             application_failure: None,
+            replayable_application_failure: None,
         }
     }
 }
@@ -1720,11 +1856,17 @@ impl StreamingResponseObservation {
             let Ok(SseEvent::Message(message)) = event else {
                 continue;
             };
+            self.has_message = true;
+            let message_index = self.message_count;
+            self.message_count += 1;
             let Ok(value) = serde_json::from_str::<Value>(&message.data) else {
                 continue;
             };
             self.usage.merge(usage_update(&value));
             if let Some(error) = openai_responses_stream_failure(&value) {
+                if message_index == 0 {
+                    self.replayable_application_failure = Some(error.clone());
+                }
                 self.application_failure = Some(error);
             }
         }
@@ -1734,9 +1876,24 @@ impl StreamingResponseObservation {
         self.usage.tokens()
     }
 
+    fn has_message(&self) -> bool {
+        self.has_message
+    }
+
     fn application_failure(&self, wire_api: WireApi) -> Option<&StreamingApplicationFailure> {
         if wire_api == WireApi::OpenAiResponses {
             self.application_failure.as_ref()
+        } else {
+            None
+        }
+    }
+
+    fn replayable_application_failure(
+        &self,
+        wire_api: WireApi,
+    ) -> Option<&StreamingApplicationFailure> {
+        if wire_api == WireApi::OpenAiResponses {
+            self.replayable_application_failure.as_ref()
         } else {
             None
         }
@@ -3092,6 +3249,282 @@ mod tests {
         assert_eq!(route.status, "cooling_down");
         assert_eq!(route.last_status_code, Some(429));
         assert!(route.cooldown_until.is_some());
+        let second = relay_openai_chat(
+            State(state.clone()),
+            relay_headers(&relay_secret),
+            Uri::from_static("/openai/v1/chat/completions"),
+            Bytes::from_static(
+                br#"{"model":"public-chat-model","messages":[{"role":"user","content":"hello"}]}"#,
+            ),
+        )
+        .await
+        .expect_err("limited account should remain unavailable");
+        assert_eq!(second.status(), StatusCode::TOO_MANY_REQUESTS);
+
+        drop(state);
+        remove_test_database(&database_path);
+    }
+
+    #[tokio::test]
+    async fn usage_limit_retries_another_account_and_keeps_the_first_account_limited() {
+        let limited_upstream = Router::new().route(
+            "/chat/completions",
+            post(|| async {
+                (
+                    StatusCode::TOO_MANY_REQUESTS,
+                    Json(json!({
+                        "error": {
+                            "code": "usage_limit_reached",
+                            "message": "usage limit reached"
+                        }
+                    })),
+                )
+            }),
+        );
+        let limited_listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind limited upstream");
+        let limited_address = limited_listener.local_addr().expect("limited address");
+        let limited_server = tokio::spawn(async move {
+            axum::serve(limited_listener, limited_upstream)
+                .await
+                .expect("serve limited upstream");
+        });
+
+        let backup_upstream = Router::new().route(
+            "/chat/completions",
+            post(|| async {
+                (
+                    StatusCode::OK,
+                    Json(json!({
+                        "id": "backup-success",
+                        "usage": {"prompt_tokens": 3, "completion_tokens": 5}
+                    })),
+                )
+            }),
+        );
+        let backup_listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind backup upstream");
+        let backup_address = backup_listener.local_addr().expect("backup address");
+        let backup_server = tokio::spawn(async move {
+            axum::serve(backup_listener, backup_upstream)
+                .await
+                .expect("serve backup upstream");
+        });
+
+        let database_path = test_database_path();
+        let db = Db::open(&database_path).await.expect("open test database");
+        let SeededRelayRoute {
+            relay_secret,
+            account_id: limited_account_id,
+            ..
+        } = seed_relay_route(
+            &db,
+            RelayRouteSeed {
+                base_url: format!("http://{limited_address}"),
+                provider: "openai-compatible",
+                auth_mode: "bearer",
+                provider_secret: "limited-secret".to_string(),
+                wire_api: "openai-chat",
+                public_model: "public-chat-model",
+                upstream_model: "limited-upstream-model",
+            },
+        )
+        .await;
+        let backup_account = db
+            .create_provider_account(CreateProviderAccountRequest {
+                name: "backup provider".to_string(),
+                provider: "openai-compatible".to_string(),
+                base_url: format!("http://{backup_address}"),
+                auth_mode: "bearer".to_string(),
+                wire_api: "openai-chat".to_string(),
+                api_key: "backup-secret".to_string(),
+                is_active: true,
+            })
+            .await
+            .expect("create backup account");
+        db.create_provider_model_route(CreateProviderModelRouteRequest {
+            public_model_id: "public-chat-model".to_string(),
+            provider_account_id: backup_account.id.clone(),
+            upstream_model_id: "backup-upstream-model".to_string(),
+            wire_api: "openai-chat".to_string(),
+            role: "backup".to_string(),
+            enabled: true,
+            weight: 100,
+            strip_params: Vec::new(),
+        })
+        .await
+        .expect("create backup route");
+        let state = test_state(db, database_path.clone());
+
+        let response = relay_openai_chat(
+            State(state.clone()),
+            relay_headers(&relay_secret),
+            Uri::from_static("/openai/v1/chat/completions"),
+            Bytes::from_static(
+                br#"{"model":"public-chat-model","messages":[{"role":"user","content":"hello"}]}"#,
+            ),
+        )
+        .await
+        .expect("relay response");
+        let response_body = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("response body");
+
+        limited_server.abort();
+        backup_server.abort();
+        assert_eq!(
+            serde_json::from_slice::<Value>(&response_body)
+                .expect("response json")
+                .get("id")
+                .and_then(Value::as_str),
+            Some("backup-success")
+        );
+        let limited_account = state
+            .db
+            .get_provider_account(&limited_account_id)
+            .await
+            .expect("get limited account")
+            .expect("limited account");
+        assert_eq!(limited_account.status, "partially_limited");
+        let candidates = state
+            .db
+            .list_provider_route_candidates("openai-chat", "public-chat-model")
+            .await
+            .expect("list candidates");
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0].account.account.id, backup_account.id);
+        let logs = state
+            .db
+            .list_request_logs(10)
+            .await
+            .expect("list request logs");
+        assert_eq!(logs.len(), 2);
+        assert!(logs.iter().any(|log| log.status_code == 429));
+        assert!(logs.iter().any(|log| log.status_code == 200));
+
+        drop(state);
+        remove_test_database(&database_path);
+    }
+
+    #[tokio::test]
+    async fn streamed_usage_limit_retries_before_forwarding_upstream_events() {
+        let limited_upstream = Router::new().route(
+            "/v1/responses",
+            post(|| async {
+                Response::builder()
+                    .status(StatusCode::OK)
+                    .header(header::CONTENT_TYPE, "text/event-stream")
+                    .body(Body::from(
+                        "event: response.failed\ndata: {\"type\":\"response.failed\",\"response\":{\"error\":{\"code\":\"usage_limit_reached\"}}}\n\n",
+                    ))
+                    .expect("limited response")
+            }),
+        );
+        let limited_listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind limited upstream");
+        let limited_address = limited_listener.local_addr().expect("limited address");
+        let limited_server = tokio::spawn(async move {
+            axum::serve(limited_listener, limited_upstream)
+                .await
+                .expect("serve limited upstream");
+        });
+
+        let backup_upstream = Router::new().route(
+            "/v1/responses",
+            post(|| async {
+                Response::builder()
+                    .status(StatusCode::OK)
+                    .header(header::CONTENT_TYPE, "text/event-stream")
+                    .body(Body::from(
+                        "event: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"id\":\"backup-response\",\"usage\":{\"input_tokens\":3,\"output_tokens\":5}}}\n\n",
+                    ))
+                    .expect("backup response")
+            }),
+        );
+        let backup_listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind backup upstream");
+        let backup_address = backup_listener.local_addr().expect("backup address");
+        let backup_server = tokio::spawn(async move {
+            axum::serve(backup_listener, backup_upstream)
+                .await
+                .expect("serve backup upstream");
+        });
+
+        let database_path = test_database_path();
+        let db = Db::open(&database_path).await.expect("open test database");
+        let SeededRelayRoute {
+            relay_secret,
+            account_id: limited_account_id,
+            ..
+        } = seed_relay_route(
+            &db,
+            RelayRouteSeed {
+                base_url: format!("http://{limited_address}"),
+                provider: "openai-compatible",
+                auth_mode: "bearer",
+                provider_secret: "limited-secret".to_string(),
+                wire_api: "openai-responses",
+                public_model: "public-responses-model",
+                upstream_model: "limited-upstream-model",
+            },
+        )
+        .await;
+        let backup_account = db
+            .create_provider_account(CreateProviderAccountRequest {
+                name: "backup provider".to_string(),
+                provider: "openai-compatible".to_string(),
+                base_url: format!("http://{backup_address}"),
+                auth_mode: "bearer".to_string(),
+                wire_api: "openai-responses".to_string(),
+                api_key: "backup-secret".to_string(),
+                is_active: true,
+            })
+            .await
+            .expect("create backup account");
+        db.create_provider_model_route(CreateProviderModelRouteRequest {
+            public_model_id: "public-responses-model".to_string(),
+            provider_account_id: backup_account.id,
+            upstream_model_id: "backup-upstream-model".to_string(),
+            wire_api: "openai-responses".to_string(),
+            role: "backup".to_string(),
+            enabled: true,
+            weight: 100,
+            strip_params: Vec::new(),
+        })
+        .await
+        .expect("create backup route");
+        let state = test_state(db, database_path.clone());
+
+        let response = relay_openai_responses(
+            State(state.clone()),
+            relay_headers(&relay_secret),
+            Uri::from_static("/openai/v1/responses"),
+            Bytes::from_static(
+                br#"{"model":"public-responses-model","input":"hello","stream":true}"#,
+            ),
+        )
+        .await
+        .expect("relay response");
+        let body = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("response body");
+
+        limited_server.abort();
+        backup_server.abort();
+        let body = String::from_utf8(body.to_vec()).expect("utf8 response");
+        assert!(body.contains("backup-response"));
+        assert!(!body.contains("usage_limit_reached"));
+        let account = state
+            .db
+            .get_provider_account(&limited_account_id)
+            .await
+            .expect("get limited account")
+            .expect("limited account");
+        assert_eq!(account.status, "partially_limited");
 
         drop(state);
         remove_test_database(&database_path);
@@ -3614,6 +4047,24 @@ mod tests {
     }
 
     #[test]
+    fn streaming_failure_after_a_business_event_is_not_replayable() {
+        let mut observation = StreamingResponseObservation::default();
+        observation.observe(
+            b"event: response.created\ndata: {\"type\":\"response.created\",\"response\":{\"id\":\"resp-1\"}}\n\nevent: response.failed\ndata: {\"type\":\"response.failed\",\"response\":{\"id\":\"resp-1\",\"error\":{\"code\":\"usage_limit_reached\"}}}\n\n",
+        );
+
+        assert!(
+            observation
+                .application_failure(WireApi::OpenAiResponses)
+                .is_some()
+        );
+        assert_eq!(
+            observation.replayable_application_failure(WireApi::OpenAiResponses),
+            None
+        );
+    }
+
+    #[test]
     fn streaming_failure_logs_exclude_provider_messages_and_unsafe_codes() {
         let failure = openai_responses_stream_failure(&json!({
             "type": "error",
@@ -3645,5 +4096,29 @@ mod tests {
         ] {
             assert_eq!(observation.application_failure(wire_api), None);
         }
+    }
+
+    #[test]
+    fn responses_continuations_are_not_replay_safe() {
+        assert!(request_is_replay_safe(
+            WireApi::OpenAiResponses,
+            &json!({"model": "gpt", "input": "hello"})
+        ));
+        assert!(request_is_replay_safe(
+            WireApi::OpenAiResponses,
+            &json!({"model": "gpt", "input": "hello", "previous_response_id": null})
+        ));
+        assert!(!request_is_replay_safe(
+            WireApi::OpenAiResponses,
+            &json!({
+                "model": "gpt",
+                "input": "continue",
+                "previous_response_id": "resp_123"
+            })
+        ));
+        assert!(request_is_replay_safe(
+            WireApi::OpenAiChat,
+            &json!({"model": "gpt", "messages": []})
+        ));
     }
 }

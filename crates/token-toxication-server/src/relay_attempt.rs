@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::time::Instant;
 
 use aioduct::{
@@ -101,6 +102,7 @@ impl RelayAttempt {
             &self.state,
             &self.selection.account.account.id,
             &self.selection.route_id,
+            &self.selection.upstream_model_id,
             &failure,
         )
         .await?;
@@ -156,16 +158,9 @@ impl RelayAttempt {
         body: &[u8],
         usage: TokenUsage,
     ) -> Result<(), AppError> {
-        let error = record_upstream_response_result(
-            &self.state,
-            &self.selection.account.account.id,
-            &self.selection.route_id,
-            &self.selection.account.account.provider,
-            status,
-            headers,
-            body,
-        )
-        .await?;
+        let error =
+            record_upstream_response_result(&self.state, &self.selection, status, headers, body)
+                .await?;
         self.insert_request_log(log, status.as_u16(), usage, error)
             .await?;
         Ok(())
@@ -234,21 +229,45 @@ impl RelayAttempt {
 
 impl AuthenticatedRelayAttempt {
     pub(crate) async fn select(
-        self,
+        &self,
         wire_api: &str,
         model: &str,
         affinity: Option<&SessionAffinity>,
     ) -> Result<RelayAttempt, AppError> {
-        let candidates = self
+        self.select_excluding(wire_api, model, affinity, &HashSet::new())
+            .await
+    }
+
+    pub(crate) async fn select_excluding(
+        &self,
+        wire_api: &str,
+        model: &str,
+        affinity: Option<&SessionAffinity>,
+        excluded_account_ids: &HashSet<String>,
+    ) -> Result<RelayAttempt, AppError> {
+        let mut candidates = self
             .state
             .db
             .list_provider_route_candidates(wire_api, model)
             .await?;
+        candidates
+            .retain(|candidate| !excluded_account_ids.contains(&candidate.account.account.id));
         let scope = RoutingScope {
             api_key_id: &self.api_key_id,
             public_model_id: model,
             wire_api,
         };
+        if candidates.is_empty()
+            && self
+                .state
+                .db
+                .has_limited_provider_route(wire_api, model)
+                .await?
+        {
+            return Err(AppError::TooManyRequests(
+                "all matching provider accounts are rate limited".into(),
+            ));
+        }
         let mut rng = rand::rng();
         let selection = select_route(&candidates, affinity, &scope, &mut rng)
             .cloned()
@@ -264,8 +283,8 @@ impl AuthenticatedRelayAttempt {
         );
 
         Ok(RelayAttempt {
-            state: self.state,
-            api_key_id: self.api_key_id,
+            state: self.state.clone(),
+            api_key_id: self.api_key_id.clone(),
             selection,
             started: self.started,
         })
@@ -301,9 +320,7 @@ pub(crate) fn sanitize_upstream_url(url: &str) -> String {
 
 async fn record_upstream_response_result(
     state: &AppState,
-    account_id: &str,
-    route_id: &str,
-    provider: &str,
+    selection: &ProviderRouteSelection,
     status: StatusCode,
     headers: &HeaderMap,
     body: &[u8],
@@ -311,18 +328,39 @@ async fn record_upstream_response_result(
     if status.is_success() {
         state
             .db
-            .mark_provider_result(account_id, "healthy", None)
+            .clear_due_provider_limits(
+                &selection.account.account.id,
+                &selection.upstream_model_id,
+                Utc::now(),
+            )
             .await?;
         state
             .db
-            .mark_route_success(route_id, status.as_u16())
+            .mark_provider_result(&selection.account.account.id, "healthy", None)
+            .await?;
+        state
+            .db
+            .mark_route_success(&selection.route_id, status.as_u16())
             .await?;
         return Ok(None);
     }
 
-    let failure = classify_response_failure(provider, status, headers, body, Utc::now());
+    let failure = classify_response_failure(
+        &selection.account.account.provider,
+        status,
+        headers,
+        body,
+        Utc::now(),
+    );
     let error = failure.error.clone();
-    record_route_failure_state(state, account_id, route_id, &failure).await?;
+    record_route_failure_state(
+        state,
+        &selection.account.account.id,
+        &selection.route_id,
+        &selection.upstream_model_id,
+        &failure,
+    )
+    .await?;
     Ok(Some(error))
 }
 
@@ -330,12 +368,27 @@ async fn record_route_failure_state(
     state: &AppState,
     account_id: &str,
     route_id: &str,
+    upstream_model_id: &str,
     failure: &RouteFailure,
 ) -> Result<(), AppError> {
     if let Some(provider_status) = failure.provider_status {
         state
             .db
             .mark_provider_result(account_id, provider_status, Some(&failure.error))
+            .await?;
+    }
+    if let Some(kind) = failure.limit_kind {
+        state
+            .db
+            .record_provider_limit(
+                account_id,
+                (!upstream_model_id.is_empty()).then_some(upstream_model_id),
+                kind.as_str(),
+                &failure.error,
+                (kind == crate::routing::LimitKind::RateLimited)
+                    .then_some(failure.cooldown_until)
+                    .flatten(),
+            )
             .await?;
     }
     state

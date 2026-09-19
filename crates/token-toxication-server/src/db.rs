@@ -1,6 +1,6 @@
 use std::{path::Path, sync::Arc};
 
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::{DateTime, Duration, NaiveDate, Utc};
 use rusqlite::{Connection, OptionalExtension, params};
 use tokio::sync::Mutex;
 use uuid::Uuid;
@@ -145,6 +145,21 @@ impl Db {
                 FOREIGN KEY(provider_account_id) REFERENCES provider_accounts(id) ON DELETE CASCADE
             );
 
+            CREATE TABLE IF NOT EXISTS provider_limits (
+                id TEXT PRIMARY KEY,
+                provider_account_id TEXT NOT NULL,
+                scope_kind TEXT NOT NULL,
+                scope_key TEXT NOT NULL DEFAULT '',
+                kind TEXT NOT NULL,
+                reason_code TEXT NOT NULL,
+                observed_at TEXT NOT NULL,
+                reset_at TEXT,
+                next_check_at TEXT NOT NULL,
+                revision INTEGER NOT NULL DEFAULT 1,
+                FOREIGN KEY(provider_account_id) REFERENCES provider_accounts(id) ON DELETE CASCADE,
+                UNIQUE(provider_account_id, scope_kind, scope_key)
+            );
+
             CREATE INDEX IF NOT EXISTS idx_request_logs_created_at ON request_logs(created_at DESC);
             CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash);
             "#,
@@ -208,6 +223,10 @@ impl Db {
                 ON provider_model_routes(public_model_id, wire_api, enabled, role);
             CREATE INDEX IF NOT EXISTS idx_provider_model_routes_health
                 ON provider_model_routes(enabled, status, cooldown_until);
+            CREATE INDEX IF NOT EXISTS idx_provider_limits_account
+                ON provider_limits(provider_account_id, scope_kind, scope_key);
+            CREATE INDEX IF NOT EXISTS idx_provider_limits_due
+                ON provider_limits(next_check_at);
             DROP INDEX IF EXISTS idx_provider_model_routes_primary;
             "#,
         )?;
@@ -773,6 +792,15 @@ impl Db {
                AND a.status != 'blocked'
                AND r.status != 'blocked'
                AND (r.cooldown_until IS NULL OR r.cooldown_until <= ?1)
+               AND NOT EXISTS (
+                   SELECT 1 FROM provider_limits l
+                   WHERE l.provider_account_id = a.id
+                     AND l.next_check_at > ?1
+                     AND (
+                         l.scope_kind = 'account'
+                         OR (l.scope_kind = 'model' AND l.scope_key = r.upstream_model_id)
+                     )
+               )
              ORDER BY m.id ASC,
                       CASE r.role WHEN 'primary' THEN 0 WHEN 'backup' THEN 1 ELSE 2 END,
                       r.created_at ASC",
@@ -813,11 +841,52 @@ impl Db {
                AND a.status != 'blocked'
                AND r.status != 'blocked'
                AND (r.cooldown_until IS NULL OR r.cooldown_until <= ?3)
+               AND NOT EXISTS (
+                   SELECT 1 FROM provider_limits l
+                   WHERE l.provider_account_id = a.id
+                     AND l.next_check_at > ?3
+                     AND (
+                         l.scope_kind = 'account'
+                         OR (l.scope_kind = 'model' AND l.scope_key = r.upstream_model_id)
+                     )
+               )
              ORDER BY CASE r.role WHEN 'primary' THEN 0 WHEN 'backup' THEN 1 ELSE 2 END,
                       r.created_at ASC",
         )?;
         let rows = stmt.query_map(params![wire_api, model, now], route_selection_from_row)?;
         rows.collect()
+    }
+
+    pub async fn has_limited_provider_route(
+        &self,
+        wire_api: &str,
+        model: &str,
+    ) -> Result<bool, rusqlite::Error> {
+        let wire_api = normalize_wire_api(wire_api, "");
+        let conn = self.conn.lock().await;
+        conn.query_row(
+            "SELECT EXISTS (
+                 SELECT 1
+                 FROM model_catalog m
+                 JOIN provider_model_routes r ON r.public_model_id = m.id
+                 JOIN provider_accounts a ON a.id = r.provider_account_id
+                 JOIN provider_limits l ON l.provider_account_id = a.id
+                 WHERE m.id = ?2
+                   AND m.enabled = 1
+                   AND r.wire_api = ?1
+                   AND r.enabled = 1
+                   AND a.is_active = 1
+                   AND a.status != 'blocked'
+                   AND r.status != 'blocked'
+                   AND l.next_check_at > ?3
+                   AND (
+                       l.scope_kind = 'account'
+                       OR (l.scope_kind = 'model' AND l.scope_key = r.upstream_model_id)
+                   )
+             )",
+            params![wire_api, model, Utc::now().to_rfc3339()],
+            |row| row.get::<_, bool>(0),
+        )
     }
 
     pub async fn update_provider_account(
@@ -855,8 +924,8 @@ impl Db {
             auth_mode,
             wire_api,
             is_active: input.is_active.unwrap_or(current.is_active),
-            status: "healthy".to_string(),
-            last_error: None,
+            status: current.status,
+            last_error: current.last_error,
             created_at: current.created_at,
             last_used_at: current.last_used_at,
         };
@@ -894,7 +963,11 @@ impl Db {
                 ],
             )?;
         }
-        Ok(account)
+        refresh_provider_availability(&conn, &account.id)?;
+        drop(conn);
+        self.get_provider_account(&account.id)
+            .await?
+            .ok_or(rusqlite::Error::QueryReturnedNoRows)
     }
 
     pub async fn get_provider_account(
@@ -951,9 +1024,199 @@ impl Db {
         error: Option<&str>,
     ) -> Result<(), rusqlite::Error> {
         let conn = self.conn.lock().await;
+        if status == "healthy" {
+            let now = Utc::now().to_rfc3339();
+            conn.execute(
+                "DELETE FROM provider_limits
+                 WHERE provider_account_id = ?1
+                   AND kind = 'rate_limited'
+                   AND next_check_at <= ?2",
+                params![id, &now],
+            )?;
+            conn.execute(
+                "UPDATE provider_accounts
+                 SET status = CASE
+                         WHEN EXISTS (
+                             SELECT 1 FROM provider_limits l
+                             WHERE l.provider_account_id = provider_accounts.id
+                               AND l.kind = 'quota_exhausted'
+                         ) THEN CASE
+                             WHEN EXISTS (
+                                 SELECT 1 FROM provider_limits l
+                                 WHERE l.provider_account_id = provider_accounts.id
+                                   AND l.scope_kind = 'account'
+                             ) THEN 'quota_exhausted'
+                             ELSE 'partially_limited'
+                         END
+                         WHEN EXISTS (
+                             SELECT 1 FROM provider_limits l
+                             WHERE l.provider_account_id = provider_accounts.id
+                         ) THEN 'rate_limited'
+                         ELSE 'healthy'
+                     END,
+                     last_error = CASE
+                         WHEN EXISTS (
+                             SELECT 1 FROM provider_limits l
+                             WHERE l.provider_account_id = provider_accounts.id
+                         ) THEN last_error
+                         ELSE NULL
+                     END,
+                     last_used_at = ?1
+                 WHERE id = ?2",
+                params![now, id],
+            )?;
+        } else {
+            conn.execute(
+                "UPDATE provider_accounts
+                 SET status = ?1, last_error = ?2, last_used_at = ?3
+                 WHERE id = ?4",
+                params![status, error, Utc::now().to_rfc3339(), id],
+            )?;
+        }
+        Ok(())
+    }
+
+    pub async fn record_provider_limit(
+        &self,
+        account_id: &str,
+        upstream_model_id: Option<&str>,
+        kind: &str,
+        reason_code: &str,
+        reset_at: Option<DateTime<Utc>>,
+    ) -> Result<(), rusqlite::Error> {
+        let now = Utc::now();
+        let scope_kind = if upstream_model_id.is_some() {
+            "model"
+        } else {
+            "account"
+        };
+        let scope_key = upstream_model_id.unwrap_or("");
+        let next_check_at = match kind {
+            "quota_exhausted" => reset_at
+                .unwrap_or_else(|| now + Duration::hours(2))
+                .min(now + Duration::hours(2)),
+            _ => reset_at.unwrap_or_else(|| now + Duration::minutes(1)),
+        };
+        let conn = self.conn.lock().await;
         conn.execute(
-            "UPDATE provider_accounts SET status = ?1, last_error = ?2, last_used_at = ?3 WHERE id = ?4",
-            params![status, error, Utc::now().to_rfc3339(), id],
+            "INSERT INTO provider_limits
+             (id, provider_account_id, scope_kind, scope_key, kind, reason_code,
+              observed_at, reset_at, next_check_at, revision)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 1)
+             ON CONFLICT(provider_account_id, scope_kind, scope_key) DO UPDATE SET
+                 kind = excluded.kind,
+                 reason_code = excluded.reason_code,
+                 observed_at = excluded.observed_at,
+                 reset_at = excluded.reset_at,
+                 next_check_at = excluded.next_check_at,
+                 revision = provider_limits.revision + 1",
+            params![
+                Uuid::new_v4().to_string(),
+                account_id,
+                scope_kind,
+                scope_key,
+                kind,
+                reason_code,
+                now.to_rfc3339(),
+                reset_at.map(|value| value.to_rfc3339()),
+                next_check_at.to_rfc3339(),
+            ],
+        )?;
+        let status = if kind == "quota_exhausted" {
+            if scope_kind == "account" {
+                "quota_exhausted"
+            } else {
+                "partially_limited"
+            }
+        } else {
+            "rate_limited"
+        };
+        conn.execute(
+            "UPDATE provider_accounts
+             SET status = ?1, last_error = ?2, last_used_at = ?3
+             WHERE id = ?4 AND status != 'blocked'",
+            params![status, reason_code, now.to_rfc3339(), account_id],
+        )?;
+        Ok(())
+    }
+
+    pub async fn clear_provider_limits(&self, account_id: &str) -> Result<(), rusqlite::Error> {
+        let conn = self.conn.lock().await;
+        conn.execute(
+            "DELETE FROM provider_limits WHERE provider_account_id = ?1",
+            params![account_id],
+        )?;
+        refresh_provider_availability(&conn, account_id)?;
+        Ok(())
+    }
+
+    pub async fn clear_provider_quota_limits(
+        &self,
+        account_id: &str,
+    ) -> Result<(), rusqlite::Error> {
+        let conn = self.conn.lock().await;
+        conn.execute(
+            "DELETE FROM provider_limits
+             WHERE provider_account_id = ?1 AND kind = 'quota_exhausted'",
+            params![account_id],
+        )?;
+        refresh_provider_availability(&conn, account_id)?;
+        Ok(())
+    }
+
+    pub async fn clear_due_provider_limits(
+        &self,
+        account_id: &str,
+        upstream_model_id: &str,
+        now: DateTime<Utc>,
+    ) -> Result<(), rusqlite::Error> {
+        let conn = self.conn.lock().await;
+        conn.execute(
+            "DELETE FROM provider_limits
+             WHERE provider_account_id = ?1
+               AND next_check_at <= ?2
+               AND (
+                   scope_kind = 'account'
+                   OR (scope_kind = 'model' AND scope_key = ?3)
+               )",
+            params![account_id, now.to_rfc3339(), upstream_model_id],
+        )?;
+        refresh_provider_availability(&conn, account_id)?;
+        Ok(())
+    }
+
+    pub async fn due_codex_limit_account_ids(
+        &self,
+        now: DateTime<Utc>,
+        limit: usize,
+    ) -> Result<Vec<String>, rusqlite::Error> {
+        let conn = self.conn.lock().await;
+        let mut stmt = conn.prepare(
+            "SELECT DISTINCT a.id
+             FROM provider_limits l
+             JOIN provider_accounts a ON a.id = l.provider_account_id
+             WHERE a.is_active = 1
+               AND a.status != 'blocked'
+               AND a.auth_mode = 'codex-oauth'
+               AND l.next_check_at <= ?1
+             ORDER BY l.next_check_at ASC
+             LIMIT ?2",
+        )?;
+        let rows = stmt.query_map(params![now.to_rfc3339(), limit as i64], |row| row.get(0))?;
+        rows.collect()
+    }
+
+    pub async fn reschedule_provider_limits(
+        &self,
+        account_id: &str,
+        next_check_at: DateTime<Utc>,
+    ) -> Result<(), rusqlite::Error> {
+        let conn = self.conn.lock().await;
+        conn.execute(
+            "UPDATE provider_limits
+             SET next_check_at = ?1
+             WHERE provider_account_id = ?2",
+            params![next_check_at.to_rfc3339(), account_id],
         )?;
         Ok(())
     }
@@ -1148,6 +1411,45 @@ where
 {
     let rows = stmt.query_map(params, account_from_row)?;
     rows.map(|row| row.map(|record| record.account)).collect()
+}
+
+fn refresh_provider_availability(
+    conn: &Connection,
+    account_id: &str,
+) -> Result<(), rusqlite::Error> {
+    conn.execute(
+        "UPDATE provider_accounts
+         SET status = CASE
+                 WHEN status = 'blocked' THEN status
+                 WHEN EXISTS (
+                     SELECT 1 FROM provider_limits l
+                     WHERE l.provider_account_id = provider_accounts.id
+                       AND l.kind = 'quota_exhausted'
+                       AND l.scope_kind = 'account'
+                 ) THEN 'quota_exhausted'
+                 WHEN EXISTS (
+                     SELECT 1 FROM provider_limits l
+                     WHERE l.provider_account_id = provider_accounts.id
+                       AND l.kind = 'quota_exhausted'
+                 ) THEN 'partially_limited'
+                 WHEN EXISTS (
+                     SELECT 1 FROM provider_limits l
+                     WHERE l.provider_account_id = provider_accounts.id
+                 ) THEN 'rate_limited'
+                 ELSE 'healthy'
+             END,
+             last_error = CASE
+                 WHEN status = 'blocked' THEN last_error
+                 WHEN EXISTS (
+                     SELECT 1 FROM provider_limits l
+                     WHERE l.provider_account_id = provider_accounts.id
+                 ) THEN last_error
+                 ELSE NULL
+             END
+         WHERE id = ?1",
+        params![account_id],
+    )?;
+    Ok(())
 }
 
 fn api_key_from_row(row: &rusqlite::Row<'_>) -> Result<ApiKeyRecord, rusqlite::Error> {

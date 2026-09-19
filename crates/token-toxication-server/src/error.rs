@@ -268,6 +268,8 @@ pub enum AppError {
     #[error("{0}")]
     Forbidden(String),
     #[error("{0}")]
+    TooManyRequests(String),
+    #[error("{0}")]
     NotFound(String),
     #[error("database error: {0}")]
     Database(#[from] rusqlite::Error),
@@ -283,6 +285,7 @@ impl AppError {
             Self::BadRequest(_) => StatusCode::BAD_REQUEST,
             Self::Unauthorized(_) => StatusCode::UNAUTHORIZED,
             Self::Forbidden(_) => StatusCode::FORBIDDEN,
+            Self::TooManyRequests(_) => StatusCode::TOO_MANY_REQUESTS,
             Self::NotFound(_) => StatusCode::NOT_FOUND,
             Self::Database(_) | Self::Upstream(_) | Self::Internal(_) => {
                 StatusCode::INTERNAL_SERVER_ERROR

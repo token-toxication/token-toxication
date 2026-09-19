@@ -89,8 +89,16 @@ async fn run_server(config: Config) -> Result<(), MainError> {
         started_at: Utc::now(),
     };
 
+    let quota_monitor = token_toxication_server::quota_monitor::spawn(
+        state.db.clone(),
+        state.http.clone(),
+        shutdown.clone(),
+    );
     let app = app(state, config.static_dir.clone());
-    server::serve(config, https_config, app, shutdown).await?;
+    let result = server::serve(config, https_config, app, shutdown.clone()).await;
+    quota_monitor.abort();
+    let _ = quota_monitor.await;
+    result?;
     Ok(())
 }
 

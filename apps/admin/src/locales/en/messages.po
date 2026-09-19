@@ -14,7 +14,7 @@ msgstr ""
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
 #. placeholder {0}: summary.strippedParams.join(", ")
-#: src/admin-ui/helpers.tsx:120
+#: src/admin-ui/helpers.tsx:148
 msgid " · stripped {0}"
 msgstr " · stripped {0}"
 
@@ -44,7 +44,7 @@ msgid "{0} × {intervalMinutes} min"
 msgstr "{0} × {intervalMinutes} min"
 
 #. placeholder {0}: formatNumber(summary.bodyBytes)
-#: src/admin-ui/helpers.tsx:121
+#: src/admin-ui/helpers.tsx:149
 msgid "{0} bytes · {stream} · keys {keys}{stripped}"
 msgstr "{0} bytes · {stream} · keys {keys}{stripped}"
 
@@ -70,12 +70,12 @@ msgid "{0} credential"
 msgstr "{0} credential"
 
 #. placeholder {0}: (seconds / 86_400).toFixed(1)
-#: src/admin-ui/helpers.tsx:368
+#: src/admin-ui/helpers.tsx:396
 msgid "{0} days"
 msgstr "{0} days"
 
 #. placeholder {0}: (seconds / 3_600).toFixed(1)
-#: src/admin-ui/helpers.tsx:375
+#: src/admin-ui/helpers.tsx:403
 msgid "{0} hours"
 msgstr "{0} hours"
 
@@ -87,7 +87,7 @@ msgid "{0} input · {1} cached · {2} output"
 msgstr "{0} input · {1} cached · {2} output"
 
 #. placeholder {0}: limit.remaining
-#: src/admin-ui/helpers.tsx:443
+#: src/admin-ui/helpers.tsx:471
 msgid "{0} remaining"
 msgstr "{0} remaining"
 
@@ -131,19 +131,19 @@ msgstr "{0}: {1}"
 msgid "{0}ms"
 msgstr "{0}ms"
 
-#: src/admin-ui/helpers.tsx:445
+#: src/admin-ui/helpers.tsx:473
 msgid "{amount}, reached"
 msgstr "{amount}, reached"
 
-#: src/admin-ui/helpers.tsx:366
+#: src/admin-ui/helpers.tsx:394
 msgid "{days, plural, one {# day} other {# days}}"
 msgstr "{days, plural, one {# day} other {# days}}"
 
-#: src/admin-ui/helpers.tsx:373
+#: src/admin-ui/helpers.tsx:401
 msgid "{hours, plural, one {# hour} other {# hours}}"
 msgstr "{hours, plural, one {# hour} other {# hours}}"
 
-#: src/admin-ui/helpers.tsx:379
+#: src/admin-ui/helpers.tsx:407
 msgid "{minutes, plural, one {# minute} other {# minutes}}"
 msgstr "{minutes, plural, one {# minute} other {# minutes}}"
 
@@ -151,11 +151,11 @@ msgstr "{minutes, plural, one {# minute} other {# minutes}}"
 msgid "{routeLabel} route required"
 msgstr "{routeLabel} route required"
 
-#: src/admin-ui/helpers.tsx:381
+#: src/admin-ui/helpers.tsx:409
 msgid "{seconds, plural, one {# second} other {# seconds}}"
 msgstr "{seconds, plural, one {# second} other {# seconds}}"
 
-#: src/admin-ui/helpers.tsx:331
+#: src/admin-ui/helpers.tsx:359
 msgid "{value, plural, one {# request} other {# requests}}"
 msgstr "{value, plural, one {# request} other {# requests}}"
 
@@ -364,11 +364,11 @@ msgstr "Auth"
 msgid "Auth mode"
 msgstr "Auth mode"
 
-#: src/admin-ui/helpers.tsx:402
+#: src/admin-ui/helpers.tsx:430
 msgid "available"
 msgstr "available"
 
-#: src/admin-ui/helpers.tsx:421
+#: src/admin-ui/helpers.tsx:449
 msgid "Available"
 msgstr "Available"
 
@@ -398,7 +398,7 @@ msgid "Backup"
 msgstr "Backup"
 
 #. placeholder {0}: credits.balance
-#: src/admin-ui/helpers.tsx:418
+#: src/admin-ui/helpers.tsx:446
 msgid "Balance {0}"
 msgstr "Balance {0}"
 
@@ -548,7 +548,7 @@ msgstr "Concurrency"
 msgid "Concurrency limit"
 msgstr "Concurrency limit"
 
-#: src/admin-ui/helpers.tsx:444
+#: src/admin-ui/helpers.tsx:472
 msgid "Configured"
 msgstr "Configured"
 
@@ -564,7 +564,7 @@ msgstr "Configured upstream identity and scheduling state."
 msgid "Connection"
 msgstr "Connection"
 
-#: src/admin-ui/helpers.tsx:471
+#: src/admin-ui/helpers.tsx:499
 msgid "Copied"
 msgstr "Copied"
 
@@ -818,7 +818,7 @@ msgstr "Light"
 msgid "Limit"
 msgstr "Limit"
 
-#: src/admin-ui/helpers.tsx:395
+#: src/admin-ui/helpers.tsx:423
 msgid "limited"
 msgstr "limited"
 
@@ -904,7 +904,7 @@ msgstr "Models and quota reported by this Google account."
 msgid "Name"
 msgstr "Name"
 
-#: src/admin-ui/helpers.tsx:459
+#: src/admin-ui/helpers.tsx:487
 msgid "never"
 msgstr "never"
 
@@ -952,7 +952,7 @@ msgstr "No DeepSeek Harness routes"
 msgid "No description"
 msgstr "No description"
 
-#: src/admin-ui/helpers.tsx:118
+#: src/admin-ui/helpers.tsx:146
 msgid "no keys"
 msgstr "no keys"
 
@@ -990,7 +990,7 @@ msgstr "No quota windows returned"
 msgid "No relay traffic"
 msgstr "No relay traffic"
 
-#: src/admin-ui/helpers.tsx:115
+#: src/admin-ui/helpers.tsx:143
 msgid "No request summary"
 msgstr "No request summary"
 
@@ -1004,15 +1004,15 @@ msgstr "No requests in this window"
 msgid "No rpm"
 msgstr "No rpm"
 
-#: src/admin-ui/helpers.tsx:88
+#: src/admin-ui/helpers.tsx:116
 msgid "No stripped params"
 msgstr "No stripped params"
 
-#: src/admin-ui/helpers.tsx:117
+#: src/admin-ui/helpers.tsx:145
 msgid "non-stream"
 msgstr "non-stream"
 
-#: src/admin-ui/helpers.tsx:424
+#: src/admin-ui/helpers.tsx:452
 msgid "None"
 msgstr "None"
 
@@ -1056,6 +1056,10 @@ msgstr "Overview"
 #: src/admin-ui/shared.tsx:42
 msgid "Page not found"
 msgstr "Page not found"
+
+#: src/admin-ui/helpers.tsx:64
+msgid "partially limited"
+msgstr "partially limited"
 
 #: src/App.tsx:208
 msgid "Password"
@@ -1115,7 +1119,7 @@ msgstr "Preset"
 msgid "Preview"
 msgstr "Preview"
 
-#: src/admin-ui/helpers.tsx:54
+#: src/admin-ui/helpers.tsx:82
 msgid "primary"
 msgstr "primary"
 
@@ -1237,6 +1241,10 @@ msgstr "Public model identity and client-facing metadata."
 msgid "Quota"
 msgstr "Quota"
 
+#: src/admin-ui/helpers.tsx:50
+msgid "quota exhausted"
+msgstr "quota exhausted"
+
 #: src/admin-ui/accounts.tsx:630
 msgid "Quota source"
 msgstr "Quota source"
@@ -1253,11 +1261,15 @@ msgstr "Quota unavailable"
 msgid "Rate limit"
 msgstr "Rate limit"
 
+#: src/admin-ui/helpers.tsx:57
+msgid "rate limited"
+msgstr "rate limited"
+
 #: src/admin-ui/accounts.tsx:991
 msgid "Raw refresh token"
 msgstr "Raw refresh token"
 
-#: src/admin-ui/helpers.tsx:437
+#: src/admin-ui/helpers.tsx:465
 msgid "Reached"
 msgstr "Reached"
 
@@ -1274,6 +1286,10 @@ msgstr "Reconnect"
 #: src/admin-ui/accounts.tsx:317
 msgid "Reconnect Antigravity"
 msgstr "Reconnect Antigravity"
+
+#: src/admin-ui/helpers.tsx:71
+msgid "recovering"
+msgstr "recovering"
 
 #: src/App.tsx:294
 msgid "Refresh"
@@ -1531,11 +1547,11 @@ msgstr "Store this value now"
 msgid "Stored metadata and request limits for this client credential."
 msgstr "Stored metadata and request limits for this client credential."
 
-#: src/admin-ui/helpers.tsx:117
+#: src/admin-ui/helpers.tsx:145
 msgid "stream"
 msgstr "stream"
 
-#: src/admin-ui/helpers.tsx:91
+#: src/admin-ui/helpers.tsx:119
 msgid "strip {params}"
 msgstr "strip {params}"
 
@@ -1639,22 +1655,22 @@ msgstr "Unexpected key prefix"
 #: src/admin-ui/accounts.tsx:855
 #: src/admin-ui/accounts.tsx:858
 #: src/admin-ui/accounts.tsx:932
-#: src/admin-ui/helpers.tsx:105
-#: src/admin-ui/helpers.tsx:339
-#: src/admin-ui/helpers.tsx:341
-#: src/admin-ui/helpers.tsx:361
-#: src/admin-ui/helpers.tsx:408
-#: src/admin-ui/helpers.tsx:426
-#: src/admin-ui/helpers.tsx:437
-#: src/admin-ui/helpers.tsx:449
+#: src/admin-ui/helpers.tsx:133
+#: src/admin-ui/helpers.tsx:367
+#: src/admin-ui/helpers.tsx:369
+#: src/admin-ui/helpers.tsx:389
+#: src/admin-ui/helpers.tsx:436
+#: src/admin-ui/helpers.tsx:454
+#: src/admin-ui/helpers.tsx:465
+#: src/admin-ui/helpers.tsx:477
 msgid "unknown"
 msgstr "unknown"
 
-#: src/admin-ui/helpers.tsx:454
+#: src/admin-ui/helpers.tsx:482
 msgid "Unknown"
 msgstr "Unknown"
 
-#: src/admin-ui/helpers.tsx:415
+#: src/admin-ui/helpers.tsx:443
 msgid "Unlimited"
 msgstr "Unlimited"
 

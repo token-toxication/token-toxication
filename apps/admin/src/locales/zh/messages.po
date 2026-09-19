@@ -14,7 +14,7 @@ msgstr ""
 "Plural-Forms: nplurals=1; plural=0;\n"
 
 #. placeholder {0}: summary.strippedParams.join(", ")
-#: src/admin-ui/helpers.tsx:120
+#: src/admin-ui/helpers.tsx:148
 msgid " · stripped {0}"
 msgstr " · 已剥离 {0}"
 
@@ -44,7 +44,7 @@ msgid "{0} × {intervalMinutes} min"
 msgstr "{0} × {intervalMinutes} 分钟"
 
 #. placeholder {0}: formatNumber(summary.bodyBytes)
-#: src/admin-ui/helpers.tsx:121
+#: src/admin-ui/helpers.tsx:149
 msgid "{0} bytes · {stream} · keys {keys}{stripped}"
 msgstr "{0} 字节 · {stream} · 字段 {keys}{stripped}"
 
@@ -70,12 +70,12 @@ msgid "{0} credential"
 msgstr "{0} 凭证"
 
 #. placeholder {0}: (seconds / 86_400).toFixed(1)
-#: src/admin-ui/helpers.tsx:368
+#: src/admin-ui/helpers.tsx:396
 msgid "{0} days"
 msgstr "{0} 天"
 
 #. placeholder {0}: (seconds / 3_600).toFixed(1)
-#: src/admin-ui/helpers.tsx:375
+#: src/admin-ui/helpers.tsx:403
 msgid "{0} hours"
 msgstr "{0} 小时"
 
@@ -87,7 +87,7 @@ msgid "{0} input · {1} cached · {2} output"
 msgstr "{0} 输入 · {1} 缓存 · {2} 输出"
 
 #. placeholder {0}: limit.remaining
-#: src/admin-ui/helpers.tsx:443
+#: src/admin-ui/helpers.tsx:471
 msgid "{0} remaining"
 msgstr "剩余 {0}"
 
@@ -131,19 +131,19 @@ msgstr "{0}：{1}"
 msgid "{0}ms"
 msgstr "{0}ms"
 
-#: src/admin-ui/helpers.tsx:445
+#: src/admin-ui/helpers.tsx:473
 msgid "{amount}, reached"
 msgstr "{amount}，已达上限"
 
-#: src/admin-ui/helpers.tsx:366
+#: src/admin-ui/helpers.tsx:394
 msgid "{days, plural, one {# day} other {# days}}"
 msgstr "{days, plural, other {# 天}}"
 
-#: src/admin-ui/helpers.tsx:373
+#: src/admin-ui/helpers.tsx:401
 msgid "{hours, plural, one {# hour} other {# hours}}"
 msgstr "{hours, plural, other {# 小时}}"
 
-#: src/admin-ui/helpers.tsx:379
+#: src/admin-ui/helpers.tsx:407
 msgid "{minutes, plural, one {# minute} other {# minutes}}"
 msgstr "{minutes, plural, other {# 分钟}}"
 
@@ -151,11 +151,11 @@ msgstr "{minutes, plural, other {# 分钟}}"
 msgid "{routeLabel} route required"
 msgstr "需要 {routeLabel} 路由"
 
-#: src/admin-ui/helpers.tsx:381
+#: src/admin-ui/helpers.tsx:409
 msgid "{seconds, plural, one {# second} other {# seconds}}"
 msgstr "{seconds, plural, other {# 秒}}"
 
-#: src/admin-ui/helpers.tsx:331
+#: src/admin-ui/helpers.tsx:359
 msgid "{value, plural, one {# request} other {# requests}}"
 msgstr "{value, plural, other {# 次请求}}"
 
@@ -364,11 +364,11 @@ msgstr "认证"
 msgid "Auth mode"
 msgstr "认证方式"
 
-#: src/admin-ui/helpers.tsx:402
+#: src/admin-ui/helpers.tsx:430
 msgid "available"
 msgstr "可用"
 
-#: src/admin-ui/helpers.tsx:421
+#: src/admin-ui/helpers.tsx:449
 msgid "Available"
 msgstr "可用"
 
@@ -398,7 +398,7 @@ msgid "Backup"
 msgstr "备用"
 
 #. placeholder {0}: credits.balance
-#: src/admin-ui/helpers.tsx:418
+#: src/admin-ui/helpers.tsx:446
 msgid "Balance {0}"
 msgstr "余额 {0}"
 
@@ -548,7 +548,7 @@ msgstr "并发"
 msgid "Concurrency limit"
 msgstr "并发上限"
 
-#: src/admin-ui/helpers.tsx:444
+#: src/admin-ui/helpers.tsx:472
 msgid "Configured"
 msgstr "已配置"
 
@@ -564,7 +564,7 @@ msgstr "已配置的上游身份与调度状态。"
 msgid "Connection"
 msgstr "连接"
 
-#: src/admin-ui/helpers.tsx:471
+#: src/admin-ui/helpers.tsx:499
 msgid "Copied"
 msgstr "已复制"
 
@@ -818,7 +818,7 @@ msgstr "浅色"
 msgid "Limit"
 msgstr "限额"
 
-#: src/admin-ui/helpers.tsx:395
+#: src/admin-ui/helpers.tsx:423
 msgid "limited"
 msgstr "已限流"
 
@@ -904,7 +904,7 @@ msgstr "此 Google 账号报告的模型与配额。"
 msgid "Name"
 msgstr "名称"
 
-#: src/admin-ui/helpers.tsx:459
+#: src/admin-ui/helpers.tsx:487
 msgid "never"
 msgstr "从未"
 
@@ -952,7 +952,7 @@ msgstr "没有 DeepSeek Harness 路由"
 msgid "No description"
 msgstr "无描述"
 
-#: src/admin-ui/helpers.tsx:118
+#: src/admin-ui/helpers.tsx:146
 msgid "no keys"
 msgstr "无字段"
 
@@ -990,7 +990,7 @@ msgstr "未返回配额窗口"
 msgid "No relay traffic"
 msgstr "没有中继流量"
 
-#: src/admin-ui/helpers.tsx:115
+#: src/admin-ui/helpers.tsx:143
 msgid "No request summary"
 msgstr "无请求摘要"
 
@@ -1004,15 +1004,15 @@ msgstr "此窗口内没有请求"
 msgid "No rpm"
 msgstr "无 rpm 限制"
 
-#: src/admin-ui/helpers.tsx:88
+#: src/admin-ui/helpers.tsx:116
 msgid "No stripped params"
 msgstr "未剥离参数"
 
-#: src/admin-ui/helpers.tsx:117
+#: src/admin-ui/helpers.tsx:145
 msgid "non-stream"
 msgstr "非流式"
 
-#: src/admin-ui/helpers.tsx:424
+#: src/admin-ui/helpers.tsx:452
 msgid "None"
 msgstr "无"
 
@@ -1056,6 +1056,10 @@ msgstr "概览"
 #: src/admin-ui/shared.tsx:42
 msgid "Page not found"
 msgstr "页面不存在"
+
+#: src/admin-ui/helpers.tsx:64
+msgid "partially limited"
+msgstr "部分受限"
 
 #: src/App.tsx:208
 msgid "Password"
@@ -1115,7 +1119,7 @@ msgstr "预设"
 msgid "Preview"
 msgstr "预览"
 
-#: src/admin-ui/helpers.tsx:54
+#: src/admin-ui/helpers.tsx:82
 msgid "primary"
 msgstr "主"
 
@@ -1237,6 +1241,10 @@ msgstr "公开模型标识与面向客户端的元数据。"
 msgid "Quota"
 msgstr "配额"
 
+#: src/admin-ui/helpers.tsx:50
+msgid "quota exhausted"
+msgstr "额度已耗尽"
+
 #: src/admin-ui/accounts.tsx:630
 msgid "Quota source"
 msgstr "配额来源"
@@ -1253,11 +1261,15 @@ msgstr "配额不可用"
 msgid "Rate limit"
 msgstr "速率限制"
 
+#: src/admin-ui/helpers.tsx:57
+msgid "rate limited"
+msgstr "已限流"
+
 #: src/admin-ui/accounts.tsx:991
 msgid "Raw refresh token"
 msgstr "原始 refresh token"
 
-#: src/admin-ui/helpers.tsx:437
+#: src/admin-ui/helpers.tsx:465
 msgid "Reached"
 msgstr "已达上限"
 
@@ -1274,6 +1286,10 @@ msgstr "重新连接"
 #: src/admin-ui/accounts.tsx:317
 msgid "Reconnect Antigravity"
 msgstr "重新连接 Antigravity"
+
+#: src/admin-ui/helpers.tsx:71
+msgid "recovering"
+msgstr "恢复检查中"
 
 #: src/App.tsx:294
 msgid "Refresh"
@@ -1531,11 +1547,11 @@ msgstr "请立即保存此值"
 msgid "Stored metadata and request limits for this client credential."
 msgstr "此客户端凭证的存储元数据与请求限额。"
 
-#: src/admin-ui/helpers.tsx:117
+#: src/admin-ui/helpers.tsx:145
 msgid "stream"
 msgstr "流式"
 
-#: src/admin-ui/helpers.tsx:91
+#: src/admin-ui/helpers.tsx:119
 msgid "strip {params}"
 msgstr "剥离 {params}"
 
@@ -1639,22 +1655,22 @@ msgstr "密钥前缀不符合预期"
 #: src/admin-ui/accounts.tsx:855
 #: src/admin-ui/accounts.tsx:858
 #: src/admin-ui/accounts.tsx:932
-#: src/admin-ui/helpers.tsx:105
-#: src/admin-ui/helpers.tsx:339
-#: src/admin-ui/helpers.tsx:341
-#: src/admin-ui/helpers.tsx:361
-#: src/admin-ui/helpers.tsx:408
-#: src/admin-ui/helpers.tsx:426
-#: src/admin-ui/helpers.tsx:437
-#: src/admin-ui/helpers.tsx:449
+#: src/admin-ui/helpers.tsx:133
+#: src/admin-ui/helpers.tsx:367
+#: src/admin-ui/helpers.tsx:369
+#: src/admin-ui/helpers.tsx:389
+#: src/admin-ui/helpers.tsx:436
+#: src/admin-ui/helpers.tsx:454
+#: src/admin-ui/helpers.tsx:465
+#: src/admin-ui/helpers.tsx:477
 msgid "unknown"
 msgstr "未知"
 
-#: src/admin-ui/helpers.tsx:454
+#: src/admin-ui/helpers.tsx:482
 msgid "Unknown"
 msgstr "未知"
 
-#: src/admin-ui/helpers.tsx:415
+#: src/admin-ui/helpers.tsx:443
 msgid "Unlimited"
 msgstr "无限制"
 
