@@ -31,6 +31,7 @@
 | `just sdk-generate` | Generate and format the TypeScript admin SDK |
 | `just ui-check` | Run frontend formatting, lint, and type checks |
 | `just ui-build` | Build the admin interface |
+| `just package` | Build frontend and release binary, package into `dist-deploy/` |
 | `just ci` | Run the full local CI pipeline |
 
 Run `just sdk-generate` after changing OpenAPI schemas or routes. The generated OpenAPI document is written to `openapi/token-toxication.openapi.json`, and the generated TypeScript SDK is written to `apps/admin/src/generated/token-toxication`.

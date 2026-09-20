@@ -55,17 +55,11 @@ ui-install:
 
 # Verify that every translatable admin string is present in the locale catalogs.
 ui-i18n-check:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    snapshot="$(mktemp -d)"
-    trap 'rm -rf "$snapshot"' EXIT
-    cp -R apps/admin/src/locales/. "$snapshot/"
-    cd apps/admin
-    vp exec lingui extract --clean
-    if ! diff -ru "$snapshot" src/locales; then
-        echo "Lingui catalogs are stale. Commit the extracted catalog changes." >&2
-        exit 1
-    fi
+    rm -rf apps/admin/.locales-snapshot
+    cp -R apps/admin/src/locales apps/admin/.locales-snapshot
+    cd apps/admin && vp exec lingui extract --clean
+    diff -ru apps/admin/.locales-snapshot apps/admin/src/locales || (rm -rf apps/admin/.locales-snapshot && echo "Lingui catalogs are stale. Commit the extracted catalog changes." >&2 && exit 1)
+    rm -rf apps/admin/.locales-snapshot
 
 # Run Vite+ frontend checks
 ui-check:
@@ -91,3 +85,16 @@ ui-dev:
 
 # Run the full local CI pipeline
 ci: fmt-check clippy test sdk-generate ui-i18n-check ui-check ui-test ui-build
+
+# ---------- Deployment ----------
+
+# Build release binary and package deployment bundle into a single folder
+package out_dir="dist-deploy": ui-build
+    cargo build --release -p token-toxication-server --bin token-toxication-server
+    rm -rf "{{out_dir}}"
+    mkdir -p "{{out_dir}}"
+    [ -f "target/release/token-toxication-server.exe" ] && cp target/release/token-toxication-server.exe "{{out_dir}}/" || true
+    [ -f "target/release/token-toxication-server" ] && cp target/release/token-toxication-server "{{out_dir}}/" || true
+    [ -f ".env.example" ] && cp .env.example "{{out_dir}}/.env.example" && cp .env.example "{{out_dir}}/.env" || true
+    echo "Package ready in: {{out_dir}}/"
+

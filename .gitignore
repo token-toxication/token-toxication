@@ -9,3 +9,5 @@
 *.log
 .DS_Store
 .env
+/dist-deploy/
+.locales-snapshot
