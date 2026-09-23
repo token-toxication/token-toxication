@@ -1,15 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { ClipboardCopyIcon, DatabaseIcon, KeyRoundIcon } from "lucide-react";
 import { plural, t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 
 import { dshModelCapabilities } from "./dsh-model-capabilities";
-import {
-  codexMinimumClientVersion,
-  codexModelCatalogJson,
-  supportsAdvancedCodexProfile,
-  type CodexAdvancedOptions,
-} from "./codex-model-catalog";
 import {
   catalogModelIds,
   codexModelOptions,
@@ -17,7 +11,6 @@ import {
   dshModelOptions,
   enabledCatalogModelOptions,
   opencodeModelOptions,
-  preferredCatalogModel,
   routableModelIdsForWireApi,
   shellQuote,
   tomlString,
@@ -37,16 +30,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const dshProviderIds: Record<DshProtocol, string> = {
@@ -119,36 +102,6 @@ export function dshProviderYaml(
   ].join("\n");
 }
 
-export function dshDefaultModelYaml(model: DshModelOption) {
-  const preferResponses =
-    model.protocols.responses &&
-    [
-      "gpt-6-astra",
-      "gpt-6-sol",
-      "gpt-6-luna",
-      "gpt-5.6-sol",
-      "gpt-5.6-terra",
-      "gpt-5.6-luna",
-    ].includes(model.id);
-  const protocol: DshProtocol = preferResponses
-    ? "responses"
-    : model.protocols.chat
-      ? "chat"
-      : model.protocols.responses
-        ? "responses"
-        : "anthropic";
-  const lines = [
-    "agent-default-model:",
-    `  provider: ${dshProviderIds[protocol]}`,
-    `  model: ${JSON.stringify(model.id)}`,
-  ];
-  const reasoning = dshModelCapabilities(model, protocol)?.reasoning;
-  if (reasoning) {
-    lines.push(`  reasoningEffort: ${reasoning.defaultEffort}`);
-  }
-  return lines.join("\n");
-}
-
 export function ClientSetupView({
   models,
   routableModels,
@@ -165,7 +118,6 @@ export function ClientSetupView({
     [],
   );
   const catalogModels = useMemo(() => catalogModelIds(models), [models]);
-  const [codexAdvanced, setCodexAdvanced] = useState<Record<string, CodexAdvancedOptions>>({});
   const codexModels = useMemo(
     () => codexModelOptions(models, routableModels),
     [models, routableModels],
@@ -186,67 +138,21 @@ export function ClientSetupView({
     const responseModels = new Set(codexModels.map((model) => model.id));
     return enabledCatalogModelOptions(models).filter((model) => responseModels.has(model.id));
   }, [codexModels, models]);
-  const opencodeModelIds = useMemo(() => opencodeModels.map((model) => model.id), [opencodeModels]);
   const dshModels = useMemo(
     () => dshModelOptions(models, routableModels),
     [models, routableModels],
   );
-  const dshModelIds = useMemo(() => dshModels.map((model) => model.id), [dshModels]);
-  const [codexModel, setCodexModel] = useState("");
-  const [claudeModel, setClaudeModel] = useState("");
-  const [opencodeModel, setOpencodeModel] = useState("");
-  const [dshModel, setDshModel] = useState("");
-  const selectedOpencodeModel = opencodeModelIds.includes(opencodeModel)
-    ? opencodeModel
-    : (opencodeModelIds[0] ?? "");
-  const selectedDshModel = dshModelIds.includes(dshModel) ? dshModel : (dshModelIds[0] ?? "");
-
-  useEffect(() => {
-    setCodexModel((current) =>
-      preferredCatalogModel(
-        current,
-        codexModels.map((model) => model.id),
-        "gpt-5",
-      ),
-    );
-  }, [codexModels]);
-
-  useEffect(() => {
-    setClaudeModel((current) => preferredCatalogModel(current, catalogModels, "claude-sonnet-4-5"));
-  }, [catalogModels]);
-
-  const opencodeWireApi = opencodeModels.find(
-    (model) => model.id === selectedOpencodeModel,
-  )?.wireApi;
 
   const snippets = useMemo(
     () =>
       buildClientSetupSnippets({
         apiKey,
         serviceOrigin,
-        codexModel,
-        codexModels,
-        codexAdvanced,
-        claudeModel,
-        opencodeModel: selectedOpencodeModel,
         opencodeModels,
         piModels,
-        dshModel: selectedDshModel,
         dshModels,
       }),
-    [
-      apiKey,
-      serviceOrigin,
-      codexModel,
-      codexModels,
-      codexAdvanced,
-      claudeModel,
-      selectedOpencodeModel,
-      opencodeModels,
-      piModels,
-      selectedDshModel,
-      dshModels,
-    ],
+    [apiKey, serviceOrigin, opencodeModels, piModels, dshModels],
   );
   const keyLooksValid = apiKey.trim() === "" || apiKey.trim().startsWith("tokentoxication-");
 
@@ -318,46 +224,7 @@ export function ClientSetupView({
                 </Trans>
               </AlertDescription>
             </Alert>
-          ) : (
-            <div className="grid gap-4 lg:col-span-2 lg:grid-cols-2 xl:grid-cols-4">
-              <ClientModelField
-                id="setup-codex-model"
-                label="Codex"
-                value={codexModel}
-                onChange={setCodexModel}
-                options={codexModels.map((model) => model.id)}
-                routedOptions={codexModels.map((model) => model.id)}
-                routeLabel={t`Responses`}
-              />
-              <ClientModelField
-                id="setup-claude-model"
-                label="Claude Code"
-                value={claudeModel}
-                onChange={setClaudeModel}
-                options={catalogModels}
-                routedOptions={claudeModels}
-                routeLabel={t`Messages`}
-              />
-              <ClientModelField
-                id="setup-opencode-model"
-                label="opencode"
-                value={selectedOpencodeModel}
-                onChange={setOpencodeModel}
-                options={opencodeModelIds}
-                routedOptions={opencodeModelIds}
-                routeLabel={t`Chat or Responses`}
-              />
-              <ClientModelField
-                id="setup-dsh-model"
-                label="DeepSeek Harness"
-                value={selectedDshModel}
-                onChange={setDshModel}
-                options={dshModelIds}
-                routedOptions={dshModelIds}
-                routeLabel={t`Chat, Responses, or Messages`}
-              />
-            </div>
-          )}
+          ) : null}
         </CardContent>
       </Card>
 
@@ -375,98 +242,70 @@ export function ClientSetupView({
               <div className="grid gap-5">
                 <Card>
                   <CardHeader>
-                    <CardTitle>Optional Codex capabilities</CardTitle>
+                    <CardTitle>
+                      <Trans>Routable Responses models</Trans>
+                    </CardTitle>
                     <CardDescription>
                       <Trans>
-                        Applies only to {codexModel}. The full profile requires Codex{" "}
-                        {codexMinimumClientVersion(codexModel)} and compatible upstream routes.
-                        These settings do not verify upstream support or change billing tiers.
+                        Codex uses its own model catalog and chooses the model. Check that the
+                        selected model has a compatible relay route; every fallback route must
+                        support the protocol Codex sends.
                       </Trans>
                     </CardDescription>
                   </CardHeader>
-                  <CardContent className="flex flex-col gap-4">
-                    {(
-                      [
-                        [
-                          "responsesLite",
-                          "Responses Lite",
-                          "Requires every eligible route for this model to support Lite.",
-                        ],
-                        [
-                          "codeMode",
-                          "Code mode",
-                          "Run tools through the client's JavaScript tool runtime.",
-                        ],
-                        [
-                          "multiAgent",
-                          "Multi-agent tools",
-                          "Expose model-specific agent tools and Ultra where supported. Delegation still follows user instructions.",
-                        ],
-                      ] as const
-                    ).map(([key, label, hint]) => (
-                      <Field key={key} label={label} htmlFor={`codex-${key}`}>
-                        <Switch
-                          id={`codex-${key}`}
-                          aria-label={label}
-                          disabled={!supportsAdvancedCodexProfile(codexModel)}
-                          checked={Boolean(codexAdvanced[codexModel]?.[key])}
-                          onCheckedChange={(checked) =>
-                            setCodexAdvanced((previous) => ({
-                              ...previous,
-                              [codexModel]: { ...previous[codexModel], [key]: checked },
-                            }))
-                          }
-                        />
-                        <p className="text-sm text-muted-foreground">{hint}</p>
-                      </Field>
+                  <CardContent className="flex flex-wrap gap-2">
+                    {codexModels.map((model) => (
+                      <Badge key={model.id} variant="secondary">
+                        {model.id}
+                      </Badge>
                     ))}
                   </CardContent>
                 </Card>
                 <ClientSnippetCard
-                  title={t`Codex static model catalog`}
-                  description={t`Run this once to snapshot every routed Responses model. Re-run it after changing the model catalog.`}
-                  endpoint="~/.codex/token-toxication-model-catalog.json"
-                  model={plural(codexModels.length, {
-                    one: "# routed model",
-                    other: "# routed models",
-                  })}
-                  snippet={snippets.codexCatalog}
+                  title={t`Codex environment`}
+                  description={t`Set the relay key in the environment that starts Codex. Do not put it in config.toml.`}
+                  endpoint="TOKEN_TOXICATION_API_KEY"
+                  model={t`Chosen in Codex`}
+                  snippet={snippets.codexEnvironment}
                 />
                 <ClientSnippetCard
-                  title={t`Codex default configuration`}
-                  description={t`Merge this root-level TOML into ~/.codex/config.toml, then run codex without --profile. It does not overwrite other settings.`}
+                  title={t`Codex provider configuration`}
+                  description={t`Merge this TOML into ~/.codex/config.toml. Keep your own model preferences and remove any earlier Token Toxication model_catalog_json override.`}
                   endpoint="/openai/v1/responses"
-                  model={codexModel || t`not set`}
+                  model={t`Chosen in Codex`}
                   snippet={snippets.codexConfig}
                 />
               </div>
             ) : (
               <EmptyNotice
                 title={t`No Codex routes`}
-                body={t`Add an enabled OpenAI Responses route to generate a Codex static catalog.`}
+                body={t`Add an enabled OpenAI Responses route to configure Codex.`}
               />
             )}
           </TabsContent>
           <TabsContent value="claude">
-            <ClientSnippetCard
-              title={t`Claude Code environment`}
-              description={t`Points Claude Code at the Anthropic Messages namespace.`}
-              endpoint="/anthropic/v1/messages"
-              model={claudeModel}
-              snippet={snippets.claudeCode}
-            />
+            {claudeModels.length > 0 ? (
+              <ClientSnippetCard
+                title={t`Claude Code environment`}
+                description={t`Points Claude Code at the Anthropic Messages namespace.`}
+                endpoint="/anthropic/v1/messages"
+                model={t`Chosen in Claude Code`}
+                snippet={snippets.claudeCode}
+              />
+            ) : (
+              <EmptyNotice
+                title={t`No Claude Code routes`}
+                body={t`Add an enabled Anthropic Messages route to configure Claude Code.`}
+              />
+            )}
           </TabsContent>
           <TabsContent value="opencode">
             {opencodeModels.length > 0 ? (
               <ClientSnippetCard
                 title={t`opencode project config`}
                 description={t`Binds each model to the AI SDK matching its configured OpenAI route.`}
-                endpoint={
-                  opencodeWireApi === "openai-responses"
-                    ? "/openai/v1/responses"
-                    : "/openai/v1/chat/completions"
-                }
-                model={selectedOpencodeModel}
+                endpoint="/openai/v1"
+                model={t`Chosen in opencode`}
                 snippet={snippets.opencode}
               />
             ) : (
@@ -499,9 +338,9 @@ export function ClientSetupView({
             {dshModels.length > 0 ? (
               <ClientSnippetCard
                 title={t`DeepSeek Harness provider`}
-                description={t`Set TOKEN_TOXICATION_API_KEY in the harness process environment, then merge these llm-pi-ai provider routes and the default model into ~/.dsh/settings.yaml. Keep existing keys; the harness applies changes on the next request.`}
+                description={t`Set TOKEN_TOXICATION_API_KEY in the harness process environment, then merge these llm-pi-ai provider routes into ~/.dsh/settings.yaml. Keep existing keys; the harness applies changes on the next request.`}
                 endpoint="settings.yaml · llm-pi-ai"
-                model={selectedDshModel}
+                model={t`Chosen in DeepSeek Harness`}
                 snippet={snippets.dsh}
               />
             ) : (
@@ -513,55 +352,6 @@ export function ClientSetupView({
           </TabsContent>
         </Tabs>
       ) : null}
-    </div>
-  );
-}
-
-function ClientModelField({
-  id,
-  label,
-  value,
-  onChange,
-  options,
-  routedOptions,
-  routeLabel,
-}: {
-  id: string;
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  options: string[];
-  routedOptions: string[];
-  routeLabel: string;
-}) {
-  const isRouted = routedOptions.includes(value);
-  return (
-    <div className="flex flex-col gap-3 rounded-md border p-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex flex-col gap-1">
-          <Label htmlFor={id}>{label}</Label>
-          <span className="text-xs text-muted-foreground">
-            <Trans>{routeLabel} route required</Trans>
-          </span>
-        </div>
-        <Badge variant={isRouted ? "secondary" : "outline"}>
-          {isRouted ? t`routed` : t`not routed`}
-        </Badge>
-      </div>
-      <Select value={value} onValueChange={onChange}>
-        <SelectTrigger id={id}>
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectGroup>
-            {options.map((model) => (
-              <SelectItem key={model} value={model}>
-                {model}
-              </SelectItem>
-            ))}
-          </SelectGroup>
-        </SelectContent>
-      </Select>
     </div>
   );
 }
@@ -607,36 +397,20 @@ function ClientSnippetCard({
 export function buildClientSetupSnippets({
   apiKey,
   serviceOrigin,
-  codexModel,
-  codexModels,
-  codexAdvanced = {},
-  claudeModel,
-  opencodeModel,
   opencodeModels,
   piModels,
-  dshModel,
   dshModels,
 }: {
   apiKey: string;
   serviceOrigin: string;
-  codexModel: string;
-  codexModels: ClientModelOption[];
-  codexAdvanced?: Record<string, CodexAdvancedOptions>;
-  claudeModel: string;
-  opencodeModel: string;
   opencodeModels: OpencodeModelOption[];
   piModels: ClientModelOption[];
-  dshModel: string;
   dshModels: DshModelOption[];
 }) {
   const origin = serviceOrigin.replace(/\/+$/, "");
   const relayApiKey = apiKey.trim() || "tokentoxication-REPLACE_ME";
   const openaiBaseUrl = `${origin}/openai/v1`;
   const anthropicBaseUrl = `${origin}/anthropic`;
-  const codexModelName = codexModel.trim() || "gpt-5";
-  const codexModelCatalog = codexModelCatalogJson(codexModels, codexAdvanced);
-  const claudeModelName = claudeModel.trim() || "claude-sonnet-4-5";
-  const opencodeModelName = opencodeModel.trim() || opencodeModels[0]?.id || "";
   const opencodeProvider = "token-toxication";
   const opencodeConfig = JSON.stringify(
     {
@@ -664,12 +438,6 @@ export function buildClientSetupSnippets({
           ),
         },
       },
-      ...(opencodeModelName
-        ? {
-            model: `${opencodeProvider}/${opencodeModelName}`,
-            small_model: `${opencodeProvider}/${opencodeModelName}`,
-          }
-        : {}),
     },
     null,
     2,
@@ -693,8 +461,6 @@ export function buildClientSetupSnippets({
     null,
     2,
   );
-  const dshModelName = dshModel.trim() || dshModels[0]?.id || "";
-  const selectedDshModel = dshModels.find((model) => model.id === dshModelName);
   const dshProviderSections = (Object.keys(dshProviderIds) as DshProtocol[])
     .map((protocol) =>
       dshProviderYaml(
@@ -713,27 +479,18 @@ export function buildClientSetupSnippets({
     "llm-pi-ai:",
     "  providers:",
     ...dshProviderSections,
-    ...(selectedDshModel ? ["", dshDefaultModelYaml(selectedDshModel)] : []),
   ].join("\n");
 
   return {
     openaiBaseUrl,
     anthropicBaseUrl,
-    codexCatalog: [
-      `export TOKEN_TOXICATION_API_KEY=${shellQuote(relayApiKey)}`,
-      "mkdir -p ~/.codex",
-      "cat > ~/.codex/token-toxication-model-catalog.json <<'JSON'",
-      codexModelCatalog,
-      "JSON",
-    ].join("\n"),
+    codexEnvironment: `export TOKEN_TOXICATION_API_KEY=${shellQuote(relayApiKey)}`,
     codexConfig: [
-      "# Merge this TOML into ~/.codex/config.toml. Replace any existing",
-      "# model, model_provider, model_catalog_json, and token-toxication provider",
-      "# settings instead of appending duplicate TOML keys or tables.",
+      "# Set TOKEN_TOXICATION_API_KEY in the Codex process environment.",
+      "# Merge into ~/.codex/config.toml; keep your own model and reasoning settings.",
+      "# Remove an earlier Token Toxication model_catalog_json override to use Codex's catalog.",
       "",
-      `model = ${tomlString(codexModelName)}`,
       `model_provider = ${tomlString("token-toxication")}`,
-      `model_catalog_json = ${tomlString("~/.codex/token-toxication-model-catalog.json")}`,
       "",
       "[model_providers.token-toxication]",
       `name = ${tomlString("Token Toxication")}`,
@@ -744,10 +501,7 @@ export function buildClientSetupSnippets({
     claudeCode: [
       `export ANTHROPIC_BASE_URL=${shellQuote(anthropicBaseUrl)}`,
       `export ANTHROPIC_AUTH_TOKEN=${shellQuote(relayApiKey)}`,
-      `export ANTHROPIC_MODEL=${shellQuote(claudeModelName)}`,
       "export CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1",
-      "",
-      `claude -p ${shellQuote("Reply with one word: connected")}`,
     ].join("\n"),
     opencode: [
       `export TOKEN_TOXICATION_API_KEY=${shellQuote(relayApiKey)}`,

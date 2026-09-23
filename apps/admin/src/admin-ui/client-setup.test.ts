@@ -1,12 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  buildClientSetupSnippets,
-  dshDefaultModelYaml,
-  dshModelEntryYaml,
-  dshProviderYaml,
-} from "./client-setup";
-import { codexModelCatalogJson } from "./codex-model-catalog";
+import { buildClientSetupSnippets, dshModelEntryYaml, dshProviderYaml } from "./client-setup";
 import { codexModelOptions, dshModelOptions } from "./helpers";
 import type { ClientModelOption, DshModelOption } from "./types";
 import type { ModelCatalogEntry, RoutableModelCatalogEntry } from "../types";
@@ -46,23 +40,9 @@ const routable: RoutableModelCatalogEntry[] = [
 
 const codexModels: ClientModelOption[] = [{ id: "gpt-5", displayName: "gpt-5" }];
 
-describe("Codex static model catalog", () => {
-  it("includes every enabled Responses route and no Chat-only model", () => {
+describe("Codex route summary", () => {
+  it("includes enabled Responses routes without Chat-only models", () => {
     expect(codexModelOptions(catalog, routable)).toEqual(codexModels);
-  });
-
-  it("generates a conservative catalog that Codex can use without model discovery", () => {
-    const catalog = JSON.parse(codexModelCatalogJson(codexModels));
-
-    expect(catalog.models).toHaveLength(1);
-    expect(catalog.models[0]).toMatchObject({
-      slug: "gpt-5",
-      display_name: "gpt-5",
-      visibility: "list",
-      supported_in_api: true,
-      input_modalities: ["text"],
-    });
-    expect(catalog.models[0].supported_reasoning_levels).toEqual([]);
   });
 });
 
@@ -71,7 +51,7 @@ describe("dshModelOptions", () => {
     ["gpt-5.6-sol", "low"],
     ["gpt-5.6-terra", "medium"],
     ["gpt-5.6-luna", "medium"],
-  ])("keeps %s Responses configuration and its %s default", (id, effort) => {
+  ])("keeps %s Responses capabilities", (id) => {
     const [model] = dshModelOptions(
       [catalogEntry(id, "other")],
       [
@@ -81,22 +61,6 @@ describe("dshModelOptions", () => {
     );
     expect(dshModelEntryYaml(model, "responses")).toContain("input: [text, image]");
     expect(dshModelEntryYaml(model, "responses")).toContain("max: max");
-    expect(dshDefaultModelYaml(model)).toBe(
-      [
-        "agent-default-model:",
-        "  provider: token-toxication-responses",
-        `  model: "${id}"`,
-        `  reasoningEffort: ${effort}`,
-      ].join("\n"),
-    );
-    expect(
-      dshDefaultModelYaml({
-        ...model,
-        protocols: { chat: true, responses: false, anthropic: false },
-      }),
-    ).toBe(
-      ["agent-default-model:", "  provider: token-toxication-chat", `  model: "${id}"`].join("\n"),
-    );
   });
 
   it.each(["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"])(
@@ -110,7 +74,6 @@ describe("dshModelOptions", () => {
       expect(dshModelEntryYaml(model, "chat")).not.toContain("reasoningEfforts");
       expect(dshModelEntryYaml(model, "chat")).not.toContain("thinkingFormat");
       expect(dshModelEntryYaml(model, "chat")).toContain("supportsPromptCacheKey: true");
-      expect(dshDefaultModelYaml(model)).not.toContain("reasoningEffort");
     },
   );
 
@@ -118,7 +81,7 @@ describe("dshModelOptions", () => {
     ["gpt-6-astra", "low"],
     ["gpt-6-sol", "medium"],
     ["gpt-6-luna", "medium"],
-  ])("requires Responses for %s agent routes and chooses that protocol", (id, defaultEffort) => {
+  ])("requires Responses for %s agent routes", (id) => {
     const models = [catalogEntry(id, "other")];
     const chat = { id, wireApi: "openai-chat" };
     expect(dshModelOptions(models, [chat])).toEqual([]);
@@ -130,14 +93,6 @@ describe("dshModelOptions", () => {
     expect(gpt6.protocols).toEqual({ chat: false, responses: true, anthropic: false });
     expect(dshModelEntryYaml(gpt6, "responses")).toContain("input: [text, image]");
     expect(dshModelEntryYaml(gpt6, "responses")).toContain("max: max");
-    expect(dshDefaultModelYaml(gpt6)).toBe(
-      [
-        "agent-default-model:",
-        "  provider: token-toxication-responses",
-        `  model: "${id}"`,
-        `  reasoningEffort: ${defaultEffort}`,
-      ].join("\n"),
-    );
   });
 
   it("keeps enabled models routed through a DeepSeek Harness protocol", () => {
@@ -171,30 +126,25 @@ describe("dshModelOptions", () => {
 describe("DeepSeek Harness settings snippet", () => {
   const dshModels = dshModelOptions(catalog, routable);
 
-  function snippetsFor(model: string, origin = "http://relay.example:3000") {
+  function snippetsFor(origin = "http://relay.example:3000") {
     return buildClientSetupSnippets({
       apiKey: "tokentoxication-test",
       serviceOrigin: origin,
-      codexModel: "gpt-5",
-      codexModels,
-      claudeModel: "claude-sonnet-4-5",
-      opencodeModel: "",
       opencodeModels: [],
       piModels: [],
-      dshModel: model,
       dshModels,
     });
   }
 
   it("enables a stable session body field for generated Chat providers", () => {
-    const snippets = snippetsFor("deepseek-v4-pro");
+    const snippets = snippetsFor();
 
     expect(snippets.dsh).toContain("token-toxication-chat:");
     expect(snippets.dsh).toContain("supportsPromptCacheKey: true");
   });
 
   it("emits one provider route per routed protocol with the relay base URLs", () => {
-    const snippets = snippetsFor("deepseek-v4-pro");
+    const snippets = snippetsFor();
 
     expect(snippets.dsh).toContain("token-toxication-chat:");
     expect(snippets.dsh).toContain('displayName: "Token Toxication"');
@@ -211,7 +161,7 @@ describe("DeepSeek Harness settings snippet", () => {
   });
 
   it("emits a secret-free settings.yaml fragment without shell commands", () => {
-    const snippets = snippetsFor("deepseek-v4-pro");
+    const snippets = snippetsFor();
 
     expect(snippets.dsh).toMatch(/^# Set TOKEN_TOXICATION_API_KEY/);
     expect(snippets.dsh).not.toContain("export TOKEN_TOXICATION_API_KEY");
@@ -220,7 +170,7 @@ describe("DeepSeek Harness settings snippet", () => {
   });
 
   it("declares protocol-specific reasoning efforts for DeepSeek and OpenAI models", () => {
-    const snippets = snippetsFor("deepseek-v4-pro");
+    const snippets = snippetsFor();
 
     expect(snippets.dsh).toContain(
       [
@@ -254,29 +204,8 @@ describe("DeepSeek Harness settings snippet", () => {
     expect(responsesProvider).not.toContain("thinkingFormat:");
   });
 
-  it("points the default model at its protocol route", () => {
-    const deepseek = snippetsFor("deepseek-v4-pro");
-    expect(deepseek.dsh).toContain(
-      [
-        "agent-default-model:",
-        "  provider: token-toxication-chat",
-        '  model: "deepseek-v4-pro"',
-        "  reasoningEffort: max",
-      ].join("\n"),
-    );
-
-    const responses = snippetsFor("gpt-5");
-    expect(responses.dsh).toContain(
-      [
-        "agent-default-model:",
-        "  provider: token-toxication-responses",
-        '  model: "gpt-5"',
-        "  reasoningEffort: high",
-      ].join("\n"),
-    );
-
-    const anthropic = snippetsFor("claude-sonnet-4-5");
-    expect(anthropic.dsh).toContain("provider: token-toxication-anthropic");
+  it("preserves the harness's existing default model", () => {
+    expect(snippetsFor().dsh).not.toContain("agent-default-model:");
   });
 
   it("omits protocols with no routable models", () => {
@@ -291,13 +220,8 @@ describe("DeepSeek Harness settings snippet", () => {
     const snippets = buildClientSetupSnippets({
       apiKey: "tokentoxication-test",
       serviceOrigin: "http://relay.example:3000",
-      codexModel: "gpt-5",
-      codexModels,
-      claudeModel: "claude-sonnet-4-5",
-      opencodeModel: "",
       opencodeModels: [],
       piModels: [],
-      dshModel: "deepseek-v4-pro",
       dshModels: chatOnly,
     });
 
@@ -307,28 +231,47 @@ describe("DeepSeek Harness settings snippet", () => {
   });
 });
 
-describe("Codex default configuration snippet", () => {
-  it("writes the static catalog and configures the base config without a profile", () => {
+describe("Codex provider configuration snippet", () => {
+  it("configures the provider while leaving models and Codex capabilities to the client", () => {
     const snippets = buildClientSetupSnippets({
       apiKey: "tokentoxication-test",
       serviceOrigin: "http://relay.example:3000",
-      codexModel: "gpt-5",
-      codexModels,
-      claudeModel: "claude-sonnet-4-5",
-      opencodeModel: "",
       opencodeModels: [],
       piModels: [],
-      dshModel: "",
       dshModels: [],
     });
 
-    expect(snippets.codexCatalog).toContain("token-toxication-model-catalog.json");
-    expect(snippets.codexCatalog).toContain('slug": "gpt-5"');
-    expect(snippets.codexConfig).toContain(
-      'model_catalog_json = "~/.codex/token-toxication-model-catalog.json"',
+    expect(snippets.codexEnvironment).toBe(
+      "export TOKEN_TOXICATION_API_KEY='tokentoxication-test'",
     );
     expect(snippets.codexConfig).toContain('model_provider = "token-toxication"');
+    expect(snippets.codexConfig).toContain('env_key = "TOKEN_TOXICATION_API_KEY"');
+    expect(snippets.codexConfig).not.toContain("tokentoxication-test");
+    expect(snippets.codexConfig).not.toMatch(/^\s*(?:model|model_catalog_json)\s*=/m);
+    expect(snippets.codexConfig).not.toMatch(
+      /^\s*(?:use_responses_lite|tool_mode|multi_agent_version)\s*=/m,
+    );
     expect(snippets.codexConfig).not.toContain("--profile");
+  });
+});
+
+describe("client model selection", () => {
+  it("leaves default model choice with Claude Code, opencode, and DeepSeek Harness", () => {
+    const snippets = buildClientSetupSnippets({
+      apiKey: "tokentoxication-test",
+      serviceOrigin: "https://relay.example",
+      opencodeModels: [{ id: "gpt-6-astra", displayName: "Astra", wireApi: "openai-responses" }],
+      piModels: [],
+      dshModels: dshModelOptions(catalog, routable),
+    });
+    expect(snippets.claudeCode).toContain("CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1");
+    expect(snippets.claudeCode).not.toContain("ANTHROPIC_MODEL=");
+    const json = JSON.parse(snippets.opencode.split("<<'JSON'\n")[1].split("\nJSON")[0]);
+    expect(json.provider["token-toxication"].models).toHaveProperty("gpt-6-astra");
+    expect(json).not.toHaveProperty("model");
+    expect(json).not.toHaveProperty("small_model");
+    expect(snippets.dsh).toContain("token-toxication-responses:");
+    expect(snippets.dsh).not.toContain("agent-default-model:");
   });
 });
 
@@ -397,7 +340,6 @@ describe("DeepSeek Harness YAML builders", () => {
 
     expect(entry).toContain("input: [text, image]");
     expect(entry).toContain("reasoningEfforts: false");
-    expect(dshDefaultModelYaml(gpt41Responses)).not.toContain("reasoningEffort:");
   });
 
   it("uses exact capabilities when the catalog family is generic", () => {
@@ -406,7 +348,6 @@ describe("DeepSeek Harness YAML builders", () => {
     expect(entry).toContain("input: [text, image]");
     expect(entry).toContain("reasoningEfforts:");
     expect(entry).toContain("  max: max");
-    expect(dshDefaultModelYaml(gpt56OtherFamily)).toContain("reasoningEffort: medium");
   });
 
   it("renders OpenAI wire spellings without Chat compatibility fields", () => {
@@ -418,7 +359,6 @@ describe("DeepSeek Harness YAML builders", () => {
     expect(entry).not.toContain("off:");
     expect(entry).not.toContain("max:");
     expect(entry).not.toContain("compat:");
-    expect(dshDefaultModelYaml(gpt55Responses)).toContain("reasoningEffort: medium");
   });
 
   it("keeps DeepSeek reasoning compatibility on Chat provider entries", () => {
@@ -441,16 +381,5 @@ describe("DeepSeek Harness YAML builders", () => {
       expect(provider).not.toContain("reasoningEfforts:");
       expect(provider).not.toContain("thinkingFormat: deepseek");
     }
-  });
-
-  it("defaults a model routed on one protocol to that protocol's provider", () => {
-    expect(dshDefaultModelYaml(plainResponses)).toBe(
-      [
-        "agent-default-model:",
-        "  provider: token-toxication-responses",
-        '  model: "gpt-5"',
-        "  reasoningEffort: high",
-      ].join("\n"),
-    );
   });
 });

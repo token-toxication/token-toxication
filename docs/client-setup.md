@@ -8,13 +8,22 @@ The admin **Client Setup** page generates copy-ready configuration from enabled,
 
 | Client | Route selection | Generated configuration |
 | --- | --- | --- |
-| Codex | OpenAI Responses | Static model catalog, relay base URL, model, and API-key environment reference |
-| Claude Code | Anthropic Messages | Anthropic-compatible relay settings |
-| opencode | OpenAI Chat or Responses | The matching AI SDK and routed models |
+| Codex | OpenAI Responses | Provider base URL and API-key environment reference; Codex owns model selection |
+| Claude Code | Anthropic Messages | Anthropic-compatible relay settings and native model discovery |
+| opencode | OpenAI Chat or Responses | The matching AI SDK and routed models, without a default override |
 | Pi | OpenAI Responses | A complete `~/.pi/agent/models.json` file |
-| DeepSeek Harness | Chat, Responses, and Anthropic Messages | `llm-pi-ai` routes for `$DSH_HOME/settings.yaml` |
+| DeepSeek Harness | Chat, Responses, and Anthropic Messages | `llm-pi-ai` routes for `$DSH_HOME/settings.yaml`, without changing the agent default |
 
 Pi setup replaces its complete models file. Back up an existing `~/.pi/agent/models.json` before applying the generated content.
+
+Client Setup does not choose a model for Codex, Claude Code, opencode, or
+DeepSeek Harness. Select a routable model in the client after adding its
+provider. For Claude Code, keep an eligible route for its native default or
+select a model using its own picker. opencode's generated project file lists
+the routed models but leaves its `model` and `small_model` preferences unset.
+The DeepSeek Harness fragment preserves any existing `agent-default-model`;
+select a new default in the harness if needed. Existing client configuration
+and environment overrides may still pin a model until you change them.
 
 ## Session affinity
 
@@ -28,227 +37,63 @@ Custom clients should send `Token-Toxication-Session-ID` exactly as written (wit
 
 ## Codex
 
-1. Configure an enabled public model and an enabled OpenAI Responses provider route.
-2. Back up `~/.codex/config.toml` and any existing `~/.codex/token-toxication-model-catalog.json`.
-3. Copy the generated catalog setup, reviewing the key export before running it. The catalog command replaces that catalog file only.
-4. Merge the separate TOML fragment into `~/.codex/config.toml`. Replace matching keys and the `token-toxication` provider table instead of appending duplicates. Keep unrelated settings.
-5. Ensure `TOKEN_TOXICATION_API_KEY` is available to the process launching Codex, then start a new session.
+This setup targets the latest Codex reference inspected at commit `c44deff7b1`.
+Codex owns its model catalog, instructions, reasoning options, Responses Lite,
+Code Mode, and multi-agent behavior. The relay setup supplies only a provider
+endpoint and an environment-based relay key; it does not select a default model
+or replace Codex's catalog.
 
-The catalog is an authoritative static file, not an overlay on Codex's bundled models. Regenerate it after changing eligible routes or upgrading Token Toxication's model profiles. Updating the server alone does not update files already copied to clients. To roll back, restore the backed-up catalog and TOML configuration and start a new session; no database migration is required.
+1. Configure enabled public model IDs and OpenAI Responses routes for the
+   Codex models you intend to use. Each candidate route, including fallback
+   accounts, must support the request protocol sent by Codex. The routable
+   model list on Client Setup is a route summary, not a replacement model picker.
+2. Set `TOKEN_TOXICATION_API_KEY` in the environment that starts Codex. Keep
+   the secret out of `config.toml` and shared screenshots.
+3. Merge the generated provider TOML into `~/.codex/config.toml`. Keep your
+   own `model` and reasoning preferences. Select models through Codex.
+4. If migrating from an earlier Token Toxication setup, remove its
+   `model_catalog_json = "~/.codex/token-toxication-model-catalog.json"`
+   entry. The old catalog file can then be removed after backing it up. Review
+   any `model = ...` entry that came from the old snippet; keep or remove it
+   according to your own preference. Do not remove unrelated catalog settings
+   without reviewing them.
 
-### GPT-6 Astra
+Codex's built-in model picker may list a model without a matching relay route.
+Create the route before selecting that model; an unroutable request fails
+rather than silently switching models. The relay does not claim that every
+upstream supports the features declared by Codex's model catalog.
 
-The exact public ID `gpt-6-astra` receives the ordinary Responses profile defined in [codex-model-catalog.ts](../apps/admin/src/admin-ui/codex-model-catalog.ts). Make sure every upstream route for that public ID actually targets Astra and supports these capabilities.
+### Protocol compatibility
 
-| Capability | Generated setting |
-| --- | --- |
-| Reasoning | `low`, `medium`, `high`, `xhigh`, `max`; default `low` |
-| Input | Text and images; original image detail capability |
-| Verbosity | Supported; default `low` |
-| Tools | Unified exec, freeform apply_patch, parallel tool calls |
-| Tool output truncation | 10,000 tokens |
-| Context | 272,000 default, 872,000 maximum configurable tokens |
-| Reasoning summary | Omitted by default |
-| Instructions | Complete workspace, task-scope, persistence, validation, and communication guidance |
+Current Codex GPT-6 profiles use Responses Lite and Code Mode; Codex controls
+these model-level choices. The relay forwards the explicit Lite header and
+request layout, including `additional_tools` and developer messages. It
+rejects malformed Lite markers and never retries a Lite request as ordinary
+Responses. Qualify all candidate upstream routes with the intended protocol
+before using them; isolated mock tests do not establish live upstream support.
 
-Context sizes describe Codex's client configuration, not a guarantee about arbitrary upstream deployments. Codex reserves headroom, so the default usable context is 258,400 tokens. Larger configured contexts are bounded by the profile's maximum. Actual long-context inference and automatic compaction have not been live-qualified by the mock tests.
+The provider TOML defaults to HTTP/SSE. To use Responses WebSockets, confirm
+all candidate routes support the transport, then set `supports_websockets = true`
+inside `[model_providers.token-toxication]` according to your Codex version.
+The first request binds a connection to one model, route, and account;
+there is no cross-connection response resume or automatic replay. See relay
+transport tests for connection lifecycle and error handling.
 
-Unknown IDs retain the existing conservative text-only profile and short fallback instructions. Display names, provider family labels, custom aliases, provider prefixes, and dated Astra aliases do not select the Astra profile. The relay still routes those IDs normally; their client capabilities are not inferred from the upstream name.
-
-The setup does not overwrite an explicit `model_reasoning_effort`. If a previous configuration specifies `none` or `minimal`, change it to a supported Astra effort such as `low`. Existing user instruction overrides also remain authoritative. The relay does not inject or rewrite the caller's `instructions`.
-
-Responses Lite, Ultra, code-mode-only, experimental context management, and multi-agent v2 are not enabled by the default profile. Optional advanced settings and WebSocket transport are described below. Ultra is a Codex orchestration mode, not a wire effort that other clients should forward literally. This profile does not introduce Fast/priority processing defaults.
-
-For other clients, use Responses for tool calling and omit unsupported sampling parameters. The relay preserves client parameters except for configured route `stripParams` and the existing Codex OAuth `max_output_tokens` removal; it does not silently repair every invalid Astra request.
-
-### GPT-6 Sol and Luna
-
-The exact public IDs `gpt-6-sol` and `gpt-6-luna` receive the ordinary GPT-6
-Responses coding profile and their respective Codex workspace instruction
-templates in `codex-gpt-6-sol-instructions.ts` and
-`codex-gpt-6-luna-instructions.ts`. Both default to
-`medium` reasoning and support `low`, `medium`, `high`, `xhigh`, and `max`.
-They use the same configured context limits and input/tool capabilities as the
-Astra profile. Sol enables Codex's Node REPL auto-review requirement; Luna does
-not. Optional Responses Lite, code mode, and multi-agent v2 settings remain
-off until explicitly selected in Client Setup. The relay does not verify that
-an upstream route supports those optional capabilities. Codex 0.155.0 or newer
-is required for these model IDs; their generated catalog entries declare that
-minimum through `minimal_client_version`.
-
-### GPT-5.6 Sol, Terra, and Luna
-
-The exact public IDs below receive complete ordinary Responses coding profiles
-from [codex-model-catalog.ts](../apps/admin/src/admin-ui/codex-model-catalog.ts).
-Sol, Terra, and Luna share their own standalone instructions in
-[codex-gpt56-instructions.ts](../apps/admin/src/admin-ui/codex-gpt56-instructions.ts).
-Astra uses separate instructions in
-[codex-astra-instructions.ts](../apps/admin/src/admin-ui/codex-astra-instructions.ts).
-
-The GPT-5.6 instructions retain explicit task-type boundaries, workspace editing
-and destructive-action rules, a structured skill workflow, and concise collaborative
-communication. Astra emphasizes carrying forward authorization, completing reviewable
-preparation before requesting approval, continuity across user steering and compaction,
-connected prose, and judgment about optional skills. Both remain bounded by user
-authorization and the tools available in the session. Neither template enables
-persistent mode, automatic review, or multi-agent orchestration. These are
-product-owned instructions for ordinary Responses, not an entire client runtime.
-
-| Public model ID | Default reasoning | Available reasoning |
-| --- | --- | --- |
-| `gpt-5.6-sol` | `low` | `low`, `medium`, `high`, `xhigh`, `max` |
-| `gpt-5.6-terra` | `medium` | `low`, `medium`, `high`, `xhigh`, `max` |
-| `gpt-5.6-luna` | `medium` | `low`, `medium`, `high`, `xhigh`, `max` |
-
-All three profiles declare text/image input, original image detail, low verbosity,
-unified exec, freeform apply_patch, parallel tool calls, and 10,000-token tool output
-truncation. The default context is 272,000 tokens, with a configurable maximum of
-872,000; these are client limits, not live upstream guarantees. Reasoning summaries
-are omitted by default. Lite, Ultra, code mode, multi-agent orchestration, and
-WebSockets are not enabled by these profiles.
-
-Regenerate an existing static catalog to receive these settings. Explicit user
-reasoning and instruction overrides still take precedence. The `gpt-5.6` family
-alias, provider-prefixed IDs, dated variants, and custom aliases keep the conservative
-Codex fallback; display labels do not select a profile. Routing eligibility is unchanged.
-
-DSH retains its existing model recognition and protocol handling. Exact GPT-5.6
-IDs take precedence over a conflicting family label. Responses entries
-offer images and the reasoning levels/defaults above; when both Chat and Responses
-routes exist, the default selects Responses. This change does not add reasoning or
-agent-tool guarantees to Chat routes.
-
-### Capability boundaries
-
-The four coding profiles explicitly select text-and-image hosted web search when
-the client enables search, accept an explicit reasoning summary while omitting it
-by default, and reserve 5% of the configured context for overhead. Search availability
-still depends on the client provider and upstream route; declaring its request shape
-does not establish that an arbitrary upstream can execute it.
-
-| Client policy | Astra | Sol, Terra, Luna |
-| --- | --- | --- |
-| Additional app usage instructions | Disabled | Enabled when apps are available |
-| Additional plugin usage instructions | Disabled | Enabled when plugins are available |
-| Additional skill usage instructions | Disabled | Disabled |
-| Node REPL automatic review requirement | Required if that tool is enabled | No model-specific requirement |
-
-These flags do not install integrations, enable Node REPL, or bypass normal
-permission checks. Deferred tool discovery is a separate capability from hosted
-web search and remains disabled in these profiles. Experimental context management
-remains disabled. Responses Lite is disabled unless explicitly selected. No paid
-speed tier is selected or advertised. Compaction compatibility hashes and account-plan
-metadata are not copied into this static relay catalog.
-
-### Optional advanced settings
-
-In Client Setup, select a model and use **Optional Codex capabilities** to enable
-Lite, code mode, or multi-agent tools independently. Switches start off and apply
-only to the selected exact model ID; unknown aliases stay conservative. These are
-catalog-generation choices, not persistent server route settings. Regenerate and
-copy the catalog after changing them. Family-specific base instructions remain
-unchanged; the client supplies the runtime's role and tool instructions.
-
-Use **Codex 0.153.4** for the previously validated Astra/GPT-5.6 advanced
-profiles. GPT-6 Sol and Luna require **Codex 0.155.0 or newer**. Older clients
-may silently ignore metadata: 0.146.0 sends Astra Ultra as `max`, not `xhigh`.
-Do not enable Ultra on that version. Passing on these versions does not qualify
-all future versions. To disable delegation, set `agents.enabled = false` and do not force
-`features.multi_agent_v2 = true` in another profile. A user instruction forbidding
-delegation must still be respected even when tools are available.
-
-| Model | Optional agent runtime | Ultra wire effort |
-| --- | --- | --- |
-| `gpt-6-astra` | v2 | `xhigh` |
-| `gpt-6-sol` | v2 | `max` |
-| `gpt-6-luna` | v2 | Not offered |
-| `gpt-5.6-sol` | v2 | `max` |
-| `gpt-5.6-terra` | v2 | `max` |
-| `gpt-5.6-luna` | v1 | Not offered |
-
-Code mode runs shell, patch, and image tools through the client's JavaScript tool
-runtime. It does not give those tools additional permissions. Multi-agent mode
-can make additional requests and consume additional upstream usage.
-
-**Responses Lite requires compatible upstreams.** Confirm every eligible route
-for that public model supports it before enabling the switch, including fallback
-accounts. The relay does not discover upstream protocol support from a model name
-or authentication mode. It preserves `additional_tools`, developer instructions,
-all-turn reasoning context, and tool returns, and forwards only the explicit
-`x-openai-internal-codex-responses-lite: true` protocol header. Missing or ambiguous
-markers are rejected. It never converts or replays Lite as ordinary Responses.
-In Lite mode the client omits top-level instructions/tools and image detail fields;
-this is distinct from ordinary Responses image-detail serialization.
-
-### WebSocket transport and steering
-
-For a provider whose routes all support Responses WebSockets, explicitly add
-`supports_websockets = true` under `[model_providers.token-toxication]` and enable
-`responses_websockets_v2 = true` in the root `[features]` table. Do not place that
-features table inside the provider table or replace unrelated feature settings.
-The default generated configuration remains HTTP/SSE.
-
-The relay accepts authenticated GET upgrades on `/openai/v1/responses`. The first
-`response.create` selects the model, route, and account for the entire connection;
-later requests cannot change model or reference another connection's response IDs.
-Only one inference request is active at a time. Tool results and steered user input
-can continue after its terminal event, using the same connection and account.
-Steering is delivered by the client at its tool boundary, not by inventing a new
-upstream steering event. Disconnecting cancels the upstream connection. There is
-no cross-connection resume, account failover, or automatic relay replay.
-
-The handshake headers and first `response.create` frame are the only affinity inputs.
-Reconnects rely on the client sending the same session identifier again.
-
-Upstream connection establishment and TLS use aioduct 0.2.5 with an HTTP/1.1-only
-upgrade client that disables redirects and retries. WebSocket frames remain handled
-by tungstenite after validating the upgrade headers and accept key; unsolicited
-subprotocols and extensions are rejected. The existing relay timeouts and message
-limits continue to apply after the HTTP upgrade.
-
-WebSocket authentication uses the relay key in headers; query parameters are
-rejected. Upstream credentials are selected server-side. Arbitrary internal header
-metadata is not forwarded. Frames/messages are limited to 32 MiB. The existing
-stream idle timeout and maximum duration settings also bound WebSocket connections;
-connections accept at most 1,024 completed response IDs, each at most 512 bytes. Slow writes are bounded,
-and shutdown releases the upstream socket. Each inference request is logged once
-with usage metadata, not prompts, images, tool contents, or raw provider errors.
-Handshake and authorization failures return sanitized errors with a numeric
-`status` and stable `error.code`. Authentication rejection blocks the account;
-rate limits and upstream server errors cool the route using the same policy as HTTP.
-
-Clients should start a fresh request with full context on a new connection only
-when they know doing so is safe. The relay does not guarantee exactly-once tool
-execution across client retries. Subscription eligibility, real inference, real
-compaction, hosted search execution, and image generation remain separate checks.
-
-### Compatibility checks
-
-The suite covers Astra, Sol, Terra, and Luna separately: default reasoning, each
-of the five explicit reasoning levels, a bounded context override, and hosted web
-search with an explicit summary. Web search is exercised as a request contract
-against the mock, not as a live search service.
-
-The isolated mock suite has passed with Codex CLI **0.146.0** and **0.153.4** on macOS for the models supported by those client versions. GPT-6 Sol and Luna cases require **0.155.0 or newer** and are skipped on older clients. These are tested versions, not a promise that every version between them, or every future version, is compatible. The test starts the real relay, uses its admin API to create temporary routes, loads the generated catalog in Codex, checks the model picker, and completes shell and patch tool round trips. It also checks image input, default/explicit reasoning, and runtime context limits. No production credentials or remote model responses are used.
-
-Advanced cases additionally exercise Lite, code mode (including nonzero shell exit
-results in ordinary and Lite mode), WebSocket tool continuation, and app-server
-steering while a shell tool is active. On 0.153.4 the suite also
-creates and waits for a real local child agent against the mock, checks model-specific
-Ultra normalization, and checks disabled delegation. These agent cases are explicitly
-skipped on older clients; ordinary CI skips all external-binary cases.
-
-Run the opt-in suite with an absolute path to a Codex binary:
-
-```bash
-just codex-compat /absolute/path/to/codex
-```
-
-This builds the relay, uses temporary configuration and a disposable workspace, and removes test data afterward. It does not change your usual Codex configuration. `just ci` runs the regular contract tests but skips this external-binary suite unless explicitly enabled. A passing mock suite establishes client/relay compatibility, not model quality, instruction-following quality, live account availability, or production readiness. Real API-key and Codex OAuth upstream smoke tests remain separate.
+The opt-in client test uses a real Codex binary and an isolated relay/mock;
+run `just codex-compat /absolute/path/to/matching/codex`. A local build from
+`c44deff7b1` (`codex-cli 0.0.0`, source build) passed the test without a
+configured default model or static catalog: the built-in picker listed Astra
+and the default model completed a Lite Code Mode tool round trip. The
+system-installed `codex-cli 0.147.0` is older and was not used for this
+claim. The test does not use production credentials or prove a live
+upstream's Lite eligibility.
 
 ## DeepSeek Harness
 
-The generated fragment adds one provider route for each eligible protocol and selects the preferred routed model as the default. Merge the fragment into the existing `$DSH_HOME/settings.yaml` rather than replacing unrelated settings.
+The generated fragment adds one provider route for each eligible protocol.
+Merge it into the existing `$DSH_HOME/settings.yaml` rather than replacing
+unrelated settings. It does not write `agent-default-model`; the harness
+retains its existing selection until changed in the client.
 
 Model capabilities are generated conservatively:
 
@@ -259,7 +104,7 @@ Model capabilities are generated conservatively:
 - Known non-reasoning models declare `reasoningEfforts: false`.
 - Unknown model IDs remain undeclared instead of inheriting guessed capabilities.
 
-The exact `gpt-6-astra`, `gpt-6-sol`, and `gpt-6-luna` IDs are offered to DSH only on Responses routes, which provide their coding-tool contract. Chat-only and Anthropic-only routes are not offered; when a model has both Chat and Responses routes, the generated default uses Responses. All three declare image input and `low`, `medium`, `high`, `xhigh`, and `max`; Astra defaults to `low`, while Sol and Luna default to `medium`. They do not inherit the older models' prefix/date normalization.
+The exact `gpt-6-astra`, `gpt-6-sol`, and `gpt-6-luna` IDs are offered to DSH only on Responses routes, which provide their coding-tool contract. Chat-only and Anthropic-only routes are not offered. All three declare image input and the `low`, `medium`, `high`, `xhigh`, and `max` reasoning effort options. The generated fragment does not set a default model or reasoning effort. These IDs do not inherit the older models' prefix/date normalization.
 
 For example, a recognized multimodal reasoning model receives both declarations:
 
@@ -274,7 +119,8 @@ For example, a recognized multimodal reasoning model receives both declarations:
     max: max
 ```
 
-The selected default model also receives a supported `reasoningEffort` value.
+Reasoning effort options are declared for each eligible model. Client model
+selection and the default effort are managed by the harness.
 
 ## Credentials
 
