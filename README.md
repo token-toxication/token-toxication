@@ -62,7 +62,7 @@ Use the admin interface to create these records in order:
 3. A **provider model route** mapping that public ID to the upstream model ID.
 4. A **relay API key** for client authentication.
 
-The model becomes discoverable after the catalog entry, route, and provider account are enabled and eligible.
+The model becomes routable after the catalog entry, route, and provider account are enabled and eligible. Codex's model picker uses its own model catalog and may list models without a relay route.
 
 Open **Client Setup** to generate configuration for a supported client. See the [client setup guide](docs/client-setup.md) for route selection, credentials, reasoning levels, and image input support.
 
