@@ -1,10 +1,13 @@
 import { CODEX_ASTRA_INSTRUCTIONS } from "./codex-astra-instructions";
 import { CODEX_GPT56_INSTRUCTIONS } from "./codex-gpt56-instructions";
+import { CODEX_GPT_6_LUNA_INSTRUCTIONS } from "./codex-gpt-6-luna-instructions";
+import { CODEX_GPT_6_SOL_INSTRUCTIONS } from "./codex-gpt-6-sol-instructions";
 import type { ClientModelOption } from "./types";
 
 type ReasoningEffort = "low" | "medium" | "high" | "xhigh" | "max";
 
 type CodexModelProfile = {
+  minimal_client_version?: string;
   supported_reasoning_levels: { effort: ReasoningEffort; description: string }[];
   default_reasoning_level?: ReasoningEffort;
   shell_type: "shell_command" | "unified_exec";
@@ -88,6 +91,30 @@ type KnownModelProfile = CodexModelProfile & {
 
 const modelProfiles = new Map<string, KnownModelProfile>([
   [
+    "gpt-6-sol",
+    {
+      ...codingProfile,
+      base_instructions: CODEX_GPT_6_SOL_INSTRUCTIONS,
+      minimal_client_version: "0.155.0",
+      default_reasoning_level: "medium",
+      include_apps_usage_instructions: false,
+      include_plugin_usage_instructions: false,
+      node_repl_auto_review_required: true,
+    },
+  ],
+  [
+    "gpt-6-luna",
+    {
+      ...codingProfile,
+      base_instructions: CODEX_GPT_6_LUNA_INSTRUCTIONS,
+      minimal_client_version: "0.155.0",
+      default_reasoning_level: "medium",
+      include_apps_usage_instructions: false,
+      include_plugin_usage_instructions: false,
+      node_repl_auto_review_required: false,
+    },
+  ],
+  [
     "gpt-6-astra",
     {
       ...codingProfile,
@@ -139,8 +166,14 @@ export type CodexAdvancedOptions = {
   multiAgent?: boolean;
 };
 
-type AgentProfile = { version: "v1" } | { version: "v2"; effort: ReasoningEffort };
+export function codexMinimumClientVersion(id: string) {
+  return modelProfiles.get(id)?.minimal_client_version ?? "0.153.4";
+}
+
+type AgentProfile = { version: "v1" } | { version: "v2"; effort?: ReasoningEffort };
 const agentProfiles = new Map<string, AgentProfile>([
+  ["gpt-6-sol", { version: "v2", effort: "max" }],
+  ["gpt-6-luna", { version: "v2" }],
   ["gpt-6-astra", { version: "v2", effort: "xhigh" }],
   ["gpt-5.6-sol", { version: "v2", effort: "max" }],
   ["gpt-5.6-terra", { version: "v2", effort: "max" }],
@@ -161,7 +194,7 @@ function advancedProfile(id: string, options: CodexAdvancedOptions = {}) {
     ...(options.multiAgent
       ? {
           multi_agent_version: agents.version,
-          ...(agents.version === "v2"
+          ...(agents.version === "v2" && agents.effort
             ? {
                 supported_reasoning_levels: [
                   ...profile.supported_reasoning_levels,

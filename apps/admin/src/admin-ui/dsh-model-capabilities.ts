@@ -139,10 +139,13 @@ export function dshModelCapabilities(
   model: DshModelOption,
   protocol: DshProtocol,
 ): DshModelCapabilities | undefined {
-  // Astra tools require Responses. Do not extend the older models' permissive
-  // prefix/date normalization to unverified Astra aliases.
-  if (model.id === "gpt-6-astra") {
-    return protocol === "responses" ? subscription56LowCapabilities : undefined;
+  // GPT-6 coding models require the Responses tool contract. Keep matching
+  // exact, as aliases and provider prefixes have not been qualified here.
+  if (["gpt-6-astra", "gpt-6-sol", "gpt-6-luna"].includes(model.id)) {
+    if (protocol !== "responses") return undefined;
+    return model.id === "gpt-6-astra"
+      ? subscription56LowCapabilities
+      : subscription56MediumCapabilities;
   }
   if (["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"].includes(model.id)) {
     if (protocol === "anthropic") return undefined;

@@ -14,6 +14,8 @@ import { describe, expect, it } from "vite-plus/test";
 import { buildClientSetupSnippets } from "./client-setup";
 import { CODEX_ASTRA_INSTRUCTIONS } from "./codex-astra-instructions";
 import { CODEX_GPT56_INSTRUCTIONS } from "./codex-gpt56-instructions";
+import { CODEX_GPT_6_LUNA_INSTRUCTIONS } from "./codex-gpt-6-luna-instructions";
+import { CODEX_GPT_6_SOL_INSTRUCTIONS } from "./codex-gpt-6-sol-instructions";
 
 // Explicit opt-in: no real OpenAI endpoint, inherited credentials, or daily
 // Codex configuration. The mock asks for pwd and a patch in a disposable cwd.
@@ -32,6 +34,8 @@ const versionParts =
     .map(Number) ?? [];
 const supportsModernAgents =
   versionParts[0] > 0 || versionParts[1] > 153 || (versionParts[1] === 153 && versionParts[2] >= 4);
+const supportsGpt6SolLuna =
+  versionParts[0] > 0 || versionParts[1] > 155 || (versionParts[1] === 155 && versionParts[2] >= 0);
 
 async function listen(server: Server) {
   server.listen(0, "127.0.0.1");
@@ -149,6 +153,8 @@ function responseStream(index: number, item: Item) {
 
 describe.skipIf(!codexBinary).each([
   { model: "gpt-6-astra", defaultEffort: "low", instructions: CODEX_ASTRA_INSTRUCTIONS },
+  { model: "gpt-6-sol", defaultEffort: "medium", instructions: CODEX_GPT_6_SOL_INSTRUCTIONS },
+  { model: "gpt-6-luna", defaultEffort: "medium", instructions: CODEX_GPT_6_LUNA_INSTRUCTIONS },
   { model: "gpt-5.6-sol", defaultEffort: "low", instructions: CODEX_GPT56_INSTRUCTIONS },
   { model: "gpt-5.6-terra", defaultEffort: "medium", instructions: CODEX_GPT56_INSTRUCTIONS },
   { model: "gpt-5.6-luna", defaultEffort: "medium", instructions: CODEX_GPT56_INSTRUCTIONS },
@@ -182,7 +188,7 @@ describe.skipIf(!codexBinary).each([
     ...["multi-agent lifecycle", "ordinary multi-agent lifecycle", "disabled delegation"].map(
       (name) => ({
         name,
-        effort: model === "gpt-5.6-luna" ? "high" : "ultra",
+        effort: ["gpt-5.6-luna", "gpt-6-luna"].includes(model) ? "high" : "ultra",
         contextWindow: undefined,
         usableContext: 258_400,
       }),
@@ -224,6 +230,9 @@ describe.skipIf(!codexBinary).each([
       const withAgents =
         name === "multi-agent lifecycle" || name === "ordinary multi-agent lifecycle";
       const agentsDisabled = name === "disabled delegation";
+      if (["gpt-6-sol", "gpt-6-luna"].includes(model) && !supportsGpt6SolLuna) {
+        context.skip();
+      }
       const withToolFailure = name.endsWith("code mode tool failure");
       if ((withAgents || agentsDisabled) && !supportsModernAgents) context.skip();
       const withCodeMode =
