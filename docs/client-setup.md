@@ -61,6 +61,21 @@ Responses Lite, Ultra, code-mode-only, experimental context management, and mult
 
 For other clients, use Responses for tool calling and omit unsupported sampling parameters. The relay preserves client parameters except for configured route `stripParams` and the existing Codex OAuth `max_output_tokens` removal; it does not silently repair every invalid Astra request.
 
+### GPT-6 Sol and Luna
+
+The exact public IDs `gpt-6-sol` and `gpt-6-luna` receive the ordinary GPT-6
+Responses coding profile and their respective Codex workspace instruction
+templates in `codex-gpt-6-sol-instructions.ts` and
+`codex-gpt-6-luna-instructions.ts`. Both default to
+`medium` reasoning and support `low`, `medium`, `high`, `xhigh`, and `max`.
+They use the same configured context limits and input/tool capabilities as the
+Astra profile. Sol enables Codex's Node REPL auto-review requirement; Luna does
+not. Optional Responses Lite, code mode, and multi-agent v2 settings remain
+off until explicitly selected in Client Setup. The relay does not verify that
+an upstream route supports those optional capabilities. Codex 0.155.0 or newer
+is required for these model IDs; their generated catalog entries declare that
+minimum through `minimal_client_version`.
+
 ### GPT-5.6 Sol, Terra, and Luna
 
 The exact public IDs below receive complete ordinary Responses coding profiles
@@ -134,16 +149,19 @@ catalog-generation choices, not persistent server route settings. Regenerate and
 copy the catalog after changing them. Family-specific base instructions remain
 unchanged; the client supplies the runtime's role and tool instructions.
 
-Use **Codex 0.153.4** for the full advanced profile tested here. Older clients may
-silently ignore metadata: 0.146.0 sends Astra Ultra as `max`, not `xhigh`. Do not
-enable Ultra on that version. Passing on these versions does not qualify all future
-versions. To disable delegation, set `agents.enabled = false` and do not force
+Use **Codex 0.153.4** for the previously validated Astra/GPT-5.6 advanced
+profiles. GPT-6 Sol and Luna require **Codex 0.155.0 or newer**. Older clients
+may silently ignore metadata: 0.146.0 sends Astra Ultra as `max`, not `xhigh`.
+Do not enable Ultra on that version. Passing on these versions does not qualify
+all future versions. To disable delegation, set `agents.enabled = false` and do not force
 `features.multi_agent_v2 = true` in another profile. A user instruction forbidding
 delegation must still be respected even when tools are available.
 
 | Model | Optional agent runtime | Ultra wire effort |
 | --- | --- | --- |
 | `gpt-6-astra` | v2 | `xhigh` |
+| `gpt-6-sol` | v2 | `max` |
+| `gpt-6-luna` | v2 | Not offered |
 | `gpt-5.6-sol` | v2 | `max` |
 | `gpt-5.6-terra` | v2 | `max` |
 | `gpt-5.6-luna` | v1 | Not offered |
@@ -211,7 +229,7 @@ of the five explicit reasoning levels, a bounded context override, and hosted we
 search with an explicit summary. Web search is exercised as a request contract
 against the mock, not as a live search service.
 
-The isolated mock suite has passed with Codex CLI **0.146.0** and **0.153.4** on macOS. These are tested versions, not a promise that every version between them, or every future version, is compatible. The test starts the real relay, uses its admin API to create temporary routes, loads the generated catalog in Codex, checks the model picker, and completes shell and patch tool round trips. It also checks image input, default/explicit reasoning, and runtime context limits. No production credentials or remote model responses are used.
+The isolated mock suite has passed with Codex CLI **0.146.0** and **0.153.4** on macOS for the models supported by those client versions. GPT-6 Sol and Luna cases require **0.155.0 or newer** and are skipped on older clients. These are tested versions, not a promise that every version between them, or every future version, is compatible. The test starts the real relay, uses its admin API to create temporary routes, loads the generated catalog in Codex, checks the model picker, and completes shell and patch tool round trips. It also checks image input, default/explicit reasoning, and runtime context limits. No production credentials or remote model responses are used.
 
 Advanced cases additionally exercise Lite, code mode (including nonzero shell exit
 results in ordinary and Lite mode), WebSocket tool continuation, and app-server
@@ -241,7 +259,7 @@ Model capabilities are generated conservatively:
 - Known non-reasoning models declare `reasoningEfforts: false`.
 - Unknown model IDs remain undeclared instead of inheriting guessed capabilities.
 
-The exact `gpt-6-astra` ID is offered only on Responses routes because DSH requires tool calling. A Chat-only Astra route is not offered; when both routes exist, the generated default uses Responses. Astra declares image input and `low`, `medium`, `high`, `xhigh`, and `max`, defaulting to `low`. It does not offer `off`, `none`, `minimal`, or `ultra`, and it does not inherit the older models' prefix/date normalization.
+The exact `gpt-6-astra`, `gpt-6-sol`, and `gpt-6-luna` IDs are offered to DSH only on Responses routes, which provide their coding-tool contract. Chat-only and Anthropic-only routes are not offered; when a model has both Chat and Responses routes, the generated default uses Responses. All three declare image input and `low`, `medium`, `high`, `xhigh`, and `max`; Astra defaults to `low`, while Sol and Luna default to `medium`. They do not inherit the older models' prefix/date normalization.
 
 For example, a recognized multimodal reasoning model receives both declarations:
 

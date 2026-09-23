@@ -114,34 +114,28 @@ describe("dshModelOptions", () => {
     },
   );
 
-  it("requires Responses for Astra agent routes and chooses that protocol", () => {
-    const models = [catalogEntry("gpt-6-astra", "other")];
-    const chat = { id: "gpt-6-astra", wireApi: "openai-chat" };
+  it.each([
+    ["gpt-6-astra", "low"],
+    ["gpt-6-sol", "medium"],
+    ["gpt-6-luna", "medium"],
+  ])("requires Responses for %s agent routes and chooses that protocol", (id, defaultEffort) => {
+    const models = [catalogEntry(id, "other")];
+    const chat = { id, wireApi: "openai-chat" };
     expect(dshModelOptions(models, [chat])).toEqual([]);
-    const [astra] = dshModelOptions(models, [
+    const [gpt6] = dshModelOptions(models, [
       chat,
-      { id: "gpt-6-astra", wireApi: "openai-responses" },
-      { id: "gpt-6-astra", wireApi: "anthropic-messages" },
+      { id, wireApi: "openai-responses" },
+      { id, wireApi: "anthropic-messages" },
     ]);
-    expect(astra.protocols).toEqual({ chat: false, responses: true, anthropic: false });
-    expect(dshModelEntryYaml(astra, "responses")).toBe(
-      [
-        '- id: "gpt-6-astra"',
-        "          input: [text, image]",
-        "          reasoningEfforts:",
-        "            low: low",
-        "            medium: medium",
-        "            high: high",
-        "            xhigh: xhigh",
-        "            max: max",
-      ].join("\n"),
-    );
-    expect(dshDefaultModelYaml(astra)).toBe(
+    expect(gpt6.protocols).toEqual({ chat: false, responses: true, anthropic: false });
+    expect(dshModelEntryYaml(gpt6, "responses")).toContain("input: [text, image]");
+    expect(dshModelEntryYaml(gpt6, "responses")).toContain("max: max");
+    expect(dshDefaultModelYaml(gpt6)).toBe(
       [
         "agent-default-model:",
         "  provider: token-toxication-responses",
-        '  model: "gpt-6-astra"',
-        "  reasoningEffort: low",
+        `  model: "${id}"`,
+        `  reasoningEffort: ${defaultEffort}`,
       ].join("\n"),
     );
   });

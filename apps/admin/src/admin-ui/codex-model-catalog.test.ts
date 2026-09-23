@@ -2,19 +2,39 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { CODEX_ASTRA_INSTRUCTIONS } from "./codex-astra-instructions";
 import { CODEX_GPT56_INSTRUCTIONS } from "./codex-gpt56-instructions";
-import { codexModelCatalogJson } from "./codex-model-catalog";
+import { CODEX_GPT_6_LUNA_INSTRUCTIONS } from "./codex-gpt-6-luna-instructions";
+import { CODEX_GPT_6_SOL_INSTRUCTIONS } from "./codex-gpt-6-sol-instructions";
+import { codexMinimumClientVersion, codexModelCatalogJson } from "./codex-model-catalog";
 import { codexModelOptions } from "./helpers";
 
 describe("Codex model profiles", () => {
+  it.each([
+    ["gpt-6-sol", "0.155.0"],
+    ["gpt-6-luna", "0.155.0"],
+    ["gpt-6-astra", "0.153.4"],
+    ["gpt-5.6-sol", "0.153.4"],
+    ["unknown", "0.153.4"],
+  ])("returns the minimum client version for %s", (id, version) => {
+    expect(codexMinimumClientVersion(id)).toBe(version);
+  });
+
   it("keeps advanced settings explicit, model-specific, and conservative for aliases", () => {
-    const ids = ["gpt-6-astra", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "custom-astra"];
+    const ids = [
+      "gpt-6-astra",
+      "gpt-6-sol",
+      "gpt-6-luna",
+      "gpt-5.6-sol",
+      "gpt-5.6-terra",
+      "gpt-5.6-luna",
+      "custom-astra",
+    ];
     const models = ids.map((id) => ({ id, displayName: "same label" }));
     const enabled = Object.fromEntries(
       ids.map((id) => [id, { responsesLite: true, codeMode: true, multiAgent: true }]),
     );
     const profiles = JSON.parse(codexModelCatalogJson(models, enabled)).models;
     for (const [index, profile] of profiles.entries()) {
-      if (index === 4) {
+      if (index === 6) {
         expect(profile).not.toHaveProperty("use_responses_lite");
         expect(profile).not.toHaveProperty("tool_mode");
         expect(profile).not.toHaveProperty("multi_agent_version");
@@ -22,17 +42,23 @@ describe("Codex model profiles", () => {
       }
       expect(profile.use_responses_lite).toBe(true);
       expect(profile.tool_mode).toBe("code_mode_only");
-      expect(profile.multi_agent_version).toBe(index === 3 ? "v1" : "v2");
+      expect(profile.multi_agent_version).toBe(index === 5 ? "v1" : "v2");
       expect(profile.multi_agent_reasoning_effort).toBe(
-        index === 0 ? "xhigh" : index === 3 ? undefined : "max",
+        index === 0 ? "xhigh" : index === 2 || index === 5 ? undefined : "max",
       );
       expect(
         profile.supported_reasoning_levels.some(
           (level: { effort: string }) => level.effort === "ultra",
         ),
-      ).toBe(index !== 3);
+      ).toBe(index !== 2 && index !== 5);
       expect(profile.base_instructions).toBe(
-        index === 0 ? CODEX_ASTRA_INSTRUCTIONS : CODEX_GPT56_INSTRUCTIONS,
+        index === 0 || index === 1 || index === 2
+          ? index === 0
+            ? CODEX_ASTRA_INSTRUCTIONS
+            : index === 1
+              ? CODEX_GPT_6_SOL_INSTRUCTIONS
+              : CODEX_GPT_6_LUNA_INSTRUCTIONS
+          : CODEX_GPT56_INSTRUCTIONS,
       );
     }
     const isolated = JSON.parse(
@@ -44,7 +70,15 @@ describe("Codex model profiles", () => {
     expect(JSON.parse(codexModelCatalogJson(models)).models[0]).not.toHaveProperty("tool_mode");
   });
   it("keeps family instructions independent in a mixed catalog", () => {
-    const ids = ["gpt-5.6-terra", "unknown", "gpt-6-astra", "gpt-5.6-sol", "gpt-5.6-luna"];
+    const ids = [
+      "gpt-5.6-terra",
+      "unknown",
+      "gpt-6-astra",
+      "gpt-6-sol",
+      "gpt-6-luna",
+      "gpt-5.6-sol",
+      "gpt-5.6-luna",
+    ];
     const catalog = JSON.parse(
       codexModelCatalogJson(ids.map((id) => ({ id, displayName: "same label" }))),
     );
@@ -54,6 +88,8 @@ describe("Codex model profiles", () => {
       CODEX_GPT56_INSTRUCTIONS,
       "You are Codex, a coding agent.",
       CODEX_ASTRA_INSTRUCTIONS,
+      CODEX_GPT_6_SOL_INSTRUCTIONS,
+      CODEX_GPT_6_LUNA_INSTRUCTIONS,
       CODEX_GPT56_INSTRUCTIONS,
       CODEX_GPT56_INSTRUCTIONS,
     ]);
@@ -68,26 +104,36 @@ describe("Codex model profiles", () => {
   });
 
   it.each([
+    ["gpt-6-sol", "medium", true],
+    ["gpt-6-luna", "medium", false],
     ["gpt-5.6-sol", "low"],
     ["gpt-5.6-terra", "medium"],
     ["gpt-5.6-luna", "medium"],
-  ])("gives %s its coding capabilities and %s default", (id, defaultEffort) => {
+  ])("gives %s its coding capabilities and %s default", (id, defaultEffort, autoReview = false) => {
     const {
       models: [profile],
     } = JSON.parse(codexModelCatalogJson([{ id, displayName: id }]));
     expect(profile).toMatchObject({
       slug: id,
+      ...(id === "gpt-6-sol" || id === "gpt-6-luna" ? { minimal_client_version: "0.155.0" } : {}),
       default_reasoning_level: defaultEffort,
-      include_apps_usage_instructions: true,
-      include_plugin_usage_instructions: true,
-      node_repl_auto_review_required: false,
+      include_apps_usage_instructions: id.startsWith("gpt-5.6"),
+      include_plugin_usage_instructions: id.startsWith("gpt-5.6"),
+      node_repl_auto_review_required: autoReview,
       web_search_tool_type: "text_and_image",
       supports_reasoning_summary_parameter: true,
       effective_context_window_percent: 95,
       supports_experimental_context: false,
       supports_search_tool: false,
       include_skills_usage_instructions: false,
-      base_instructions: CODEX_GPT56_INSTRUCTIONS,
+      base_instructions:
+        id === "gpt-6-sol"
+          ? CODEX_GPT_6_SOL_INSTRUCTIONS
+          : id === "gpt-6-luna"
+            ? CODEX_GPT_6_LUNA_INSTRUCTIONS
+            : id.startsWith("gpt-6")
+              ? CODEX_ASTRA_INSTRUCTIONS
+              : CODEX_GPT56_INSTRUCTIONS,
       shell_type: "unified_exec",
       apply_patch_tool_type: "freeform",
       input_modalities: ["text", "image"],

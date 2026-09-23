@@ -5,6 +5,7 @@ import { Trans } from "@lingui/react/macro";
 
 import { dshModelCapabilities } from "./dsh-model-capabilities";
 import {
+  codexMinimumClientVersion,
   codexModelCatalogJson,
   supportsAdvancedCodexProfile,
   type CodexAdvancedOptions,
@@ -121,7 +122,14 @@ export function dshProviderYaml(
 export function dshDefaultModelYaml(model: DshModelOption) {
   const preferResponses =
     model.protocols.responses &&
-    ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"].includes(model.id);
+    [
+      "gpt-6-astra",
+      "gpt-6-sol",
+      "gpt-6-luna",
+      "gpt-5.6-sol",
+      "gpt-5.6-terra",
+      "gpt-5.6-luna",
+    ].includes(model.id);
   const protocol: DshProtocol = preferResponses
     ? "responses"
     : model.protocols.chat
@@ -369,9 +377,11 @@ export function ClientSetupView({
                   <CardHeader>
                     <CardTitle>Optional Codex capabilities</CardTitle>
                     <CardDescription>
-                      Applies only to {codexModel}. The full profile requires Codex 0.153.4 and
-                      compatible upstream routes. These settings do not verify upstream support or
-                      change billing tiers.
+                      <Trans>
+                        Applies only to {codexModel}. The full profile requires Codex{" "}
+                        {codexMinimumClientVersion(codexModel)} and compatible upstream routes.
+                        These settings do not verify upstream support or change billing tiers.
+                      </Trans>
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="flex flex-col gap-4">
