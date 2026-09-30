@@ -13,8 +13,8 @@ use crate::{
     error::AppError,
     models::{
         CodexAccountCredits, CodexAccountQuotaLimit, CodexAccountQuotaResponse,
-        CodexAccountQuotaWindow, CodexAccountSpendControl, CodexAccountSpendControlLimit,
-        ProviderAccountRecord,
+        CodexAccountQuotaWindow, CodexAccountResetCredit, CodexAccountResetCredits,
+        CodexAccountSpendControl, CodexAccountSpendControlLimit, ProviderAccountRecord,
     },
 };
 
@@ -132,6 +132,62 @@ struct CodexUsageResetCredits {
     available_count: Option<i64>,
 }
 
+#[derive(Debug, Deserialize)]
+struct CodexResetCreditsDetails {
+    available_count: i64,
+    credits: Vec<CodexResetCreditDetails>,
+}
+#[derive(Debug, Deserialize)]
+struct CodexResetCreditDetails {
+    id: String,
+    reset_type: String,
+    status: String,
+    granted_at: DateTime<Utc>,
+    expires_at: Option<DateTime<Utc>>,
+    title: Option<String>,
+    description: Option<String>,
+}
+impl From<CodexResetCreditsDetails> for CodexAccountResetCredits {
+    fn from(details: CodexResetCreditsDetails) -> Self {
+        Self {
+            available_count: details.available_count,
+            credits: Some(
+                details
+                    .credits
+                    .into_iter()
+                    .map(|credit| CodexAccountResetCredit {
+                        id: credit.id,
+                        reset_type: if credit.reset_type == "codex_rate_limits" {
+                            credit.reset_type
+                        } else {
+                            "unknown".into()
+                        },
+                        status: match credit.status.as_str() {
+                            "available" | "redeeming" | "redeemed" => credit.status,
+                            _ => "unknown".into(),
+                        },
+                        granted_at: credit.granted_at.timestamp(),
+                        expires_at: credit.expires_at.map(|value| value.timestamp()),
+                        title: credit.title,
+                        description: credit.description,
+                    })
+                    .collect(),
+            ),
+        }
+    }
+}
+pub fn codex_reset_credits_endpoint(base_url: &str) -> Result<String, AppError> {
+    codex_account_read_endpoint(base_url, "rate-limit-reset-credits")
+}
+fn codex_account_read_endpoint(base_url: &str, resource: &str) -> Result<String, AppError> {
+    let root = codex_account_api_base_url(parse_codex_base_url(base_url)?);
+    let prefix = if root.path().contains("/backend-api") {
+        "wham"
+    } else {
+        "api/codex"
+    };
+    Ok(append_codex_path(root, &format!("{prefix}/{resource}")))
+}
 pub fn is_codex_subscription_auth(auth_mode: &str) -> bool {
     auth_mode == "codex-oauth"
 }
@@ -151,10 +207,7 @@ pub fn codex_subscription_endpoint(base_url: &str) -> Result<String, AppError> {
 }
 
 pub fn codex_quota_endpoint(base_url: &str) -> Result<String, AppError> {
-    Ok(append_codex_path(
-        codex_account_api_base_url(parse_codex_base_url(base_url)?),
-        "wham/usage",
-    ))
+    codex_account_read_endpoint(base_url, "usage")
 }
 
 pub fn canonicalize_legacy_codex_base_url(base_url: &str) -> Option<String> {
@@ -257,22 +310,38 @@ pub async fn codex_account_quota(
     let result = async {
         let authorization = codex_subscription_authorization(db, http, &account).await?;
         let endpoint = codex_quota_endpoint(&account.account.base_url)?;
-        let payload = fetch_codex_usage(
-            http,
-            &endpoint,
-            &authorization.access_token,
-            authorization.account_id.as_deref(),
-            CODEX_QUOTA_TIMEOUT,
-        )
-        .await?;
-
-        Ok(codex_quota_response(
+        let details_endpoint = codex_reset_credits_endpoint(&account.account.base_url)?;
+        let (payload, details) = tokio::join!(
+            fetch_codex_usage(
+                http,
+                &endpoint,
+                &authorization.access_token,
+                authorization.account_id.as_deref(),
+                CODEX_QUOTA_TIMEOUT
+            ),
+            fetch_codex_payload::<CodexResetCreditsDetails>(
+                http,
+                &details_endpoint,
+                &authorization.access_token,
+                authorization.account_id.as_deref(),
+                Duration::from_secs(5)
+            ),
+        );
+        let mut quota = codex_quota_response(
             account.account.id.clone(),
             account.account.auth_mode.clone(),
             endpoint,
-            payload,
+            payload?,
             Utc::now(),
-        ))
+        );
+        match details {
+            Ok(details) => {
+                quota.reset_credits_available_count = Some(details.available_count);
+                quota.reset_credits = Some(details.into());
+            }
+            Err(_) => tracing::warn!("Codex reset credit details unavailable; using usage summary"),
+        }
+        Ok(quota)
     }
     .await;
 
@@ -352,6 +421,16 @@ async fn fetch_codex_usage(
     account_id: Option<&str>,
     timeout: Duration,
 ) -> Result<CodexUsagePayload, AppError> {
+    fetch_codex_payload(http, endpoint, access_token, account_id, timeout).await
+}
+
+async fn fetch_codex_payload<T: serde::de::DeserializeOwned>(
+    http: &TokioClient,
+    endpoint: &str,
+    access_token: &str,
+    account_id: Option<&str>,
+    timeout: Duration,
+) -> Result<T, AppError> {
     let mut request = http
         .get(endpoint)?
         .bearer_auth(access_token)
@@ -440,6 +519,14 @@ fn codex_quota_response(
                 }),
         }),
         rate_limit_reached_type: reached_type(payload.rate_limit_reached_type),
+        reset_credits: payload
+            .rate_limit_reset_credits
+            .as_ref()
+            .and_then(|summary| summary.available_count)
+            .map(|available_count| CodexAccountResetCredits {
+                available_count,
+                credits: None,
+            }),
         reset_credits_available_count: payload
             .rate_limit_reset_credits
             .and_then(|credits| credits.available_count),

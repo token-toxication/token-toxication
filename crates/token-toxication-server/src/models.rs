@@ -362,6 +362,24 @@ pub struct CodexAccountSpendControl {
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
+pub struct CodexAccountResetCredits {
+    pub available_count: i64,
+    pub credits: Option<Vec<CodexAccountResetCredit>>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CodexAccountResetCredit {
+    pub id: String,
+    pub reset_type: String,
+    pub status: String,
+    pub granted_at: i64,
+    pub expires_at: Option<i64>,
+    pub title: Option<String>,
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct CodexAccountQuotaResponse {
     pub account_id: String,
     pub auth_mode: String,
@@ -372,6 +390,7 @@ pub struct CodexAccountQuotaResponse {
     pub spend_control: Option<CodexAccountSpendControl>,
     pub rate_limit_reached_type: Option<String>,
     pub reset_credits_available_count: Option<i64>,
+    pub reset_credits: Option<CodexAccountResetCredits>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
