@@ -5,6 +5,8 @@ export type {
   CodexAccountCredits,
   CodexAccountQuotaLimit,
   CodexAccountQuotaResponse,
+  CodexAccountResetCredits,
+  CodexAccountResetCredit,
   CodexAccountQuotaWindow,
   CodexAccountSpendControl,
   CodexAccountSpendControlLimit,

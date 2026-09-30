@@ -22,6 +22,9 @@ import {
   accountPresetValue,
   applyAccountPreset,
   formatCodexCredits,
+  formatCodexResetCreditExpiration,
+  formatCodexResetCreditTimestamp,
+  formatCodexResetCreditStatus,
   formatCodexSpendControl,
   formatCodexWindow,
   formatDate,
@@ -888,6 +891,45 @@ export function CodexAccountDialog({
                     value={formatCodexSpendControl(quota.spendControl.reached, spendLimit)}
                   />
                 ) : null}
+              </div>
+            ) : null}
+            {quota?.resetCredits?.credits ? (
+              <div className="w-full min-w-0 max-w-full overflow-x-auto rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>
+                        <Trans>Reset credit</Trans>
+                      </TableHead>
+                      <TableHead>
+                        <Trans>Status</Trans>
+                      </TableHead>
+                      <TableHead>
+                        <Trans>Granted</Trans>
+                      </TableHead>
+                      <TableHead>
+                        <Trans>Expires</Trans>
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {quota.resetCredits.credits.map((credit) => (
+                      <TableRow key={credit.id}>
+                        <TableCell>
+                          <div className="font-medium">{credit.title || credit.resetType}</div>
+                          {credit.description ? (
+                            <div className="text-xs text-muted-foreground">
+                              {credit.description}
+                            </div>
+                          ) : null}
+                        </TableCell>
+                        <TableCell>{formatCodexResetCreditStatus(credit.status)}</TableCell>
+                        <TableCell>{formatCodexResetCreditTimestamp(credit.grantedAt)}</TableCell>
+                        <TableCell>{formatCodexResetCreditExpiration(credit.expiresAt)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
             ) : null}
             <div className="w-full min-w-0 max-w-full overflow-x-auto rounded-md border">

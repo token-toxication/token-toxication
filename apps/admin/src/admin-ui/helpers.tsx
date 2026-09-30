@@ -455,6 +455,27 @@ export function formatCodexCredits(credits: NonNullable<CodexAccountQuotaRespons
   return t`unknown`;
 }
 
+export function formatCodexResetCreditStatus(status: string | null | undefined) {
+  switch (status) {
+    case "available":
+      return t`Available`;
+    case "redeeming":
+      return t`Redeeming`;
+    case "redeemed":
+      return t`Redeemed`;
+    default:
+      return t`Unknown`;
+  }
+}
+
+export function formatCodexResetCreditTimestamp(value: number | null | undefined) {
+  return value == null ? t`unknown` : formatDate(new Date(value * 1000).toISOString());
+}
+
+export function formatCodexResetCreditExpiration(value: number | null | undefined) {
+  return value == null ? t`Never` : formatCodexResetCreditTimestamp(value);
+}
+
 export function formatCodexSpendControl(
   reached: boolean | null | undefined,
   limit:
