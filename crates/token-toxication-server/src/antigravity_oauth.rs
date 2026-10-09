@@ -259,6 +259,7 @@ async fn finish_antigravity_oauth(
                 wire_api: Some("gemini-generate-content".to_string()),
                 api_key: Some(credential),
                 is_active: Some(true),
+                max_running_requests: None,
             },
         )
         .await?
@@ -275,6 +276,7 @@ async fn finish_antigravity_oauth(
             wire_api: "gemini-generate-content".to_string(),
             api_key: credential,
             is_active: true,
+            max_running_requests: 0,
         })
         .await?
     };

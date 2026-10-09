@@ -47,11 +47,12 @@ use crate::{
         CreateProviderModelRouteRequest, Dashboard, GeminiAccountModelsResponse,
         GeminiAccountQuotaResponse, GeminiModel, GeminiModelListResponse, HealthResponse,
         MetricsResponse, ModelCatalogEntryResponse, ModelCatalogListResponse, OpenAiModel,
-        OpenAiModelListResponse, ProviderAccountListResponse, ProviderAccountResponse,
-        ProviderModelRouteListResponse, ProviderModelRouteResponse, ProviderPresetListResponse,
-        RequestLogListResponse, RequestSummary, RoutableModelCatalogEntry,
-        RoutableModelCatalogListResponse, UpdateApiKeyRequest, UpdateModelCatalogEntryRequest,
-        UpdateProviderAccountRequest, UpdateProviderModelRouteRequest,
+        OpenAiModelListResponse, ProviderAccount, ProviderAccountListResponse,
+        ProviderAccountResponse, ProviderModelRouteListResponse, ProviderModelRouteResponse,
+        ProviderPresetListResponse, RequestLogListResponse, RequestSummary,
+        RoutableModelCatalogEntry, RoutableModelCatalogListResponse, UpdateApiKeyRequest,
+        UpdateModelCatalogEntryRequest, UpdateProviderAccountRequest,
+        UpdateProviderModelRouteRequest,
     },
     provider_catalog::provider_presets,
     relay_attempt::{RelayAttempt, RelayAttemptLog, TokenUsage, authenticate_relay_api_key},
@@ -363,7 +364,9 @@ async fn relay_json_endpoint(
         .and_then(Value::as_bool)
         .unwrap_or(false);
     let replay_safe = request_is_replay_safe(wire_api, &original_request_json);
-    let failover_deadline = Instant::now() + FAILOVER_START_BUDGET;
+    // Started at the first slot acquisition and extended by later queue waits,
+    // so time spent queued for a running-request slot never eats the budget.
+    let mut failover_deadline: Option<Instant> = None;
     let mut excluded_account_ids = HashSet::new();
     let mut last_rate_limit_response = None;
 
@@ -378,6 +381,7 @@ async fn relay_json_endpoint(
             .await
         {
             Ok(attempt) => attempt,
+            Err(error @ AppError::ServiceUnavailable(_)) => return Err(error),
             Err(error) => {
                 if let Some((status, content_type, bytes)) = last_rate_limit_response {
                     return response_with_bytes(status, content_type, bytes, "no-store");
@@ -385,6 +389,10 @@ async fn relay_json_endpoint(
                 return Err(error);
             }
         };
+        let failover_deadline = *failover_deadline.insert(match failover_deadline {
+            Some(deadline) => deadline + attempt.queue_wait(),
+            None => Instant::now() + FAILOVER_START_BUDGET,
+        });
         let upstream_model_id = attempt.selection().upstream_model_id.clone();
         let strip_params = attempt.selection().strip_params.clone();
         let account = attempt.selection().account.clone();
@@ -901,9 +909,11 @@ pub async fn delete_api_key(
 pub async fn list_provider_accounts(
     State(state): State<AppState>,
 ) -> Result<Json<ProviderAccountListResponse>, AppError> {
-    Ok(Json(ProviderAccountListResponse {
-        data: state.db.list_provider_accounts().await?,
-    }))
+    let mut accounts = state.db.list_provider_accounts().await?;
+    for account in &mut accounts {
+        with_account_load(&state, account);
+    }
+    Ok(Json(ProviderAccountListResponse { data: accounts }))
 }
 
 pub async fn start_antigravity_oauth(
@@ -1013,7 +1023,8 @@ pub async fn create_provider_account(
             "provider account name, base URL, and API key are required".into(),
         ));
     }
-    let account = state.db.create_provider_account(input).await?;
+    let mut account = state.db.create_provider_account(input).await?;
+    with_account_load(&state, &mut account);
     Ok((
         StatusCode::CREATED,
         Json(ProviderAccountResponse { data: account }),
@@ -1034,12 +1045,22 @@ pub async fn update_provider_account(
             "provider account base URL cannot be empty".into(),
         ));
     }
-    let account = state
+    let mut account = state
         .db
         .update_provider_account(&id, input)
         .await
         .map_err(map_not_found)?;
+    state
+        .account_concurrency
+        .set_limit(&account.id, account.max_running_requests);
+    with_account_load(&state, &mut account);
     Ok(Json(ProviderAccountResponse { data: account }))
+}
+
+fn with_account_load(state: &AppState, account: &mut ProviderAccount) {
+    let load = state.account_concurrency.load(&account.id);
+    account.running_requests = load.running;
+    account.queued_requests = load.queued;
 }
 
 pub async fn delete_provider_account(
@@ -1047,6 +1068,7 @@ pub async fn delete_provider_account(
     Path(id): Path<String>,
 ) -> Result<StatusCode, AppError> {
     state.db.delete_provider_account(&id).await?;
+    state.account_concurrency.forget(&id);
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -2084,6 +2106,7 @@ fn validate_provider_model_route_input(
 
 #[cfg(test)]
 mod tests {
+    mod account_concurrency;
     mod responses_contract;
     mod responses_websocket;
 
@@ -2162,6 +2185,7 @@ mod tests {
                 .unwrap(),
             antigravity_oauth: AntigravityOAuthStore::default(),
             relay_metrics: Default::default(),
+            account_concurrency: Default::default(),
             relay_stream_idle_timeout: Duration::from_secs(5),
             relay_stream_max_duration: Duration::from_secs(900),
             shutdown: crate::server::ShutdownSignal::for_test(),
@@ -2242,6 +2266,7 @@ mod tests {
                 wire_api: wire_api.to_string(),
                 api_key: provider_secret,
                 is_active: true,
+                max_running_requests: 0,
             })
             .await
             .expect("create provider account");
@@ -2317,6 +2342,7 @@ mod tests {
                 wire_api: "openai-responses".to_string(),
                 api_key: "synthetic-provider-key".to_string(),
                 is_active: true,
+                max_running_requests: 0,
             })
             .await
             .expect("create provider account");
@@ -3341,6 +3367,7 @@ mod tests {
                 wire_api: "openai-chat".to_string(),
                 api_key: "backup-secret".to_string(),
                 is_active: true,
+                max_running_requests: 0,
             })
             .await
             .expect("create backup account");
@@ -3482,6 +3509,7 @@ mod tests {
                 wire_api: "openai-responses".to_string(),
                 api_key: "backup-secret".to_string(),
                 is_active: true,
+                max_running_requests: 0,
             })
             .await
             .expect("create backup account");

@@ -499,3 +499,146 @@ async fn websocket_binds_account_and_preserves_tool_and_steering_continuations()
         remove_test_database(&database_path);
     }
 }
+
+#[tokio::test]
+async fn websocket_queued_response_keeps_upstream_alive_and_respects_limit() {
+    // The upstream answers each response.create, and pings the relay after the
+    // first response so the relay must answer while the second one is queued.
+    let (pong_tx, mut pong_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
+    let (second_tx, mut second_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
+    let upstream = Router::new().route(
+        "/v1/responses",
+        get(move |ws: WebSocketUpgrade| {
+            let pong_tx = pong_tx.clone();
+            let second_tx = second_tx.clone();
+            async move {
+                ws.on_upgrade(move |mut socket| async move {
+                    let mut responses = 0;
+                    while let Some(Ok(message)) = socket.next().await {
+                        match message {
+                            Message::Text(_) => {
+                                responses += 1;
+                                if responses == 2 {
+                                    second_tx.send(()).ok();
+                                }
+                                let id = format!("resp_{responses}");
+                                let done = json!({"type":"response.completed","response":{"id":id,"usage":{"input_tokens":1,"output_tokens":1}}});
+                                socket.send(Message::Text(done.to_string().into())).await.unwrap();
+                                if responses == 1 {
+                                    socket.send(Message::Ping(Bytes::from_static(b"keepalive"))).await.unwrap();
+                                }
+                            }
+                            Message::Pong(data) if data.as_ref() == b"keepalive" => {
+                                pong_tx.send(()).ok();
+                            }
+                            Message::Close(_) => break,
+                            _ => {}
+                        }
+                    }
+                })
+            }
+        }),
+    );
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let upstream_address = listener.local_addr().unwrap();
+    let upstream_task = tokio::spawn(async move { axum::serve(listener, upstream).await });
+    let database_path = test_database_path();
+    let db = Db::open(&database_path).await.unwrap();
+    let seed = seed_relay_route(
+        &db,
+        RelayRouteSeed {
+            base_url: format!("http://{upstream_address}"),
+            provider: "openai-compatible",
+            auth_mode: "bearer",
+            provider_secret: "synthetic-provider-key".into(),
+            wire_api: "openai-responses",
+            public_model: "public-coding",
+            upstream_model: "private-coding",
+        },
+    )
+    .await;
+    db.update_provider_account(
+        &seed.account_id,
+        crate::models::UpdateProviderAccountRequest {
+            name: None,
+            provider: None,
+            base_url: None,
+            auth_mode: None,
+            wire_api: None,
+            api_key: None,
+            is_active: None,
+            max_running_requests: Some(1),
+        },
+    )
+    .await
+    .unwrap();
+    let state = test_state(db, database_path.clone());
+    let relay = crate::app(state.clone(), PathBuf::from("nonexistent-static-test-dir"));
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let relay_task = tokio::spawn(async move { axum::serve(listener, relay).await });
+    let mut request = format!("ws://{address}/openai/v1/responses")
+        .into_client_request()
+        .unwrap();
+    request.headers_mut().insert(
+        header::AUTHORIZATION,
+        HeaderValue::from_str(&format!("Bearer {}", seed.relay_secret)).unwrap(),
+    );
+    let (mut client, _) = connect_async(request).await.unwrap();
+    let first = json!({"type":"response.create","model":"public-coding","input":"synthetic-first"});
+    client
+        .send(tungstenite::Message::Text(first.to_string().into()))
+        .await
+        .unwrap();
+    let completed = tokio::time::timeout(Duration::from_secs(3), client.next())
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    assert!(completed.to_text().unwrap().contains("response.completed"));
+
+    // Saturate the account from outside so the next response must queue.
+    let held = state
+        .account_concurrency
+        .try_acquire(&seed.account_id, 1)
+        .expect("slot is free after the first response");
+    let second = json!({"type":"response.create","model":"public-coding","input":"synthetic-second","previous_response_id":"resp_1"});
+    client
+        .send(tungstenite::Message::Text(second.to_string().into()))
+        .await
+        .unwrap();
+    tokio::time::timeout(Duration::from_secs(3), async {
+        while state.account_concurrency.load(&seed.account_id).queued == 0 {
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    })
+    .await
+    .expect("second response queues");
+    tokio::time::timeout(Duration::from_secs(3), pong_rx.recv())
+        .await
+        .expect("relay answers upstream ping while queued");
+    assert!(
+        second_rx.try_recv().is_err(),
+        "queued response must not be sent"
+    );
+
+    drop(held);
+    tokio::time::timeout(Duration::from_secs(3), second_rx.recv())
+        .await
+        .expect("second response reaches upstream after release");
+    let completed = tokio::time::timeout(Duration::from_secs(3), client.next())
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    assert!(completed.to_text().unwrap().contains("resp_2"));
+
+    let logs = state.db.list_request_logs(10).await.unwrap();
+    assert_eq!(logs.len(), 2);
+    assert!(logs.iter().any(|log| log.queue_wait_ms > 0));
+
+    relay_task.abort();
+    upstream_task.abort();
+    drop(client);
+    remove_test_database(&database_path);
+}

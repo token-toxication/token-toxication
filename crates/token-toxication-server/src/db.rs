@@ -170,6 +170,18 @@ impl Db {
             "wire_api",
             "TEXT NOT NULL DEFAULT 'anthropic-messages'",
         )?;
+        ensure_column(
+            &conn,
+            "provider_accounts",
+            "max_running_requests",
+            "INTEGER NOT NULL DEFAULT 0",
+        )?;
+        ensure_column(
+            &conn,
+            "request_logs",
+            "queue_wait_ms",
+            "INTEGER NOT NULL DEFAULT 0",
+        )?;
         ensure_column(&conn, "request_logs", "upstream_model", "TEXT")?;
         ensure_column(&conn, "request_logs", "upstream_url", "TEXT")?;
         ensure_column(&conn, "request_logs", "request_summary", "TEXT")?;
@@ -459,6 +471,9 @@ impl Db {
             auth_mode,
             wire_api: normalize_wire_api(&input.wire_api, &input.provider),
             is_active: input.is_active,
+            max_running_requests: input.max_running_requests,
+            running_requests: 0,
+            queued_requests: 0,
             status: "healthy".to_string(),
             last_error: None,
             created_at: now,
@@ -469,8 +484,8 @@ impl Db {
         conn.execute(
             "INSERT INTO provider_accounts
              (id, name, provider, base_url, auth_mode, wire_api, api_key, is_active,
-              status, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+              status, created_at, max_running_requests)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
             params![
                 &account.id,
                 &account.name,
@@ -482,6 +497,7 @@ impl Db {
                 bool_to_i64(account.is_active),
                 &account.status,
                 account.created_at.to_rfc3339(),
+                i64::from(account.max_running_requests),
             ],
         )?;
         Ok(account)
@@ -491,7 +507,7 @@ impl Db {
         let conn = self.conn.lock().await;
         let mut stmt = conn.prepare(
             "SELECT id, name, provider, base_url, auth_mode, wire_api, api_key, is_active,
-                    status, last_error, created_at, last_used_at
+                    status, last_error, created_at, last_used_at, max_running_requests
              FROM provider_accounts
              ORDER BY created_at DESC",
         )?;
@@ -829,7 +845,8 @@ impl Db {
         let mut stmt = conn.prepare(
             "SELECT a.id, a.name, a.provider, a.base_url, a.auth_mode, a.wire_api, a.api_key,
                     a.is_active, a.status, a.last_error, a.created_at, a.last_used_at,
-                    r.id, r.public_model_id, r.upstream_model_id, r.role, r.weight, r.strip_params
+                    r.id, r.public_model_id, r.upstream_model_id, r.role, r.weight, r.strip_params,
+                    a.max_running_requests
              FROM model_catalog m
              JOIN provider_model_routes r ON r.public_model_id = m.id
              JOIN provider_accounts a ON a.id = r.provider_account_id
@@ -924,6 +941,11 @@ impl Db {
             auth_mode,
             wire_api,
             is_active: input.is_active.unwrap_or(current.is_active),
+            max_running_requests: input
+                .max_running_requests
+                .unwrap_or(current.max_running_requests),
+            running_requests: 0,
+            queued_requests: 0,
             status: current.status,
             last_error: current.last_error,
             created_at: current.created_at,
@@ -935,6 +957,7 @@ impl Db {
             conn.execute(
                 "UPDATE provider_accounts SET name = ?1, provider = ?2, base_url = ?3,
                  auth_mode = ?4, wire_api = ?5, api_key = ?6, is_active = ?7,
+                 max_running_requests = ?9,
                  status = 'healthy', last_error = NULL WHERE id = ?8",
                 params![
                     &account.name,
@@ -945,12 +968,14 @@ impl Db {
                     api_key,
                     bool_to_i64(account.is_active),
                     &account.id,
+                    i64::from(account.max_running_requests),
                 ],
             )?;
         } else {
             conn.execute(
                 "UPDATE provider_accounts SET name = ?1, provider = ?2, base_url = ?3,
                  auth_mode = ?4, wire_api = ?5, is_active = ?6,
+                 max_running_requests = ?8,
                  status = 'healthy', last_error = NULL WHERE id = ?7",
                 params![
                     &account.name,
@@ -960,6 +985,7 @@ impl Db {
                     &account.wire_api,
                     bool_to_i64(account.is_active),
                     &account.id,
+                    i64::from(account.max_running_requests),
                 ],
             )?;
         }
@@ -977,7 +1003,7 @@ impl Db {
         let conn = self.conn.lock().await;
         let mut stmt = conn.prepare(
             "SELECT id, name, provider, base_url, auth_mode, wire_api, api_key, is_active,
-                    status, last_error, created_at, last_used_at
+                    status, last_error, created_at, last_used_at, max_running_requests
              FROM provider_accounts WHERE id = ?1",
         )?;
         stmt.query_row(params![id], account_from_row)
@@ -992,7 +1018,7 @@ impl Db {
         let conn = self.conn.lock().await;
         let mut stmt = conn.prepare(
             "SELECT id, name, provider, base_url, auth_mode, wire_api, api_key, is_active,
-                    status, last_error, created_at, last_used_at
+                    status, last_error, created_at, last_used_at, max_running_requests
              FROM provider_accounts WHERE id = ?1",
         )?;
         stmt.query_row(params![id], account_from_row).optional()
@@ -1275,8 +1301,8 @@ impl Db {
             "INSERT INTO request_logs
              (id, api_key_id, provider_account_id, method, path, model, upstream_model,
               upstream_url, request_summary, status_code, latency_ms, input_tokens,
-              cached_input_tokens, output_tokens, cost_usd, created_at, error)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
+              cached_input_tokens, output_tokens, cost_usd, created_at, error, queue_wait_ms)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
             params![
                 log.id,
                 log.api_key_id,
@@ -1299,6 +1325,7 @@ impl Db {
                 log.cost_usd,
                 log.created_at.to_rfc3339(),
                 log.error,
+                log.queue_wait_ms,
             ],
         )?;
         Ok(())
@@ -1309,7 +1336,7 @@ impl Db {
         let mut stmt = conn.prepare(
             "SELECT id, api_key_id, provider_account_id, method, path, model, upstream_model,
                     upstream_url, request_summary, status_code, latency_ms, input_tokens,
-                    cached_input_tokens, output_tokens, cost_usd, created_at, error
+                    cached_input_tokens, output_tokens, cost_usd, created_at, error, queue_wait_ms
              FROM request_logs
              ORDER BY created_at DESC
              LIMIT ?1",
@@ -1402,6 +1429,10 @@ fn migrate_legacy_codex_base_urls(conn: &mut Connection) -> Result<usize, rusqli
     Ok(migrated)
 }
 
+fn clamp_u32(value: i64) -> u32 {
+    u32::try_from(value.max(0)).unwrap_or(u32::MAX)
+}
+
 fn rows_to_accounts<P>(
     stmt: &mut rusqlite::Statement<'_>,
     params: P,
@@ -1483,6 +1514,10 @@ fn account_from_row(row: &rusqlite::Row<'_>) -> Result<ProviderAccountRecord, ru
             auth_mode: row.get(4)?,
             wire_api: row.get(5)?,
             is_active: row.get::<_, i64>(7)? == 1,
+            // Read by name: account rows and route-selection rows place it differently.
+            max_running_requests: clamp_u32(row.get::<_, i64>("max_running_requests")?),
+            running_requests: 0,
+            queued_requests: 0,
             status: row.get(8)?,
             last_error: row.get(9)?,
             created_at: parse_time(row.get::<_, String>(10)?.as_str()),
@@ -1562,6 +1597,7 @@ fn request_log_from_row(row: &rusqlite::Row<'_>) -> Result<RequestLog, rusqlite:
         cost_usd: row.get(14)?,
         created_at: parse_time(row.get::<_, String>(15)?.as_str()),
         error: row.get(16)?,
+        queue_wait_ms: row.get::<_, i64>(17)? as u64,
     })
 }
 
@@ -1817,6 +1853,7 @@ mod tests {
                 request_summary: None,
                 status_code: 200,
                 latency_ms: 10,
+                queue_wait_ms: 0,
                 input_tokens,
                 cached_input_tokens,
                 output_tokens,
@@ -1932,6 +1969,7 @@ mod tests {
                 request_summary: None,
                 status_code: 200,
                 latency_ms: 10,
+                queue_wait_ms: 0,
                 input_tokens: 1,
                 cached_input_tokens: 0,
                 output_tokens: 1,
@@ -1990,6 +2028,7 @@ mod tests {
                 wire_api: "openai-chat".to_string(),
                 api_key: "backup-key".to_string(),
                 is_active: true,
+                max_running_requests: 0,
             })
             .await
             .expect("create backup account");
@@ -2002,6 +2041,7 @@ mod tests {
                 wire_api: "openai-chat".to_string(),
                 api_key: "primary-key".to_string(),
                 is_active: true,
+                max_running_requests: 0,
             })
             .await
             .expect("create primary account");
@@ -2077,6 +2117,7 @@ mod tests {
                 wire_api: "openai-responses".to_string(),
                 api_key: "first-key".to_string(),
                 is_active: true,
+                max_running_requests: 0,
             })
             .await
             .expect("create first account");
@@ -2089,6 +2130,7 @@ mod tests {
                 wire_api: "openai-responses".to_string(),
                 api_key: "second-key".to_string(),
                 is_active: true,
+                max_running_requests: 0,
             })
             .await
             .expect("create second account");
@@ -2174,6 +2216,7 @@ mod tests {
                 wire_api: "openai-chat".to_string(),
                 api_key: "primary-key".to_string(),
                 is_active: true,
+                max_running_requests: 0,
             })
             .await
             .expect("create primary account");
@@ -2186,6 +2229,7 @@ mod tests {
                 wire_api: "openai-chat".to_string(),
                 api_key: "backup-key".to_string(),
                 is_active: true,
+                max_running_requests: 0,
             })
             .await
             .expect("create backup account");
@@ -2255,6 +2299,7 @@ mod tests {
                 wire_api: "openai-chat".to_string(),
                 api_key: "primary-key".to_string(),
                 is_active: true,
+                max_running_requests: 0,
             })
             .await
             .expect("create primary account");
@@ -2267,6 +2312,7 @@ mod tests {
                 wire_api: "openai-chat".to_string(),
                 api_key: "backup-key".to_string(),
                 is_active: true,
+                max_running_requests: 0,
             })
             .await
             .expect("create backup account");
@@ -2409,6 +2455,7 @@ mod tests {
                 wire_api: "openai-responses".to_string(),
                 api_key: "refresh-token".to_string(),
                 is_active: true,
+                max_running_requests: 0,
             })
             .await
             .expect("create Codex account");
@@ -2430,6 +2477,7 @@ mod tests {
                     wire_api: None,
                     api_key: None,
                     is_active: None,
+                    max_running_requests: None,
                 },
             )
             .await
@@ -2456,6 +2504,7 @@ mod tests {
                 wire_api: "openai-responses".to_string(),
                 api_key: "refresh-token-1".to_string(),
                 is_active: true,
+                max_running_requests: 0,
             })
             .await
             .expect("create first Codex account");
@@ -2468,6 +2517,7 @@ mod tests {
                 wire_api: "openai-responses".to_string(),
                 api_key: "refresh-token-2".to_string(),
                 is_active: true,
+                max_running_requests: 0,
             })
             .await
             .expect("create second Codex account");
@@ -2480,6 +2530,7 @@ mod tests {
                 wire_api: "openai-responses".to_string(),
                 api_key: "api-key".to_string(),
                 is_active: true,
+                max_running_requests: 0,
             })
             .await
             .expect("create bearer account");
@@ -2600,6 +2651,7 @@ mod tests {
                 wire_api: "openai-chat".to_string(),
                 api_key: "deepseek-key".to_string(),
                 is_active: true,
+                max_running_requests: 0,
             })
             .await
             .expect("create deepseek account");
@@ -2612,6 +2664,7 @@ mod tests {
                 wire_api: "openai-responses".to_string(),
                 api_key: "openai-key".to_string(),
                 is_active: true,
+                max_running_requests: 0,
             })
             .await
             .expect("create duplicate account");
@@ -2624,6 +2677,7 @@ mod tests {
                 wire_api: "openai-responses".to_string(),
                 api_key: "openai-key".to_string(),
                 is_active: false,
+                max_running_requests: 0,
             })
             .await
             .expect("create inactive account");

@@ -38,6 +38,49 @@ import type {
   UpdateProviderModelRouteRequest,
 } from "../types";
 
+type WorkspaceData = {
+  dashboard: Dashboard;
+  apiKeys: ApiKey[];
+  accounts: ProviderAccount[];
+  providerPresets: ProviderPreset[];
+  modelCatalog: ModelCatalogEntry[];
+  routableModels: RoutableModelCatalogEntry[];
+  modelRoutes: ProviderModelRoute[];
+  logs: RequestLog[];
+};
+
+async function fetchWorkspace(): Promise<WorkspaceData> {
+  const [
+    dashboard,
+    apiKeys,
+    accounts,
+    providerPresets,
+    modelCatalog,
+    routableModels,
+    modelRoutes,
+    logs,
+  ] = await Promise.all([
+    api.dashboard(),
+    api.apiKeys(),
+    api.providerAccounts(),
+    api.providerPresets(),
+    api.modelCatalog(),
+    api.routableModelCatalog(),
+    api.providerModelRoutes(),
+    api.requestLogs(50),
+  ]);
+  return {
+    dashboard,
+    apiKeys,
+    accounts,
+    providerPresets,
+    modelCatalog,
+    routableModels,
+    modelRoutes,
+    logs,
+  };
+}
+
 export function providerRouteRequestFromForm(
   form: ProviderRouteForm,
 ): CreateProviderModelRouteRequest {
@@ -100,53 +143,60 @@ export function useAdminWorkspace() {
   const [isCodexDetailsLoading, setIsCodexDetailsLoading] = useState(false);
   const [codexDetailsError, setCodexDetailsError] = useState<string | null>(null);
 
+  const applyWorkspace = useCallback((workspace: WorkspaceData) => {
+    setDashboard(workspace.dashboard);
+    setApiKeys(workspace.apiKeys);
+    setAccounts(workspace.accounts);
+    setProviderPresets(workspace.providerPresets);
+    setModelCatalog(workspace.modelCatalog);
+    setRoutableModels(workspace.routableModels);
+    setModelRoutes(workspace.modelRoutes);
+    setLogs(workspace.logs);
+  }, []);
+
+  const handleWorkspaceError = useCallback((error: unknown) => {
+    toast.error(error instanceof Error ? error.message : t`Failed to load dashboard`);
+    if (error instanceof Error && /token|session|credentials/i.test(error.message)) {
+      clearStoredToken();
+      setToken(null);
+    }
+  }, []);
+
   const refresh = useCallback(async () => {
     if (!getStoredToken()) {
       return;
     }
     setIsLoading(true);
     try {
-      const [
-        nextDashboard,
-        nextKeys,
-        nextAccounts,
-        nextPresets,
-        nextCatalog,
-        nextRoutableModels,
-        nextRoutes,
-        nextLogs,
-      ] = await Promise.all([
-        api.dashboard(),
-        api.apiKeys(),
-        api.providerAccounts(),
-        api.providerPresets(),
-        api.modelCatalog(),
-        api.routableModelCatalog(),
-        api.providerModelRoutes(),
-        api.requestLogs(50),
-      ]);
-      setDashboard(nextDashboard);
-      setApiKeys(nextKeys);
-      setAccounts(nextAccounts);
-      setProviderPresets(nextPresets);
-      setModelCatalog(nextCatalog);
-      setRoutableModels(nextRoutableModels);
-      setModelRoutes(nextRoutes);
-      setLogs(nextLogs);
+      applyWorkspace(await fetchWorkspace());
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : t`Failed to load dashboard`);
-      if (error instanceof Error && /token|session|credentials/i.test(error.message)) {
-        clearStoredToken();
-        setToken(null);
-      }
+      handleWorkspaceError(error);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [applyWorkspace, handleWorkspaceError]);
 
+  // Initial load for a stored session; sign-in refreshes explicitly. State is
+  // only updated from the settled promise, never synchronously in the effect.
   useEffect(() => {
-    void refresh();
-  }, [refresh, token]);
+    if (!getStoredToken()) {
+      return;
+    }
+    let cancelled = false;
+    fetchWorkspace()
+      .then((workspace) => {
+        if (!cancelled) applyWorkspace(workspace);
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) handleWorkspaceError(error);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [applyWorkspace, handleWorkspaceError]);
 
   useEffect(() => {
     function handleOAuthMessage(event: MessageEvent<AntigravityOAuthMessage>) {
@@ -261,6 +311,7 @@ export function useAdminWorkspace() {
         wireApi: createAccountForm.wireApi,
         apiKey: createAccountForm.apiKey.trim() || undefined,
         isActive: createAccountForm.isActive,
+        maxRunningRequests: numberFromInput(createAccountForm.maxRunningRequests),
       });
       toast.success(t`Provider account updated`);
     } else {
@@ -272,6 +323,7 @@ export function useAdminWorkspace() {
         wireApi: createAccountForm.wireApi,
         apiKey: createAccountForm.apiKey,
         isActive: createAccountForm.isActive,
+        maxRunningRequests: numberFromInput(createAccountForm.maxRunningRequests),
       });
       toast.success(t`Provider account created`);
     }
