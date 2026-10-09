@@ -2,6 +2,7 @@ pub mod account_concurrency;
 pub mod acme;
 pub mod antigravity_oauth;
 pub mod auth;
+pub mod codex_device_oauth;
 pub mod codex_subscription;
 pub mod config;
 pub mod db;
@@ -48,6 +49,7 @@ pub struct AppState {
     pub gemini_http: aioduct::TokioClient,
     pub websocket_http: aioduct::TokioClient,
     pub antigravity_oauth: antigravity_oauth::AntigravityOAuthStore,
+    pub codex_device_oauth: codex_device_oauth::CodexDeviceOAuthStore,
     pub relay_metrics: relay_metrics::RelayMetrics,
     pub account_concurrency: account_concurrency::AccountConcurrency,
     pub relay_stream_idle_timeout: Duration,

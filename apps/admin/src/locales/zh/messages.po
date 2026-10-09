@@ -20,7 +20,7 @@ msgstr " · 已剥离 {0}"
 
 #. placeholder {0}: routeCountForAccount(routes, account.id)
 #. placeholder {0}: routeCountForModel(routes, model.id)
-#: src/admin-ui/accounts.tsx:291
+#: src/admin-ui/accounts.tsx:292
 #: src/admin-ui/models.tsx:212
 msgid "{0, plural, one {# route} other {# routes}}"
 msgstr "{0, plural, other {# 条路由}}"
@@ -63,17 +63,17 @@ msgid "{0} concurrent requests"
 msgstr "{0} 个并发请求"
 
 #. placeholder {0}: selectedPreset.label
-#: src/admin-ui/accounts.tsx:1149
+#: src/admin-ui/accounts.tsx:1164
 msgid "{0} credential"
 msgstr "{0} 凭证"
 
 #. placeholder {0}: (seconds / 86_400).toFixed(1)
-#: src/admin-ui/helpers.tsx:397
+#: src/admin-ui/helpers.tsx:403
 msgid "{0} days"
 msgstr "{0} 天"
 
 #. placeholder {0}: (seconds / 3_600).toFixed(1)
-#: src/admin-ui/helpers.tsx:404
+#: src/admin-ui/helpers.tsx:410
 msgid "{0} hours"
 msgstr "{0} 小时"
 
@@ -85,7 +85,7 @@ msgid "{0} input · {1} cached · {2} output"
 msgstr "{0} 输入 · {1} 缓存 · {2} 输出"
 
 #. placeholder {0}: limit.remaining
-#: src/admin-ui/helpers.tsx:493
+#: src/admin-ui/helpers.tsx:499
 msgid "{0} remaining"
 msgstr "剩余 {0}"
 
@@ -131,40 +131,40 @@ msgstr "{0}：{1}"
 msgid "{0}ms"
 msgstr "{0}ms"
 
-#: src/admin-ui/helpers.tsx:495
+#: src/admin-ui/helpers.tsx:501
 msgid "{amount}, reached"
 msgstr "{amount}，已达上限"
 
-#: src/admin-ui/helpers.tsx:395
+#: src/admin-ui/helpers.tsx:401
 msgid "{days, plural, one {# day} other {# days}}"
 msgstr "{days, plural, other {# 天}}"
 
-#: src/admin-ui/helpers.tsx:402
+#: src/admin-ui/helpers.tsx:408
 msgid "{hours, plural, one {# hour} other {# hours}}"
 msgstr "{hours, plural, other {# 小时}}"
 
-#: src/admin-ui/helpers.tsx:408
+#: src/admin-ui/helpers.tsx:414
 msgid "{minutes, plural, one {# minute} other {# minutes}}"
 msgstr "{minutes, plural, other {# 分钟}}"
 
-#: src/admin-ui/accounts.tsx:1272
+#: src/admin-ui/accounts.tsx:1302
 msgid "{running}/{capacity} · {queued} queued"
 msgstr "{running}/{capacity} · 排队 {queued}"
 
-#: src/admin-ui/helpers.tsx:410
+#: src/admin-ui/helpers.tsx:416
 msgid "{seconds, plural, one {# second} other {# seconds}}"
 msgstr "{seconds, plural, other {# 秒}}"
 
-#: src/admin-ui/helpers.tsx:360
+#: src/admin-ui/helpers.tsx:366
 msgid "{value, plural, one {# request} other {# requests}}"
 msgstr "{value, plural, other {# 次请求}}"
 
-#: src/admin-ui/accounts.tsx:595
+#: src/admin-ui/accounts.tsx:596
 #: src/admin-ui/dashboard.tsx:114
 msgid "Account"
 msgstr "账号"
 
-#: src/admin-ui/accounts.tsx:162
+#: src/admin-ui/accounts.tsx:163
 #: src/admin-ui/api-keys.tsx:88
 msgid "Actions"
 msgstr "操作"
@@ -187,7 +187,7 @@ msgstr "可用上游账号"
 msgid "Add a provider account to relay traffic."
 msgstr "添加供应商账号以转发流量。"
 
-#: src/admin-ui/accounts.tsx:501
+#: src/admin-ui/accounts.tsx:502
 msgid "Add a provider route from a Catalog Model to make this account schedulable."
 msgstr "从目录模型添加供应商路由，使此账号可被调度。"
 
@@ -199,16 +199,16 @@ msgstr "从模型目录添加路由，使此目录模型可被路由。"
 msgid "Add a route to make a catalog model reachable."
 msgstr "添加路由以使目录模型可达。"
 
-#: src/admin-ui/accounts.tsx:1259
+#: src/admin-ui/accounts.tsx:1289
 msgid "Add account"
 msgstr "添加账号"
 
-#: src/admin-ui/accounts.tsx:132
+#: src/admin-ui/accounts.tsx:133
 msgid "Add Account"
 msgstr "添加账号"
 
-#: src/admin-ui/accounts.tsx:256
-#: src/admin-ui/accounts.tsx:268
+#: src/admin-ui/accounts.tsx:257
+#: src/admin-ui/accounts.tsx:269
 msgid "Add an account to make the relay schedulable."
 msgstr "添加账号以使中继可被调度。"
 
@@ -253,7 +253,7 @@ msgstr "添加模型"
 msgid "Add Model"
 msgstr "添加模型"
 
-#: src/admin-ui/accounts.tsx:1053
+#: src/admin-ui/accounts.tsx:1061
 msgid "Add provider account"
 msgstr "添加供应商账号"
 
@@ -299,7 +299,11 @@ msgstr "全部"
 msgid "All services"
 msgstr "全部服务"
 
-#: src/admin-ui/use-admin-workspace.ts:341
+#: src/admin-ui/use-admin-workspace.ts:346
+msgid "Allow popups to open the Codex sign-in page"
+msgstr "允许弹出窗口打开 Codex 登录页面"
+
+#: src/admin-ui/use-admin-workspace.ts:388
 msgid "Allow popups to sign in with Antigravity"
 msgstr "请允许弹窗以使用 Antigravity 登录"
 
@@ -311,11 +315,11 @@ msgstr "Anthropic 基址"
 msgid "Anthropic Messages"
 msgstr "Anthropic Messages"
 
-#: src/admin-ui/use-admin-workspace.ts:213
+#: src/admin-ui/use-admin-workspace.ts:214
 msgid "Antigravity account connected"
 msgstr "Antigravity 账号已连接"
 
-#: src/admin-ui/use-admin-workspace.ts:216
+#: src/admin-ui/use-admin-workspace.ts:217
 msgid "Antigravity sign-in failed"
 msgstr "Antigravity 登录失败"
 
@@ -325,15 +329,15 @@ msgstr "Antigravity 登录失败"
 msgid "API Key"
 msgstr "API 密钥"
 
-#: src/admin-ui/use-admin-workspace.ts:429
+#: src/admin-ui/use-admin-workspace.ts:476
 msgid "API key activated"
 msgstr "API 密钥已启用"
 
-#: src/admin-ui/use-admin-workspace.ts:267
+#: src/admin-ui/use-admin-workspace.ts:268
 msgid "API key created"
 msgstr "API 密钥已创建"
 
-#: src/admin-ui/use-admin-workspace.ts:481
+#: src/admin-ui/use-admin-workspace.ts:528
 msgid "API key deleted"
 msgstr "API 密钥已删除"
 
@@ -341,7 +345,7 @@ msgstr "API 密钥已删除"
 msgid "API key not found"
 msgstr "未找到 API 密钥"
 
-#: src/admin-ui/use-admin-workspace.ts:429
+#: src/admin-ui/use-admin-workspace.ts:476
 msgid "API key paused"
 msgstr "API 密钥已暂停"
 
@@ -359,21 +363,21 @@ msgstr "API 密钥"
 msgid "Appearance"
 msgstr "外观"
 
-#: src/admin-ui/accounts.tsx:639
-#: src/admin-ui/accounts.tsx:870
+#: src/admin-ui/accounts.tsx:640
+#: src/admin-ui/accounts.tsx:871
 msgid "Auth"
 msgstr "认证"
 
-#: src/admin-ui/accounts.tsx:1125
+#: src/admin-ui/accounts.tsx:1133
 msgid "Auth mode"
 msgstr "认证方式"
 
-#: src/admin-ui/helpers.tsx:431
+#: src/admin-ui/helpers.tsx:437
 msgid "available"
 msgstr "可用"
 
-#: src/admin-ui/helpers.tsx:450
-#: src/admin-ui/helpers.tsx:461
+#: src/admin-ui/helpers.tsx:456
+#: src/admin-ui/helpers.tsx:467
 msgid "Available"
 msgstr "可用"
 
@@ -390,7 +394,7 @@ msgstr "返回模型目录"
 msgid "Back to overview"
 msgstr "返回概览"
 
-#: src/admin-ui/accounts.tsx:378
+#: src/admin-ui/accounts.tsx:379
 msgid "Back to provider accounts"
 msgstr "返回供应商账号"
 
@@ -403,12 +407,12 @@ msgid "Backup"
 msgstr "备用"
 
 #. placeholder {0}: credits.balance
-#: src/admin-ui/helpers.tsx:447
+#: src/admin-ui/helpers.tsx:453
 msgid "Balance {0}"
 msgstr "余额 {0}"
 
-#: src/admin-ui/accounts.tsx:150
-#: src/admin-ui/accounts.tsx:1159
+#: src/admin-ui/accounts.tsx:151
+#: src/admin-ui/accounts.tsx:1187
 msgid "Base URL"
 msgstr "基址 URL"
 
@@ -446,13 +450,13 @@ msgid "Catalog details"
 msgstr "目录详情"
 
 #: src/admin-routes.tsx:14
-#: src/admin-ui/accounts.tsx:509
+#: src/admin-ui/accounts.tsx:510
 #: src/admin-ui/models.tsx:388
 #: src/admin-ui/models.tsx:659
 msgid "Catalog Model"
 msgstr "目录模型"
 
-#: src/admin-ui/accounts.tsx:494
+#: src/admin-ui/accounts.tsx:495
 msgid "Catalog Model bindings that use this Provider Account."
 msgstr "使用此供应商账号的目录模型绑定。"
 
@@ -520,13 +524,22 @@ msgstr "客户端配置"
 msgid "Close"
 msgstr "关闭"
 
-#: src/admin-ui/accounts.tsx:847
+#: src/admin-ui/accounts.tsx:848
 msgid "Codex account"
 msgstr "Codex 账号"
 
-#: src/admin-ui/accounts.tsx:1156
+#: src/admin-ui/accounts.tsx:1184
 msgid "Codex account API base"
 msgstr "Codex 账号 API 基址"
+
+#: src/admin-ui/use-admin-workspace.ts:365
+msgid "Codex account connected"
+msgstr "Codex 账号已连接"
+
+#: src/admin-ui/use-admin-workspace.ts:371
+#: src/admin-ui/use-admin-workspace.ts:374
+msgid "Codex device login expired"
+msgstr "Codex 设备登录已过期"
 
 #: src/admin-ui/client-setup.tsx:265
 msgid "Codex environment"
@@ -536,9 +549,9 @@ msgstr "Codex 环境变量"
 msgid "Codex provider configuration"
 msgstr "Codex 供应商配置"
 
-#: src/admin-ui/accounts.tsx:192
-#: src/admin-ui/accounts.tsx:199
-#: src/admin-ui/accounts.tsx:302
+#: src/admin-ui/accounts.tsx:193
+#: src/admin-ui/accounts.tsx:200
+#: src/admin-ui/accounts.tsx:303
 msgid "Codex quota"
 msgstr "Codex 配额"
 
@@ -566,23 +579,23 @@ msgstr "并发"
 msgid "Concurrency limit"
 msgstr "并发上限"
 
-#: src/admin-ui/helpers.tsx:494
+#: src/admin-ui/helpers.tsx:500
 msgid "Configured"
 msgstr "已配置"
 
-#: src/admin-ui/accounts.tsx:1144
+#: src/admin-ui/accounts.tsx:1159
 msgid "Configured in Model Catalog"
 msgstr "在模型目录中配置"
 
-#: src/admin-ui/accounts.tsx:449
+#: src/admin-ui/accounts.tsx:450
 msgid "Configured upstream identity and scheduling state."
 msgstr "已配置的上游身份与调度状态。"
 
-#: src/admin-ui/accounts.tsx:446
+#: src/admin-ui/accounts.tsx:447
 msgid "Connection"
 msgstr "连接"
 
-#: src/admin-ui/helpers.tsx:521
+#: src/admin-ui/helpers.tsx:527
 msgid "Copied"
 msgstr "已复制"
 
@@ -611,7 +624,7 @@ msgstr "创建 API 密钥"
 msgid "Create key"
 msgstr "创建密钥"
 
-#: src/admin-ui/accounts.tsx:480
+#: src/admin-ui/accounts.tsx:481
 #: src/admin-ui/api-keys.tsx:333
 msgid "Created"
 msgstr "创建时间"
@@ -620,7 +633,7 @@ msgstr "创建时间"
 msgid "Credential details"
 msgstr "凭证详情"
 
-#: src/admin-ui/accounts.tsx:896
+#: src/admin-ui/accounts.tsx:897
 msgid "Credits"
 msgstr "额度"
 
@@ -628,7 +641,7 @@ msgstr "额度"
 msgid "Current service assumptions exposed by the frontend."
 msgstr "前端展示的当前服务约定。"
 
-#: src/admin-ui/accounts.tsx:1081
+#: src/admin-ui/accounts.tsx:1089
 msgid "Custom"
 msgstr "自定义"
 
@@ -656,7 +669,7 @@ msgstr "DeepSeek Harness 供应商"
 msgid "Defaults to model ID"
 msgstr "默认为模型 ID"
 
-#: src/admin-ui/accounts.tsx:437
+#: src/admin-ui/accounts.tsx:438
 #: src/admin-ui/api-keys.tsx:261
 #: src/admin-ui/models.tsx:623
 msgid "Delete"
@@ -667,15 +680,15 @@ msgstr "删除"
 msgid "Description"
 msgstr "描述"
 
-#: src/admin-ui/accounts.tsx:429
+#: src/admin-ui/accounts.tsx:430
 #: src/admin-ui/api-keys.tsx:257
 #: src/admin-ui/models.tsx:394
 #: src/admin-ui/models.tsx:619
 msgid "Disable"
 msgstr "停用"
 
-#: src/admin-ui/accounts.tsx:245
-#: src/admin-ui/accounts.tsx:336
+#: src/admin-ui/accounts.tsx:246
+#: src/admin-ui/accounts.tsx:337
 msgid "Disabled"
 msgstr "已停用"
 
@@ -696,26 +709,32 @@ msgstr "显示名称"
 msgid "Each point counts completed requests in one interval. Hover or focus for details."
 msgstr "每个点表示一个区间内已完成的请求。悬停或聚焦可查看详情。"
 
-#: src/admin-ui/accounts.tsx:433
+#: src/admin-ui/accounts.tsx:434
 msgid "Edit"
 msgstr "编辑"
 
-#: src/admin-ui/accounts.tsx:1053
+#: src/admin-ui/accounts.tsx:1061
 msgid "Edit provider account"
 msgstr "编辑供应商账号"
 
-#: src/admin-ui/accounts.tsx:429
+#: src/admin-ui/accounts.tsx:430
 #: src/admin-ui/api-keys.tsx:257
 #: src/admin-ui/models.tsx:394
 #: src/admin-ui/models.tsx:619
 msgid "Enable"
 msgstr "启用"
 
-#: src/admin-ui/accounts.tsx:245
-#: src/admin-ui/accounts.tsx:336
+#: src/admin-ui/accounts.tsx:246
+#: src/admin-ui/accounts.tsx:337
 #: src/admin-ui/models.tsx:1019
 msgid "Enabled"
 msgstr "已启用"
+
+#. placeholder {0}: flow.userCode
+#. placeholder {1}: flow.verificationUrl
+#: src/admin-ui/use-admin-workspace.ts:358
+msgid "Enter the Codex device code {0} at {1}"
+msgstr "请在 {1} 输入 Codex 设备代码 {0}"
 
 #: src/App.tsx:277
 msgid "Environment"
@@ -733,16 +752,16 @@ msgstr "客户端可以发送的全部精确模型名。"
 msgid "Exact upstream model ID"
 msgstr "精确上游模型 ID"
 
-#: src/admin-ui/accounts.tsx:921
+#: src/admin-ui/accounts.tsx:922
 #: src/admin-ui/api-keys.tsx:345
 msgid "Expires"
 msgstr "过期时间"
 
-#: src/admin-ui/accounts.tsx:1226
+#: src/admin-ui/accounts.tsx:1254
 msgid "Extra requests overflow to other accounts in the same tier, then wait in a queue. Leave blank or 0 for unlimited."
 msgstr "超出的请求会先溢出到同层级的其他账号，仍无空位时排队等待。留空或填 0 表示不限制。"
 
-#: src/admin-ui/use-admin-workspace.ts:158
+#: src/admin-ui/use-admin-workspace.ts:159
 msgid "Failed to load dashboard"
 msgstr "加载仪表盘失败"
 
@@ -756,11 +775,11 @@ msgstr "系列"
 msgid "Forwarded headers"
 msgstr "转发请求头"
 
-#: src/admin-ui/accounts.tsx:613
+#: src/admin-ui/accounts.tsx:614
 msgid "Gemini account"
 msgstr "Gemini 账号"
 
-#: src/admin-ui/accounts.tsx:1158
+#: src/admin-ui/accounts.tsx:1186
 msgid "Gemini endpoint base"
 msgstr "Gemini 端点基址"
 
@@ -772,11 +791,11 @@ msgstr "Gemini GenerateContent"
 msgid "Generate copy-paste configuration for local AI coding clients."
 msgstr "为本地 AI 编程客户端生成可复制粘贴的配置。"
 
-#: src/admin-ui/accounts.tsx:780
+#: src/admin-ui/accounts.tsx:781
 msgid "Google did not return models for this credential."
 msgstr "Google 未为此凭证返回模型。"
 
-#: src/admin-ui/accounts.tsx:918
+#: src/admin-ui/accounts.tsx:919
 msgid "Granted"
 msgstr "发放时间"
 
@@ -833,23 +852,27 @@ msgstr "最近使用"
 msgid "Latency"
 msgstr "延迟"
 
-#: src/admin-ui/accounts.tsx:1201
+#: src/admin-ui/accounts.tsx:1229
 msgid "Leave the credential blank to keep the current value."
 msgstr "凭证留空则保留当前值。"
+
+#: src/admin-ui/accounts.tsx:1171
+msgid "Legacy Codex credential"
+msgstr "旧版 Codex 凭证"
 
 #: src/components/theme-toggle.tsx:17
 msgid "Light"
 msgstr "浅色"
 
-#: src/admin-ui/accounts.tsx:950
+#: src/admin-ui/accounts.tsx:951
 msgid "Limit"
 msgstr "限额"
 
-#: src/admin-ui/helpers.tsx:424
+#: src/admin-ui/helpers.tsx:430
 msgid "limited"
 msgstr "已限流"
 
-#: src/admin-ui/accounts.tsx:873
+#: src/admin-ui/accounts.tsx:874
 #: src/admin-ui/api-keys.tsx:82
 msgid "Limits"
 msgstr "限额"
@@ -862,7 +885,11 @@ msgstr "本地"
 msgid "Local time"
 msgstr "本地时间"
 
-#: src/admin-ui/accounts.tsx:1210
+#: src/admin-ui/accounts.tsx:1174
+msgid "Manual refresh tokens are deprecated. Create a new account with Codex device login, then remove this legacy account."
+msgstr "手动 refresh token 已弃用。请使用 Codex 设备登录创建新账号，然后删除此旧账号。"
+
+#: src/admin-ui/accounts.tsx:1238
 msgid "Max running requests"
 msgstr "最大并发请求数"
 
@@ -874,14 +901,14 @@ msgstr "将此 TOML 合并到 ~/.codex/config.toml。保留自己的模型偏好
 msgid "Messages routed"
 msgstr "已路由 Messages"
 
-#: src/admin-ui/accounts.tsx:735
+#: src/admin-ui/accounts.tsx:736
 #: src/admin-ui/client-setup.tsx:387
 #: src/admin-ui/logs.tsx:185
 #: src/admin-ui/models.tsx:138
 msgid "Model"
 msgstr "模型"
 
-#: src/admin-ui/use-admin-workspace.ts:414
+#: src/admin-ui/use-admin-workspace.ts:461
 msgid "Model added"
 msgstr "模型已添加"
 
@@ -892,50 +919,50 @@ msgstr "模型已添加"
 msgid "Model Catalog"
 msgstr "模型目录"
 
-#: src/admin-ui/use-admin-workspace.ts:435
+#: src/admin-ui/use-admin-workspace.ts:482
 msgid "Model disabled"
 msgstr "模型已停用"
 
-#: src/admin-ui/use-admin-workspace.ts:435
+#: src/admin-ui/use-admin-workspace.ts:482
 msgid "Model enabled"
 msgstr "模型已启用"
 
-#: src/admin-ui/accounts.tsx:673
+#: src/admin-ui/accounts.tsx:674
 msgid "Model group"
 msgstr "模型组"
 
-#: src/admin-ui/accounts.tsx:738
+#: src/admin-ui/accounts.tsx:739
 #: src/admin-ui/models.tsx:766
 msgid "Model ID"
 msgstr "模型 ID"
 
-#: src/admin-ui/use-admin-workspace.ts:444
+#: src/admin-ui/use-admin-workspace.ts:491
 msgid "Model updated"
 msgstr "模型已更新"
 
-#: src/admin-ui/accounts.tsx:210
-#: src/admin-ui/accounts.tsx:217
-#: src/admin-ui/accounts.tsx:313
-#: src/admin-ui/accounts.tsx:419
+#: src/admin-ui/accounts.tsx:211
+#: src/admin-ui/accounts.tsx:218
+#: src/admin-ui/accounts.tsx:314
+#: src/admin-ui/accounts.tsx:420
 msgid "Models and quota"
 msgstr "模型与配额"
 
-#: src/admin-ui/accounts.tsx:615
+#: src/admin-ui/accounts.tsx:616
 msgid "Models and quota reported by this Google account."
 msgstr "此 Google 账号报告的模型与配额。"
 
-#: src/admin-ui/accounts.tsx:141
-#: src/admin-ui/accounts.tsx:1087
+#: src/admin-ui/accounts.tsx:142
+#: src/admin-ui/accounts.tsx:1095
 #: src/admin-ui/api-keys.tsx:73
 #: src/admin-ui/api-keys.tsx:383
 msgid "Name"
 msgstr "名称"
 
-#: src/admin-ui/helpers.tsx:509
+#: src/admin-ui/helpers.tsx:515
 msgid "never"
 msgstr "从未"
 
-#: src/admin-ui/helpers.tsx:476
+#: src/admin-ui/helpers.tsx:482
 msgid "Never"
 msgstr "永不"
 
@@ -943,7 +970,7 @@ msgstr "永不"
 msgid "Newly created keys are prefilled here once. Existing rows only show previews, so paste the original tokentoxication-* value before copying a setup block."
 msgstr "新创建的密钥只会在此预填一次。已有条目只显示预览，复制配置前请粘贴原始 tokentoxication-* 值。"
 
-#: src/admin-ui/accounts.tsx:779
+#: src/admin-ui/accounts.tsx:780
 msgid "No account models returned"
 msgstr "未返回账号模型"
 
@@ -1003,19 +1030,19 @@ msgstr "没有 opencode 路由"
 msgid "No Pi routes"
 msgstr "没有 Pi 路由"
 
-#: src/admin-ui/accounts.tsx:255
-#: src/admin-ui/accounts.tsx:267
+#: src/admin-ui/accounts.tsx:256
+#: src/admin-ui/accounts.tsx:268
 #: src/admin-ui/dashboard.tsx:120
 msgid "No provider accounts"
 msgstr "没有供应商账号"
 
-#: src/admin-ui/accounts.tsx:500
+#: src/admin-ui/accounts.tsx:501
 #: src/admin-ui/models.tsx:309
 #: src/admin-ui/models.tsx:453
 msgid "No provider routes"
 msgstr "没有供应商路由"
 
-#: src/admin-ui/accounts.tsx:1004
+#: src/admin-ui/accounts.tsx:1005
 msgid "No quota windows returned"
 msgstr "未返回配额窗口"
 
@@ -1047,7 +1074,7 @@ msgstr "未剥离参数"
 msgid "non-stream"
 msgstr "非流式"
 
-#: src/admin-ui/helpers.tsx:453
+#: src/admin-ui/helpers.tsx:459
 msgid "None"
 msgstr "无"
 
@@ -1095,7 +1122,7 @@ msgstr "部分受限"
 msgid "Password"
 msgstr "密码"
 
-#: src/admin-ui/accounts.tsx:1047
+#: src/admin-ui/accounts.tsx:1055
 msgid "Paste the value from tokens.refresh_token or openai.refresh"
 msgstr "粘贴 tokens.refresh_token 或 openai.refresh 中的值"
 
@@ -1128,7 +1155,7 @@ msgstr "权限"
 msgid "Pi custom provider"
 msgstr "Pi 自定义供应商"
 
-#: src/admin-ui/accounts.tsx:868
+#: src/admin-ui/accounts.tsx:869
 msgid "Plan"
 msgstr "套餐"
 
@@ -1141,7 +1168,7 @@ msgstr "将 Claude Code 指向 Anthropic Messages 命名空间。"
 msgid "Policy"
 msgstr "策略"
 
-#: src/admin-ui/accounts.tsx:1061
+#: src/admin-ui/accounts.tsx:1069
 msgid "Preset"
 msgstr "预设"
 
@@ -1153,7 +1180,7 @@ msgstr "预览"
 msgid "primary"
 msgstr "主"
 
-#: src/admin-ui/accounts.tsx:812
+#: src/admin-ui/accounts.tsx:813
 #: src/admin-ui/models.tsx:983
 msgid "Primary"
 msgstr "主"
@@ -1162,22 +1189,22 @@ msgstr "主"
 msgid "Primary and backup bindings from public models to upstream models."
 msgstr "从公开模型到上游模型的主备绑定。"
 
-#: src/admin-ui/accounts.tsx:635
+#: src/admin-ui/accounts.tsx:636
 msgid "Project"
 msgstr "项目"
 
-#: src/admin-ui/accounts.tsx:147
-#: src/admin-ui/accounts.tsx:462
-#: src/admin-ui/accounts.tsx:1105
+#: src/admin-ui/accounts.tsx:148
+#: src/admin-ui/accounts.tsx:463
+#: src/admin-ui/accounts.tsx:1113
 #: src/admin-ui/models.tsx:248
 #: src/admin-ui/models.tsx:691
 #: src/admin-ui/models.tsx:954
 msgid "Protocol"
 msgstr "协议"
 
-#: src/admin-ui/accounts.tsx:144
-#: src/admin-ui/accounts.tsx:456
-#: src/admin-ui/accounts.tsx:1096
+#: src/admin-ui/accounts.tsx:145
+#: src/admin-ui/accounts.tsx:457
+#: src/admin-ui/accounts.tsx:1104
 msgid "Provider"
 msgstr "供应商"
 
@@ -1186,7 +1213,7 @@ msgid "Provider account"
 msgstr "供应商账号"
 
 #: src/admin-routes.tsx:12
-#: src/admin-ui/accounts.tsx:403
+#: src/admin-ui/accounts.tsx:404
 #: src/admin-ui/logs.tsx:112
 #: src/admin-ui/models.tsx:245
 #: src/admin-ui/models.tsx:465
@@ -1194,29 +1221,29 @@ msgstr "供应商账号"
 msgid "Provider Account"
 msgstr "供应商账号"
 
-#: src/admin-ui/use-admin-workspace.ts:328
+#: src/admin-ui/use-admin-workspace.ts:333
 msgid "Provider account created"
 msgstr "供应商账号已创建"
 
-#: src/admin-ui/use-admin-workspace.ts:507
+#: src/admin-ui/use-admin-workspace.ts:554
 msgid "Provider account deleted"
 msgstr "供应商账号已删除"
 
-#: src/admin-ui/accounts.tsx:375
+#: src/admin-ui/accounts.tsx:376
 msgid "Provider account not found"
 msgstr "未找到供应商账号"
 
-#: src/admin-ui/use-admin-workspace.ts:316
+#: src/admin-ui/use-admin-workspace.ts:321
 msgid "Provider account updated"
 msgstr "供应商账号已更新"
 
 #: src/admin-routes.tsx:11
-#: src/admin-ui/accounts.tsx:124
-#: src/admin-ui/accounts.tsx:398
+#: src/admin-ui/accounts.tsx:125
+#: src/admin-ui/accounts.tsx:399
 msgid "Provider Accounts"
 msgstr "供应商账号"
 
-#: src/admin-ui/use-admin-workspace.ts:488
+#: src/admin-ui/use-admin-workspace.ts:535
 msgid "Provider activated"
 msgstr "供应商已启用"
 
@@ -1229,13 +1256,13 @@ msgstr "供应商模型路由"
 msgid "Provider Model Route not found"
 msgstr "未找到供应商模型路由"
 
-#: src/admin-ui/accounts.tsx:491
+#: src/admin-ui/accounts.tsx:492
 #: src/admin-ui/models.tsx:228
 #: src/admin-ui/models.tsx:444
 msgid "Provider Model Routes"
 msgstr "供应商模型路由"
 
-#: src/admin-ui/use-admin-workspace.ts:488
+#: src/admin-ui/use-admin-workspace.ts:535
 msgid "Provider paused"
 msgstr "供应商已暂停"
 
@@ -1243,15 +1270,15 @@ msgstr "供应商已暂停"
 msgid "Provider pool"
 msgstr "供应商池"
 
-#: src/admin-ui/use-admin-workspace.ts:423
+#: src/admin-ui/use-admin-workspace.ts:470
 msgid "Provider route added"
 msgstr "供应商路由已添加"
 
-#: src/admin-ui/use-admin-workspace.ts:470
+#: src/admin-ui/use-admin-workspace.ts:517
 msgid "Provider route deleted"
 msgstr "供应商路由已删除"
 
-#: src/admin-ui/use-admin-workspace.ts:461
+#: src/admin-ui/use-admin-workspace.ts:508
 msgid "Provider route updated"
 msgstr "供应商路由已更新"
 
@@ -1271,7 +1298,7 @@ msgstr "公开模型标识与面向客户端的元数据。"
 msgid "Queue wait"
 msgstr "排队等待"
 
-#: src/admin-ui/accounts.tsx:413
+#: src/admin-ui/accounts.tsx:414
 msgid "Quota"
 msgstr "配额"
 
@@ -1279,15 +1306,15 @@ msgstr "配额"
 msgid "quota exhausted"
 msgstr "额度已耗尽"
 
-#: src/admin-ui/accounts.tsx:643
+#: src/admin-ui/accounts.tsx:644
 msgid "Quota source"
 msgstr "配额来源"
 
-#: src/admin-ui/accounts.tsx:656
+#: src/admin-ui/accounts.tsx:657
 msgid "Quota summary unavailable"
 msgstr "配额摘要不可用"
 
-#: src/admin-ui/accounts.tsx:886
+#: src/admin-ui/accounts.tsx:887
 msgid "Quota unavailable"
 msgstr "配额不可用"
 
@@ -1299,11 +1326,11 @@ msgstr "速率限制"
 msgid "rate limited"
 msgstr "已限流"
 
-#: src/admin-ui/accounts.tsx:1043
+#: src/admin-ui/accounts.tsx:1051
 msgid "Raw refresh token"
 msgstr "原始 refresh token"
 
-#: src/admin-ui/helpers.tsx:487
+#: src/admin-ui/helpers.tsx:493
 msgid "Reached"
 msgstr "已达上限"
 
@@ -1311,13 +1338,13 @@ msgstr "已达上限"
 msgid "Recent requests"
 msgstr "最近请求"
 
-#: src/admin-ui/accounts.tsx:425
+#: src/admin-ui/accounts.tsx:426
 msgid "Reconnect"
 msgstr "重新连接"
 
-#: src/admin-ui/accounts.tsx:228
-#: src/admin-ui/accounts.tsx:235
-#: src/admin-ui/accounts.tsx:324
+#: src/admin-ui/accounts.tsx:229
+#: src/admin-ui/accounts.tsx:236
+#: src/admin-ui/accounts.tsx:325
 msgid "Reconnect Antigravity"
 msgstr "重新连接 Antigravity"
 
@@ -1325,11 +1352,11 @@ msgstr "重新连接 Antigravity"
 msgid "recovering"
 msgstr "恢复检查中"
 
-#: src/admin-ui/helpers.tsx:465
+#: src/admin-ui/helpers.tsx:471
 msgid "Redeemed"
 msgstr "已兑换"
 
-#: src/admin-ui/helpers.tsx:463
+#: src/admin-ui/helpers.tsx:469
 msgid "Redeeming"
 msgstr "兑换中"
 
@@ -1345,7 +1372,7 @@ msgstr "刷新管理数据以加载概览。"
 msgid "Register an exact public model name clients may send."
 msgstr "登记客户端可能发送的精确公开模型名。"
 
-#: src/admin-ui/accounts.tsx:1057
+#: src/admin-ui/accounts.tsx:1065
 msgid "Register an upstream credential for relay scheduling."
 msgstr "登记用于中继调度的上游凭证。"
 
@@ -1357,7 +1384,7 @@ msgstr "中继 API 密钥"
 msgid "Relay control plane"
 msgstr "中继控制面板"
 
-#: src/admin-ui/accounts.tsx:880
+#: src/admin-ui/accounts.tsx:881
 msgid "Relay endpoint"
 msgstr "中继端点"
 
@@ -1373,8 +1400,8 @@ msgstr "此次完成尝试的中继结果与计量。"
 msgid "Relay status, latency, model, sanitized routing metadata, and token accounting."
 msgstr "中继状态、延迟、模型、脱敏路由元数据与 token 计量。"
 
-#: src/admin-ui/accounts.tsx:679
-#: src/admin-ui/accounts.tsx:741
+#: src/admin-ui/accounts.tsx:680
+#: src/admin-ui/accounts.tsx:742
 msgid "Remaining"
 msgstr "剩余"
 
@@ -1426,17 +1453,17 @@ msgstr "每 {intervalMinutes} 分钟请求数"
 msgid "Requests today"
 msgstr "今日请求"
 
-#: src/admin-ui/accounts.tsx:682
-#: src/admin-ui/accounts.tsx:744
-#: src/admin-ui/accounts.tsx:959
+#: src/admin-ui/accounts.tsx:683
+#: src/admin-ui/accounts.tsx:745
+#: src/admin-ui/accounts.tsx:960
 msgid "Reset"
 msgstr "重置"
 
-#: src/admin-ui/accounts.tsx:912
+#: src/admin-ui/accounts.tsx:913
 msgid "Reset credit"
 msgstr "重置额度"
 
-#: src/admin-ui/accounts.tsx:875
+#: src/admin-ui/accounts.tsx:876
 msgid "Reset credits"
 msgstr "重置额度"
 
@@ -1444,7 +1471,7 @@ msgstr "重置额度"
 msgid "Responses routed"
 msgstr "已路由 Responses"
 
-#: src/admin-ui/accounts.tsx:515
+#: src/admin-ui/accounts.tsx:516
 #: src/admin-ui/models.tsx:251
 #: src/admin-ui/models.tsx:468
 #: src/admin-ui/models.tsx:697
@@ -1460,19 +1487,19 @@ msgstr "可路由的 Responses 模型"
 msgid "Route"
 msgstr "路由"
 
-#: src/admin-ui/accounts.tsx:1144
+#: src/admin-ui/accounts.tsx:1159
 msgid "Route binding"
 msgstr "路由绑定"
 
-#: src/admin-ui/use-admin-workspace.ts:450
+#: src/admin-ui/use-admin-workspace.ts:497
 msgid "Route disabled"
 msgstr "路由已停用"
 
-#: src/admin-ui/use-admin-workspace.ts:450
+#: src/admin-ui/use-admin-workspace.ts:497
 msgid "Route enabled"
 msgstr "路由已启用"
 
-#: src/admin-ui/accounts.tsx:153
+#: src/admin-ui/accounts.tsx:154
 #: src/admin-ui/models.tsx:147
 msgid "Routes"
 msgstr "路由"
@@ -1490,11 +1517,11 @@ msgstr "路由健康与可用性。"
 msgid "RPM"
 msgstr "RPM"
 
-#: src/admin-ui/accounts.tsx:156
+#: src/admin-ui/accounts.tsx:157
 msgid "Running"
 msgstr "运行中"
 
-#: src/admin-ui/accounts.tsx:474
+#: src/admin-ui/accounts.tsx:475
 msgid "Running requests"
 msgstr "运行中请求"
 
@@ -1504,13 +1531,13 @@ msgstr "运行中请求"
 msgid "Runtime"
 msgstr "运行时"
 
-#: src/admin-ui/accounts.tsx:1258
+#: src/admin-ui/accounts.tsx:1288
 #: src/admin-ui/models.tsx:435
 #: src/admin-ui/models.tsx:648
 msgid "Save changes"
 msgstr "保存更改"
 
-#: src/admin-ui/accounts.tsx:1234
+#: src/admin-ui/accounts.tsx:1262
 msgid "Schedulable"
 msgstr "可调度"
 
@@ -1518,7 +1545,7 @@ msgstr "可调度"
 msgid "Search model, display name, or family"
 msgstr "搜索模型、显示名称或系列"
 
-#: src/admin-ui/accounts.tsx:813
+#: src/admin-ui/accounts.tsx:814
 msgid "Secondary"
 msgstr "次级"
 
@@ -1546,35 +1573,39 @@ msgstr "设置"
 msgid "Sign in"
 msgstr "登录"
 
-#: src/admin-ui/accounts.tsx:1256
+#: src/admin-ui/accounts.tsx:1286
 msgid "Sign in with Antigravity"
 msgstr "使用 Antigravity 登录"
+
+#: src/admin-ui/accounts.tsx:1284
+msgid "Sign in with Codex"
+msgstr "使用 Codex 登录"
 
 #: src/App.tsx:306
 msgid "Sign out"
 msgstr "退出登录"
 
-#: src/admin-ui/use-admin-workspace.ts:234
+#: src/admin-ui/use-admin-workspace.ts:235
 msgid "Sign-in failed"
 msgstr "登录失败"
 
-#: src/admin-ui/use-admin-workspace.ts:231
+#: src/admin-ui/use-admin-workspace.ts:232
 msgid "Signed in"
 msgstr "已登录"
 
-#: src/admin-ui/use-admin-workspace.ts:247
+#: src/admin-ui/use-admin-workspace.ts:248
 msgid "Signed out"
 msgstr "已退出"
 
-#: src/admin-ui/accounts.tsx:900
+#: src/admin-ui/accounts.tsx:901
 msgid "Spending limit"
 msgstr "支出上限"
 
-#: src/admin-ui/accounts.tsx:159
-#: src/admin-ui/accounts.tsx:468
-#: src/admin-ui/accounts.tsx:521
-#: src/admin-ui/accounts.tsx:915
-#: src/admin-ui/accounts.tsx:962
+#: src/admin-ui/accounts.tsx:160
+#: src/admin-ui/accounts.tsx:469
+#: src/admin-ui/accounts.tsx:522
+#: src/admin-ui/accounts.tsx:916
+#: src/admin-ui/accounts.tsx:963
 #: src/admin-ui/api-keys.tsx:295
 #: src/admin-ui/logs.tsx:191
 #: src/admin-ui/logs.tsx:291
@@ -1610,7 +1641,7 @@ msgstr "剥离 {params}"
 msgid "Strip request params"
 msgstr "剥离请求参数"
 
-#: src/admin-ui/accounts.tsx:849
+#: src/admin-ui/accounts.tsx:850
 msgid "Subscription quota reported by this Codex account."
 msgstr "此 Codex 账号报告的订阅配额。"
 
@@ -1618,7 +1649,7 @@ msgstr "此 Codex 账号报告的订阅配额。"
 msgid "System"
 msgstr "跟随系统"
 
-#: src/admin-ui/accounts.tsx:1005
+#: src/admin-ui/accounts.tsx:1006
 msgid "The relay returned no Codex quota windows."
 msgstr "中继未返回 Codex 配额窗口。"
 
@@ -1638,7 +1669,7 @@ msgstr "此 API 密钥可能已删除，或链接不完整。"
 msgid "This Catalog Model may have been deleted or the link is incomplete."
 msgstr "此目录模型可能已删除，或链接不完整。"
 
-#: src/admin-ui/accounts.tsx:376
+#: src/admin-ui/accounts.tsx:377
 msgid "This provider account may have been deleted or the link is incomplete."
 msgstr "此供应商账号可能已删除，或链接不完整。"
 
@@ -1654,7 +1685,7 @@ msgstr "此请求日志可能已超出当前日志集合，或链接不完整。
 msgid "This secret is shown once."
 msgstr "此密文只显示一次。"
 
-#: src/admin-ui/accounts.tsx:642
+#: src/admin-ui/accounts.tsx:643
 msgid "Tier"
 msgstr "档位"
 
@@ -1674,23 +1705,27 @@ msgstr "Token"
 msgid "Tokens today"
 msgstr "今日 token"
 
-#: src/admin-ui/accounts.tsx:627
+#: src/admin-ui/use-admin-workspace.ts:377
+msgid "Unable to connect Codex account"
+msgstr "无法连接 Codex 账号"
+
+#: src/admin-ui/accounts.tsx:628
 msgid "Unable to load account data"
 msgstr "无法加载账号数据"
 
-#: src/admin-ui/use-admin-workspace.ts:395
+#: src/admin-ui/use-admin-workspace.ts:442
 msgid "Unable to load Codex quota"
 msgstr "无法加载 Codex 配额"
 
-#: src/admin-ui/use-admin-workspace.ts:379
+#: src/admin-ui/use-admin-workspace.ts:426
 msgid "Unable to load Gemini account data"
 msgstr "无法加载 Gemini 账号数据"
 
-#: src/admin-ui/accounts.tsx:861
+#: src/admin-ui/accounts.tsx:862
 msgid "Unable to load quota"
 msgstr "无法加载配额"
 
-#: src/admin-ui/use-admin-workspace.ts:353
+#: src/admin-ui/use-admin-workspace.ts:400
 msgid "Unable to start Antigravity sign-in"
 msgstr "无法开始 Antigravity 登录"
 
@@ -1698,37 +1733,37 @@ msgstr "无法开始 Antigravity 登录"
 msgid "Unexpected key prefix"
 msgstr "密钥前缀不符合预期"
 
-#: src/admin-ui/accounts.tsx:636
-#: src/admin-ui/accounts.tsx:640
-#: src/admin-ui/accounts.tsx:643
-#: src/admin-ui/accounts.tsx:710
-#: src/admin-ui/accounts.tsx:760
-#: src/admin-ui/accounts.tsx:868
-#: src/admin-ui/accounts.tsx:871
-#: src/admin-ui/accounts.tsx:984
+#: src/admin-ui/accounts.tsx:637
+#: src/admin-ui/accounts.tsx:641
+#: src/admin-ui/accounts.tsx:644
+#: src/admin-ui/accounts.tsx:711
+#: src/admin-ui/accounts.tsx:761
+#: src/admin-ui/accounts.tsx:869
+#: src/admin-ui/accounts.tsx:872
+#: src/admin-ui/accounts.tsx:985
 #: src/admin-ui/helpers.tsx:133
-#: src/admin-ui/helpers.tsx:368
-#: src/admin-ui/helpers.tsx:370
-#: src/admin-ui/helpers.tsx:390
-#: src/admin-ui/helpers.tsx:437
-#: src/admin-ui/helpers.tsx:455
-#: src/admin-ui/helpers.tsx:472
-#: src/admin-ui/helpers.tsx:487
-#: src/admin-ui/helpers.tsx:499
+#: src/admin-ui/helpers.tsx:374
+#: src/admin-ui/helpers.tsx:376
+#: src/admin-ui/helpers.tsx:396
+#: src/admin-ui/helpers.tsx:443
+#: src/admin-ui/helpers.tsx:461
+#: src/admin-ui/helpers.tsx:478
+#: src/admin-ui/helpers.tsx:493
+#: src/admin-ui/helpers.tsx:505
 msgid "unknown"
 msgstr "未知"
 
-#: src/admin-ui/helpers.tsx:467
-#: src/admin-ui/helpers.tsx:504
+#: src/admin-ui/helpers.tsx:473
+#: src/admin-ui/helpers.tsx:510
 msgid "Unknown"
 msgstr "未知"
 
-#: src/admin-ui/accounts.tsx:1221
-#: src/admin-ui/helpers.tsx:444
+#: src/admin-ui/accounts.tsx:1249
+#: src/admin-ui/helpers.tsx:450
 msgid "Unlimited"
 msgstr "无限制"
 
-#: src/admin-ui/accounts.tsx:821
+#: src/admin-ui/accounts.tsx:822
 msgid "Unreported"
 msgstr "未报告"
 
@@ -1737,7 +1772,7 @@ msgstr "未报告"
 msgid "until {0}"
 msgstr "直到 {0}"
 
-#: src/admin-ui/accounts.tsx:1056
+#: src/admin-ui/accounts.tsx:1064
 msgid "Update routing details or replace the upstream credential."
 msgstr "更新路由详情或替换上游凭证。"
 
@@ -1745,19 +1780,19 @@ msgstr "更新路由详情或替换上游凭证。"
 msgid "Upstream"
 msgstr "上游"
 
-#: src/admin-ui/accounts.tsx:1043
+#: src/admin-ui/accounts.tsx:1051
 msgid "Upstream API key"
 msgstr "上游 API 密钥"
 
-#: src/admin-ui/accounts.tsx:1048
+#: src/admin-ui/accounts.tsx:1056
 msgid "Upstream credential"
 msgstr "上游凭证"
 
-#: src/admin-ui/accounts.tsx:127
+#: src/admin-ui/accounts.tsx:128
 msgid "Upstream credentials used by model routes."
 msgstr "模型路由使用的上游凭证。"
 
-#: src/admin-ui/accounts.tsx:512
+#: src/admin-ui/accounts.tsx:513
 #: src/admin-ui/models.tsx:242
 #: src/admin-ui/models.tsx:462
 #: src/admin-ui/models.tsx:685
@@ -1768,7 +1803,7 @@ msgstr "上游模型"
 msgid "Upstream model ID"
 msgstr "上游模型 ID"
 
-#: src/admin-ui/accounts.tsx:1206
+#: src/admin-ui/accounts.tsx:1234
 msgid "Upstream path"
 msgstr "上游路径"
 
@@ -1776,7 +1811,7 @@ msgstr "上游路径"
 msgid "usable client credentials"
 msgstr "可用客户端凭证"
 
-#: src/admin-ui/accounts.tsx:666
+#: src/admin-ui/accounts.tsx:667
 msgid "Usage windows"
 msgstr "用量窗口"
 
@@ -1788,11 +1823,11 @@ msgstr "使用中继 API 密钥密文"
 msgid "Use the credentials from your service environment."
 msgstr "使用服务环境中的凭据。"
 
-#: src/admin-ui/accounts.tsx:1237
+#: src/admin-ui/accounts.tsx:1265
 msgid "Use this account for relay traffic"
 msgstr "用此账号处理中继流量"
 
-#: src/admin-ui/accounts.tsx:956
+#: src/admin-ui/accounts.tsx:957
 msgid "Used"
 msgstr "已使用"
 
@@ -1800,7 +1835,7 @@ msgstr "已使用"
 msgid "Username"
 msgstr "用户名"
 
-#: src/admin-ui/accounts.tsx:518
+#: src/admin-ui/accounts.tsx:519
 #: src/admin-ui/models.tsx:471
 #: src/admin-ui/models.tsx:703
 #: src/admin-ui/models.tsx:994
@@ -1811,8 +1846,8 @@ msgstr "权重"
 msgid "Weight applies among healthy routes with the same role. Primary routes are preferred over backups."
 msgstr "权重在具有相同角色的健康路由之间生效。主路由优先于备用路由。"
 
-#: src/admin-ui/accounts.tsx:676
-#: src/admin-ui/accounts.tsx:953
+#: src/admin-ui/accounts.tsx:677
+#: src/admin-ui/accounts.tsx:954
 msgid "Window"
 msgstr "窗口"
 

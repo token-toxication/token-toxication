@@ -4,6 +4,9 @@ import type {
   AntigravityOAuthStartResponse,
   ApiKey,
   CodexAccountQuotaResponse,
+  CodexDeviceOAuthStartRequest,
+  CodexDeviceOAuthStartResponse,
+  CodexDeviceOAuthStatusResponse,
   CreateApiKeyRequest,
   CreateApiKeyResponse,
   CreateModelCatalogEntryRequest,
@@ -158,6 +161,18 @@ export const api = {
     payload: AntigravityOAuthStartRequest,
   ): Promise<AntigravityOAuthStartResponse> {
     const response = await callApi(adminApi.startAntigravityOauth({ body: payload }));
+    return unwrapResult(response);
+  },
+
+  async startCodexDeviceOAuth(
+    payload: CodexDeviceOAuthStartRequest,
+  ): Promise<CodexDeviceOAuthStartResponse> {
+    const response = await callApi(adminApi.startCodexDeviceOauth({ body: payload }));
+    return unwrapResult(response);
+  },
+
+  async codexDeviceOAuthStatus(flowId: string): Promise<CodexDeviceOAuthStatusResponse> {
+    const response = await callApi(adminApi.getCodexDeviceOauthStatus({ flowId }));
     return unwrapResult(response);
   },
 

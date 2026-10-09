@@ -9,6 +9,7 @@ use serde_json::Value;
 use url::Url;
 
 use crate::{
+    codex_device_oauth::CodexDeviceOAuthStore,
     db::Db,
     error::AppError,
     models::{
@@ -20,6 +21,10 @@ use crate::{
 
 const CODEX_CLIENT_ID: &str = "app_EMoamEEZ73f0CkXaXp7hrann";
 const DEFAULT_CODEX_ISSUER: &str = "https://auth.openai.com";
+pub const CODEX_DEVICE_OAUTH_AUTH_MODE: &str = "codex-device-oauth";
+pub const CODEX_MANUAL_REFRESH_AUTH_MODE: &str = "codex-manual-refresh";
+pub const CODEX_DEVICE_ORIGINATOR: &str = "codex_cli_rs";
+pub const CODEX_MANUAL_ORIGINATOR: &str = "opencode";
 const CODEX_QUOTA_TIMEOUT: Duration = Duration::from_secs(15);
 const REFRESH_SAFETY_MARGIN_MS: i64 = 30_000;
 const STORED_CODEX_CREDENTIAL_TYPE: &str = "token-toxication-codex-oauth-v1";
@@ -32,6 +37,7 @@ pub struct CodexSubscriptionAuthorization {
     pub access_token: String,
     pub account_id: Option<String>,
     pub endpoint: String,
+    pub originator: &'static str,
 }
 
 #[derive(Debug, Clone)]
@@ -189,7 +195,15 @@ fn codex_account_read_endpoint(base_url: &str, resource: &str) -> Result<String,
     Ok(append_codex_path(root, &format!("{prefix}/{resource}")))
 }
 pub fn is_codex_subscription_auth(auth_mode: &str) -> bool {
-    auth_mode == "codex-oauth"
+    is_codex_device_oauth_auth(auth_mode) || is_codex_manual_refresh_auth(auth_mode)
+}
+
+pub fn is_codex_device_oauth_auth(auth_mode: &str) -> bool {
+    auth_mode == CODEX_DEVICE_OAUTH_AUTH_MODE
+}
+
+pub fn is_codex_manual_refresh_auth(auth_mode: &str) -> bool {
+    auth_mode == CODEX_MANUAL_REFRESH_AUTH_MODE || auth_mode == "codex-oauth"
 }
 
 pub fn codex_subscription_endpoint(base_url: &str) -> Result<String, AppError> {
@@ -282,6 +296,7 @@ pub async fn codex_subscription_authorization(
             access_token: credential.access.unwrap_or_default(),
             account_id: credential.account_id,
             endpoint,
+            originator: CODEX_MANUAL_ORIGINATOR,
         });
     }
 
@@ -298,17 +313,23 @@ pub async fn codex_subscription_authorization(
         access_token: tokens.access_token,
         account_id: credential.account_id,
         endpoint,
+        originator: CODEX_MANUAL_ORIGINATOR,
     })
 }
 
 pub async fn codex_account_quota(
     db: &Db,
     http: &TokioClient,
+    device_store: &CodexDeviceOAuthStore,
     account_id: &str,
 ) -> Result<CodexAccountQuotaResponse, AppError> {
     let account = codex_account_record(db, account_id).await?;
     let result = async {
-        let authorization = codex_subscription_authorization(db, http, &account).await?;
+        let authorization = if is_codex_device_oauth_auth(&account.account.auth_mode) {
+            crate::codex_device_oauth::authorization(device_store, db, http, &account).await?
+        } else {
+            codex_subscription_authorization(db, http, &account).await?
+        };
         let endpoint = codex_quota_endpoint(&account.account.base_url)?;
         let details_endpoint = codex_reset_credits_endpoint(&account.account.base_url)?;
         let (payload, details) = tokio::join!(
@@ -1184,9 +1205,14 @@ mod tests {
             .await
             .expect("block account");
 
-        codex_account_quota(&db, &test_http_client(), &account.id)
-            .await
-            .expect("quota response");
+        codex_account_quota(
+            &db,
+            &test_http_client(),
+            &CodexDeviceOAuthStore::default(),
+            &account.id,
+        )
+        .await
+        .expect("quota response");
 
         let account = db
             .get_provider_account(&account.id)
@@ -1249,9 +1275,14 @@ mod tests {
             .await
             .expect("create Codex account");
 
-        codex_account_quota(&db, &test_http_client(), &account.id)
-            .await
-            .expect("quota response");
+        codex_account_quota(
+            &db,
+            &test_http_client(),
+            &CodexDeviceOAuthStore::default(),
+            &account.id,
+        )
+        .await
+        .expect("quota response");
         db.mark_provider_result(&account.id, "healthy", None)
             .await
             .expect("record unrelated success");

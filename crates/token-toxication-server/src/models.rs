@@ -238,6 +238,35 @@ pub struct ProviderAccountResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
+pub struct CodexDeviceOAuthStartRequest {
+    #[serde(default)]
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CodexDeviceOAuthStartResponse {
+    pub flow_id: String,
+    pub verification_url: String,
+    pub user_code: String,
+    pub expires_at: DateTime<Utc>,
+    pub poll_interval_seconds: u64,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CodexDeviceOAuthStatusResponse {
+    pub flow_id: String,
+    pub status: String,
+    pub expires_at: DateTime<Utc>,
+    pub next_poll_at: Option<DateTime<Utc>>,
+    pub account: Option<ProviderAccount>,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct AntigravityOAuthStartRequest {
     pub account_id: Option<String>,
     #[serde(default)]

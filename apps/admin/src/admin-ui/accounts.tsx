@@ -36,6 +36,7 @@ import {
   isCodexAccount,
   isGeminiAccount,
   isAntigravityAccountAuth,
+  isCodexDeviceOAuthAuth,
   isCodexSubscriptionAuth,
   providerPresetForForm,
   quotaPercent,
@@ -1035,8 +1036,15 @@ export function CreateAccountSheet({
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
 }) {
   const isCodexSubscription = isCodexSubscriptionAuth(form.authMode);
+  const isCodexDeviceOAuth = isCodexDeviceOAuthAuth(form.authMode);
   const isAntigravityAccount = isAntigravityAccountAuth(form.authMode);
-  const usesTextareaCredential = isCodexSubscription;
+  const usesTextareaCredential = isCodexSubscription && !isCodexDeviceOAuth;
+  const visiblePresets = editing
+    ? presets.filter(
+        (preset) =>
+          preset.authMode !== "codex-device-oauth" || form.authMode === "codex-device-oauth",
+      )
+    : presets.filter((preset) => preset.authMode !== "codex-manual-refresh");
   const selectedPreset = providerPresetForForm(form, presets);
   const credentialLabel =
     selectedPreset?.credentialLabel ??
@@ -1072,7 +1080,7 @@ export function CreateAccountSheet({
               </SelectTrigger>
               <SelectContent>
                 <SelectGroup>
-                  {presets.map((preset) => (
+                  {visiblePresets.map((preset) => (
                     <SelectItem key={preset.id} value={preset.id}>
                       {preset.label}
                     </SelectItem>
@@ -1135,7 +1143,14 @@ export function CreateAccountSheet({
                     <SelectItem value="x-api-key">x-api-key</SelectItem>
                     <SelectItem value="x-goog-api-key">x-goog-api-key</SelectItem>
                     <SelectItem value="bearer">Bearer</SelectItem>
-                    <SelectItem value="codex-oauth">Codex OAuth</SelectItem>
+                    {(!editing || form.authMode === "codex-device-oauth") && (
+                      <SelectItem value="codex-device-oauth">Codex device login</SelectItem>
+                    )}
+                    {editing && form.authMode === "codex-manual-refresh" ? (
+                      <SelectItem value="codex-manual-refresh">
+                        Codex manual refresh (legacy)
+                      </SelectItem>
+                    ) : null}
                     <SelectItem value="antigravity-oauth">Antigravity OAuth</SelectItem>
                   </SelectGroup>
                 </SelectContent>
@@ -1148,6 +1163,19 @@ export function CreateAccountSheet({
               <KeyRoundIcon className="size-4" />
               <AlertTitle>{t`${selectedPreset.label} credential`}</AlertTitle>
               <AlertDescription>{selectedPreset.credentialHelp}</AlertDescription>
+            </Alert>
+          ) : null}
+          {editing && form.authMode === "codex-manual-refresh" ? (
+            <Alert variant="destructive">
+              <AlertTitle>
+                <Trans>Legacy Codex credential</Trans>
+              </AlertTitle>
+              <AlertDescription>
+                <Trans>
+                  Manual refresh tokens are deprecated. Create a new account with Codex device
+                  login, then remove this legacy account.
+                </Trans>
+              </AlertDescription>
             </Alert>
           ) : null}
           <Field
@@ -1169,7 +1197,7 @@ export function CreateAccountSheet({
               required
             />
           </Field>
-          {!isAntigravityAccount ? (
+          {!isAntigravityAccount && !isCodexDeviceOAuth ? (
             <Field label={credentialLabel} htmlFor="account-api-key">
               {usesTextareaCredential ? (
                 <Textarea
@@ -1247,16 +1275,18 @@ export function CreateAccountSheet({
           </div>
           <SheetFooter>
             <Button type="submit">
-              {isAntigravityAccount ? (
+              {isAntigravityAccount || isCodexDeviceOAuth ? (
                 <LogInIcon data-icon="inline-start" />
               ) : (
                 <CableIcon data-icon="inline-start" />
               )}
-              {isAntigravityAccount && !editing
-                ? t`Sign in with Antigravity`
-                : editing
-                  ? t`Save changes`
-                  : t`Add account`}
+              {isCodexDeviceOAuth && !editing
+                ? t`Sign in with Codex`
+                : isAntigravityAccount && !editing
+                  ? t`Sign in with Antigravity`
+                  : editing
+                    ? t`Save changes`
+                    : t`Add account`}
             </Button>
           </SheetFooter>
         </form>
