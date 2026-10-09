@@ -72,6 +72,14 @@ pub struct ProviderAccount {
     pub auth_mode: String,
     pub wire_api: String,
     pub is_active: bool,
+    /// Maximum concurrently running upstream requests; zero means unlimited.
+    pub max_running_requests: u32,
+    /// Requests currently holding a slot on this account (runtime only).
+    #[serde(default)]
+    pub running_requests: u32,
+    /// Requests waiting for a slot on this account (runtime only).
+    #[serde(default)]
+    pub queued_requests: u32,
     pub status: String,
     pub last_error: Option<String>,
     pub created_at: DateTime<Utc>,
@@ -98,6 +106,9 @@ pub struct CreateProviderAccountRequest {
     pub api_key: String,
     #[serde(default = "default_active")]
     pub is_active: bool,
+    /// Maximum concurrently running upstream requests; zero means unlimited.
+    #[serde(default)]
+    pub max_running_requests: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -110,6 +121,7 @@ pub struct UpdateProviderAccountRequest {
     pub wire_api: Option<String>,
     pub api_key: Option<String>,
     pub is_active: Option<bool>,
+    pub max_running_requests: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -125,7 +137,11 @@ pub struct RequestLog {
     pub upstream_url: Option<String>,
     pub request_summary: Option<RequestSummary>,
     pub status_code: u16,
+    /// Time from acquiring a running-request slot to completion.
     pub latency_ms: u64,
+    /// Time spent queued for a running-request slot before relaying.
+    #[serde(default)]
+    pub queue_wait_ms: u64,
     pub input_tokens: u64,
     pub cached_input_tokens: u64,
     pub output_tokens: u64,

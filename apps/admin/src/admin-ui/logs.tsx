@@ -79,6 +79,16 @@ export function RequestLogDetailView({ logs }: { logs: readonly RequestLog[] }) 
                   <Trans>{log.latencyMs}ms</Trans>
                 </dd>
               </div>
+              {log.queueWaitMs ? (
+                <div>
+                  <dt className="text-xs text-muted-foreground">
+                    <Trans>Queue wait</Trans>
+                  </dt>
+                  <dd className="mt-1">
+                    <Trans>{log.queueWaitMs}ms</Trans>
+                  </dd>
+                </div>
+              ) : null}
               <div>
                 <dt className="text-xs text-muted-foreground">
                   <Trans>Tokens</Trans>

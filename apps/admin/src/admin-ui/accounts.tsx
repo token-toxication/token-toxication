@@ -153,6 +153,9 @@ export function AccountsView({
                   <Trans>Routes</Trans>
                 </TableHead>
                 <TableHead>
+                  <Trans>Running</Trans>
+                </TableHead>
+                <TableHead>
                   <Trans>Status</Trans>
                 </TableHead>
                 <TableHead className="text-right">
@@ -175,6 +178,7 @@ export function AccountsView({
                   <TableCell>{wireApiLabel(account.wireApi)}</TableCell>
                   <TableCell className="max-w-[280px] truncate">{account.baseUrl}</TableCell>
                   <TableCell>{routeCountForAccount(routes, account.id)}</TableCell>
+                  <TableCell className="tabular-nums">{runningRequestsLabel(account)}</TableCell>
                   <TableCell>{statusBadge(account.status, account.isActive)}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
@@ -464,6 +468,12 @@ export function AccountDetailView({
                   <Trans>Status</Trans>
                 </dt>
                 <dd className="mt-1">{statusBadge(account.status, account.isActive)}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted-foreground">
+                  <Trans>Running requests</Trans>
+                </dt>
+                <dd className="mt-1 tabular-nums">{runningRequestsLabel(account)}</dd>
               </div>
               <div>
                 <dt className="text-xs text-muted-foreground">
@@ -1197,6 +1207,27 @@ export function CreateAccountSheet({
               value={upstreamPathForWireApi(form.wireApi, form.authMode)}
             />
           </div>
+          <Field label={t`Max running requests`} htmlFor="account-max-running-requests">
+            <Input
+              id="account-max-running-requests"
+              type="number"
+              min={0}
+              step={1}
+              inputMode="numeric"
+              value={form.maxRunningRequests}
+              onChange={(event) =>
+                setForm((current) => ({ ...current, maxRunningRequests: event.target.value }))
+              }
+              placeholder={t`Unlimited`}
+              aria-describedby="account-max-running-requests-help"
+            />
+          </Field>
+          <p id="account-max-running-requests-help" className="text-xs text-muted-foreground">
+            <Trans>
+              Extra requests overflow to other accounts in the same tier, then wait in a queue.
+              Leave blank or 0 for unlimited.
+            </Trans>
+          </p>
           <div className="flex items-center justify-between gap-3 rounded-md border p-3">
             <div className="flex flex-col gap-1">
               <Label htmlFor="account-active">
@@ -1232,4 +1263,11 @@ export function CreateAccountSheet({
       </SheetContent>
     </Sheet>
   );
+}
+
+function runningRequestsLabel(account: ProviderAccount) {
+  const running = account.runningRequests ?? 0;
+  const queued = account.queuedRequests ?? 0;
+  const capacity = account.maxRunningRequests > 0 ? String(account.maxRunningRequests) : "∞";
+  return queued > 0 ? t`${running}/${capacity} · ${queued} queued` : `${running}/${capacity}`;
 }

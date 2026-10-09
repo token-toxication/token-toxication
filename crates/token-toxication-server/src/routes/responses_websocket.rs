@@ -1,10 +1,14 @@
 use super::*;
+use crate::relay_attempt::QueuedPermit;
 use crate::websocket_transport::{self, ConnectError};
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use futures_util::{SinkExt, StreamExt};
 use std::collections::HashSet;
+use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::time::{Instant, timeout};
-use tokio_tungstenite::tungstenite;
+use tokio_tungstenite::{WebSocketStream, tungstenite};
+
+type UpstreamSocket = WebSocketStream<aioduct::upgrade::UpgradedSend>;
 
 const LITE_METADATA: &str = "ws_request_header_x_openai_internal_codex_responses_lite";
 const MAX_RESPONSES: usize = 1024;
@@ -88,14 +92,30 @@ impl Stop {
 async fn serve(mut client: WebSocket, state: AppState, headers: HeaderMap) {
     let mut active = None;
     let mut shutdown = state.shutdown.subscribe();
+    // Time spent queued for running-request slots extends the connection's
+    // maximum duration instead of consuming it.
+    let queued_ms = AtomicU64::new(0);
+    let started = Instant::now();
     let stop = if *shutdown.borrow() {
         Stop::Shutdown
     } else {
-        tokio::select! {
-            _ = shutdown.changed() => Stop::Shutdown,
-            result = timeout(state.relay_stream_max_duration,
-                relay_connection(&mut client, &state, &headers, &mut active)) => {
-                result.unwrap_or(Stop::Timeout)
+        let relay = relay_connection(&mut client, &state, &headers, &mut active, &queued_ms);
+        tokio::pin!(relay);
+        loop {
+            let deadline = started
+                + state.relay_stream_max_duration
+                + Duration::from_millis(queued_ms.load(Ordering::Relaxed));
+            tokio::select! {
+                _ = shutdown.changed() => break Stop::Shutdown,
+                stop = &mut relay => break stop,
+                _ = tokio::time::sleep_until(deadline) => {
+                    let extended = started
+                        + state.relay_stream_max_duration
+                        + Duration::from_millis(queued_ms.load(Ordering::Relaxed));
+                    if extended <= Instant::now() {
+                        break Stop::Timeout;
+                    }
+                }
             }
         }
     };
@@ -203,6 +223,7 @@ async fn relay_connection(
     state: &AppState,
     headers: &HeaderMap,
     active: &mut Option<ActiveResponse>,
+    queued_ms: &AtomicU64,
 ) -> Stop {
     let idle = state.relay_stream_idle_timeout;
     let first = match timeout(idle, client.next()).await {
@@ -230,16 +251,25 @@ async fn relay_connection(
         Ok(value) => value,
         Err(_) => return Stop::Client,
     };
-    let binding = match authenticated
-        .select("openai-responses", &model, affinity.as_ref())
-        .await
-    {
-        Ok(value) => value,
-        Err(_) => return Stop::Protocol,
+    let selection = authenticated.select("openai-responses", &model, affinity.as_ref());
+    let mut binding = match while_queued(client, None, idle, selection).await {
+        Ok(Ok(value)) => value,
+        Ok(Err(AppError::ServiceUnavailable(_))) => return Stop::Shutdown,
+        Ok(Err(_)) => return Stop::Protocol,
+        Err(stop) => return stop,
     };
+    let first_permit = binding
+        .take_queued_permit()
+        .expect("selected attempt holds a running-request slot");
+    queued_ms.fetch_add(binding.queue_wait().as_millis() as u64, Ordering::Relaxed);
     let account = &binding.selection().account;
     let base_endpoint = upstream_url(&account.account.base_url, "/v1/responses");
-    *active = Some(start_response(&binding, &mut first, &base_endpoint));
+    *active = Some(start_response(
+        &binding,
+        first_permit,
+        &mut first,
+        &base_endpoint,
+    ));
     let auth = if is_codex_subscription_auth(&account.account.auth_mode) {
         match codex_subscription_authorization(&state.db, &state.http, account).await {
             Ok(auth) => Some(auth),
@@ -346,7 +376,14 @@ async fn relay_connection(
                         if authenticate_relay_api_key(state, headers, None).await.is_err() { return Stop::Client; }
                         let mut value: Value = match serde_json::from_str(&text) { Ok(value) => value, Err(_) => return Stop::Protocol };
                         if prepare_event(&mut value, headers, &model, &previous, false).is_err() { return Stop::Protocol; }
-                        *active = Some(start_response(&binding, &mut value, &endpoint));
+                        let queued_at = Instant::now();
+                        let permit = match while_queued(client, Some(&mut upstream), idle, binding.acquire_permit()).await {
+                            Ok(Ok(permit)) => permit,
+                            Ok(Err(_)) => return Stop::Shutdown,
+                            Err(stop) => return stop,
+                        };
+                        queued_ms.fetch_add(queued_at.elapsed().as_millis() as u64, Ordering::Relaxed);
+                        *active = Some(start_response(&binding, permit, &mut value, &endpoint));
                         if !matches!(timeout(idle, upstream.send(tungstenite::Message::Text(value.to_string().into()))).await, Ok(Ok(()))) { return Stop::Upstream; }
                     }
                     Some(Ok(Message::Ping(data))) => {
@@ -411,7 +448,57 @@ async fn relay_connection(
     }
 }
 
-fn start_response(binding: &RelayAttempt, value: &mut Value, endpoint: &str) -> ActiveResponse {
+/// Drives `wait` (which may be queued for a running-request slot) while
+/// keeping both sockets serviced: client and upstream pings are answered, and
+/// a disconnect on either side abandons the queue position.
+async fn while_queued<T>(
+    client: &mut WebSocket,
+    mut upstream: Option<&mut UpstreamSocket>,
+    idle: Duration,
+    wait: impl std::future::Future<Output = T>,
+) -> Result<T, Stop> {
+    tokio::pin!(wait);
+    loop {
+        let upstream_next = async {
+            match upstream.as_deref_mut() {
+                Some(upstream) => upstream.next().await,
+                None => std::future::pending().await,
+            }
+        };
+        tokio::select! {
+            value = &mut wait => return Ok(value),
+            message = client.next() => match message {
+                Some(Ok(Message::Ping(data))) => {
+                    if !matches!(timeout(idle, client.send(Message::Pong(data))).await, Ok(Ok(()))) {
+                        return Err(Stop::Client);
+                    }
+                }
+                Some(Ok(Message::Pong(_))) => {}
+                // Only one response may be in flight per connection.
+                Some(Ok(Message::Text(_) | Message::Binary(_))) => return Err(Stop::Protocol),
+                _ => return Err(Stop::Client),
+            },
+            message = upstream_next => match message {
+                Some(Ok(tungstenite::Message::Ping(data))) => {
+                    let Some(upstream) = upstream.as_deref_mut() else { unreachable!() };
+                    if !matches!(timeout(idle, upstream.send(tungstenite::Message::Pong(data))).await, Ok(Ok(()))) {
+                        return Err(Stop::Upstream);
+                    }
+                }
+                Some(Ok(tungstenite::Message::Pong(_))) => {}
+                // No response is in flight, so any other upstream frame is unexpected.
+                _ => return Err(Stop::Upstream),
+            },
+        }
+    }
+}
+
+fn start_response(
+    binding: &RelayAttempt,
+    permit: QueuedPermit,
+    value: &mut Value,
+    endpoint: &str,
+) -> ActiveResponse {
     value["model"] = json!(binding.selection().upstream_model_id);
     let stripped = strip_upstream_params(
         value,
@@ -420,7 +507,7 @@ fn start_response(binding: &RelayAttempt, value: &mut Value, endpoint: &str) -> 
         &binding.selection().account.account.auth_mode,
     );
     ActiveResponse {
-        attempt: binding.continuation(),
+        attempt: binding.continuation(permit),
         log: RelayAttemptLog {
             path: "/openai/v1/responses".into(),
             upstream_url: Some(endpoint.into()),

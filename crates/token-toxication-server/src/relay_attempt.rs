@@ -1,5 +1,5 @@
 use std::collections::HashSet;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use aioduct::{
     RequestBuilderSend, Response,
@@ -11,6 +11,7 @@ use uuid::Uuid;
 
 use crate::{
     AppState,
+    account_concurrency::AccountPermit,
     auth::extract_api_key,
     db::ProviderRouteSelection,
     error::AppError,
@@ -42,13 +43,21 @@ pub(crate) struct RelayAttempt {
     state: AppState,
     api_key_id: String,
     selection: ProviderRouteSelection,
+    /// When the running-request slot was acquired; latency excludes queueing.
     started: Instant,
+    queue_wait: Duration,
+    /// Running-request slot on the selected account, released on drop.
+    permit: Option<AccountPermit>,
 }
 
 pub(crate) struct AuthenticatedRelayAttempt {
     state: AppState,
     api_key_id: String,
-    started: Instant,
+}
+
+/// Error returned when the relay shuts down while a request is queued.
+pub(crate) fn shutting_down_error() -> AppError {
+    AppError::ServiceUnavailable("relay is shutting down".into())
 }
 
 impl RelayAttempt {
@@ -57,7 +66,6 @@ impl RelayAttempt {
         headers: &HeaderMap,
         query: Option<&str>,
     ) -> Result<AuthenticatedRelayAttempt, AppError> {
-        let started = Instant::now();
         let api_key_id = authenticate_relay_api_key(state, headers, query)
             .await?
             .view
@@ -66,7 +74,6 @@ impl RelayAttempt {
         Ok(AuthenticatedRelayAttempt {
             state: state.clone(),
             api_key_id,
-            started,
         })
     }
 
@@ -74,13 +81,33 @@ impl RelayAttempt {
         &self.selection
     }
 
-    pub(crate) fn continuation(&self) -> Self {
+    /// Waits in FIFO order for a running-request slot on the bound account.
+    /// Dropping the returned future leaves the queue; shutdown aborts the wait.
+    pub(crate) async fn acquire_permit(&self) -> Result<QueuedPermit, AppError> {
+        acquire_until_shutdown(&self.state, &self.selection).await
+    }
+
+    pub(crate) fn continuation(&self, permit: QueuedPermit) -> Self {
         Self {
             state: self.state.clone(),
             api_key_id: self.api_key_id.clone(),
             selection: self.selection.clone(),
             started: Instant::now(),
+            queue_wait: permit.waited,
+            permit: Some(permit.permit),
         }
+    }
+
+    pub(crate) fn queue_wait(&self) -> Duration {
+        self.queue_wait
+    }
+
+    /// Hands the slot to a continuation without re-queueing.
+    pub(crate) fn take_queued_permit(&mut self) -> Option<QueuedPermit> {
+        let waited = self.queue_wait;
+        self.permit
+            .take()
+            .map(|permit| QueuedPermit { permit, waited })
     }
 
     pub(crate) async fn record_failure(
@@ -215,6 +242,7 @@ impl RelayAttempt {
                 request_summary: log.request_summary.clone(),
                 status_code,
                 latency_ms: self.started.elapsed().as_millis() as u64,
+                queue_wait_ms: self.queue_wait.as_millis() as u64,
                 input_tokens: usage.input_tokens,
                 cached_input_tokens: usage.cached_input_tokens,
                 output_tokens: usage.output_tokens,
@@ -268,10 +296,31 @@ impl AuthenticatedRelayAttempt {
                 "all matching provider accounts are rate limited".into(),
             ));
         }
-        let mut rng = rand::rng();
-        let selection = select_route(&candidates, affinity, &scope, &mut rng)
-            .cloned()
-            .ok_or_else(|| AppError::Forbidden("no active provider account is available".into()))?;
+        let (selection, permit) = {
+            let mut rng = rand::rng();
+            let preferred = select_route(&candidates, affinity, &scope, &mut rng)
+                .cloned()
+                .ok_or_else(|| {
+                    AppError::Forbidden("no active provider account is available".into())
+                })?;
+            match self.try_acquire(&preferred) {
+                Some(permit) => (preferred, Some(permit)),
+                None => match self.overflow(&candidates, &preferred, affinity, &scope, &mut rng) {
+                    Some((selection, permit)) => (selection, Some(permit)),
+                    None => (preferred, None),
+                },
+            }
+        };
+        let permit = match permit {
+            Some(permit) => QueuedPermit {
+                permit,
+                waited: Duration::ZERO,
+            },
+            // Every same-tier account is saturated: queue on the preferred one.
+            // There is no timeout; client cancellation drops this future and
+            // removes the waiter from the queue, and shutdown aborts it.
+            None => acquire_until_shutdown(&self.state, &selection).await?,
+        };
         self.state.relay_metrics.record_selection(
             wire_api,
             &selection.role,
@@ -286,8 +335,78 @@ impl AuthenticatedRelayAttempt {
             state: self.state.clone(),
             api_key_id: self.api_key_id.clone(),
             selection,
-            started: self.started,
+            started: Instant::now(),
+            queue_wait: permit.waited,
+            permit: Some(permit.permit),
         })
+    }
+
+    fn try_acquire(&self, selection: &ProviderRouteSelection) -> Option<AccountPermit> {
+        self.state.account_concurrency.try_acquire(
+            &selection.account.account.id,
+            selection.account.account.max_running_requests,
+        )
+    }
+
+    /// Picks another account in the preferred account's tier that has a free
+    /// slot, keeping the usual weighted/affinity order among them.
+    fn overflow(
+        &self,
+        candidates: &[ProviderRouteSelection],
+        preferred: &ProviderRouteSelection,
+        affinity: Option<&SessionAffinity>,
+        scope: &RoutingScope<'_>,
+        rng: &mut impl rand::Rng,
+    ) -> Option<(ProviderRouteSelection, AccountPermit)> {
+        let mut remaining: Vec<ProviderRouteSelection> = candidates
+            .iter()
+            .filter(|candidate| {
+                candidate.role == preferred.role
+                    && candidate.account.account.id != preferred.account.account.id
+            })
+            .cloned()
+            .collect();
+        while let Some(next) = select_route(&remaining, affinity, scope, rng).cloned() {
+            if let Some(permit) = self.try_acquire(&next) {
+                return Some((next, permit));
+            }
+            remaining.retain(|candidate| candidate.account.account.id != next.account.account.id);
+        }
+        None
+    }
+}
+
+/// A running-request slot together with how long the request queued for it.
+pub(crate) struct QueuedPermit {
+    permit: AccountPermit,
+    waited: Duration,
+}
+
+async fn acquire_until_shutdown(
+    state: &AppState,
+    selection: &ProviderRouteSelection,
+) -> Result<QueuedPermit, AppError> {
+    let mut shutdown = state.shutdown.subscribe();
+    if *shutdown.borrow_and_update() {
+        return Err(shutting_down_error());
+    }
+    let queued_at = Instant::now();
+    let acquire = state.account_concurrency.acquire(
+        &selection.account.account.id,
+        selection.account.account.max_running_requests,
+    );
+    tokio::pin!(acquire);
+    loop {
+        tokio::select! {
+            biased;
+            changed = shutdown.changed() => match changed {
+                Ok(()) if !*shutdown.borrow_and_update() => continue,
+                _ => return Err(shutting_down_error()),
+            },
+            permit = &mut acquire => {
+                return Ok(QueuedPermit { permit, waited: queued_at.elapsed() });
+            }
+        }
     }
 }
 

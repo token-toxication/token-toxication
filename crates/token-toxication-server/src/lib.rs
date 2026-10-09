@@ -1,3 +1,4 @@
+pub mod account_concurrency;
 pub mod acme;
 pub mod antigravity_oauth;
 pub mod auth;
@@ -48,6 +49,7 @@ pub struct AppState {
     pub websocket_http: aioduct::TokioClient,
     pub antigravity_oauth: antigravity_oauth::AntigravityOAuthStore,
     pub relay_metrics: relay_metrics::RelayMetrics,
+    pub account_concurrency: account_concurrency::AccountConcurrency,
     pub relay_stream_idle_timeout: Duration,
     pub relay_stream_max_duration: Duration,
     pub shutdown: server::ShutdownSignal,

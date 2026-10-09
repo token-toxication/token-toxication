@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type React from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { plural, t } from "@lingui/core/macro";
@@ -338,13 +338,19 @@ export function ModelDetailView({
 }) {
   const { modelId } = useParams();
   const model = models.find((item) => item.id === modelId);
-  const [draft, setDraft] = useState({ displayName: "", family: "" });
-
-  useEffect(() => {
+  const [draft, setDraft] = useState({
+    displayName: model?.displayName ?? "",
+    family: model?.family ?? "",
+  });
+  // Reset the draft when the loaded record changes (adjusting state while
+  // rendering avoids an extra effect-driven render).
+  const [draftSource, setDraftSource] = useState(model);
+  if (model !== draftSource) {
+    setDraftSource(model);
     if (model) {
       setDraft({ displayName: model.displayName, family: model.family });
     }
-  }, [model]);
+  }
 
   if (!model) {
     return (

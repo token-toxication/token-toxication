@@ -17,6 +17,7 @@ export type CreateAccountForm = {
   wireApi: string;
   apiKey: string;
   isActive: boolean;
+  maxRunningRequests: string;
 };
 
 export type ModelCatalogForm = {
@@ -88,6 +89,7 @@ export const emptyAccountForm: CreateAccountForm = {
   wireApi: "anthropic-messages",
   apiKey: "",
   isActive: true,
+  maxRunningRequests: "",
 };
 
 export function accountFormFromAccount(account: ProviderAccount): CreateAccountForm {
@@ -99,6 +101,7 @@ export function accountFormFromAccount(account: ProviderAccount): CreateAccountF
     wireApi: account.wireApi,
     apiKey: "",
     isActive: account.isActive,
+    maxRunningRequests: account.maxRunningRequests > 0 ? String(account.maxRunningRequests) : "",
   };
 }
 

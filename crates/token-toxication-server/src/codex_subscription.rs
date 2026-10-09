@@ -1176,6 +1176,7 @@ mod tests {
                 })
                 .to_string(),
                 is_active: true,
+                max_running_requests: 0,
             })
             .await
             .expect("create Codex account");
@@ -1243,6 +1244,7 @@ mod tests {
                 })
                 .to_string(),
                 is_active: true,
+                max_running_requests: 0,
             })
             .await
             .expect("create Codex account");
