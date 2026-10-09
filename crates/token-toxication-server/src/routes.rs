@@ -30,9 +30,10 @@ use crate::{
         gemini_account_models, gemini_account_quota,
     },
     auth::{generate_secret, login, logout, me, require_admin},
+    codex_device_oauth,
     codex_subscription::{
         CodexSubscriptionAuthorization, codex_account_quota, codex_subscription_authorization,
-        is_codex_subscription_auth,
+        is_codex_device_oauth_auth, is_codex_subscription_auth,
     },
     error::AppError,
     gemini_code_assist::{
@@ -42,7 +43,8 @@ use crate::{
     models::{
         AnthropicModel, AnthropicModelListResponse, AntigravityOAuthStartRequest,
         AntigravityOAuthStartResponse, ApiKeyListResponse, ApiKeyResponse,
-        CodexAccountQuotaResponse, CreateApiKeyRequest, CreateApiKeyResponse,
+        CodexAccountQuotaResponse, CodexDeviceOAuthStartRequest, CodexDeviceOAuthStartResponse,
+        CodexDeviceOAuthStatusResponse, CreateApiKeyRequest, CreateApiKeyResponse,
         CreateModelCatalogEntryRequest, CreateProviderAccountRequest,
         CreateProviderModelRouteRequest, Dashboard, GeminiAccountModelsResponse,
         GeminiAccountQuotaResponse, GeminiModel, GeminiModelListResponse, HealthResponse,
@@ -96,6 +98,11 @@ pub fn admin_routes(state: AppState) -> Router<AppState> {
             get(get_codex_account_quota),
         )
         .route("/oauth/antigravity/start", post(start_antigravity_oauth))
+        .route("/oauth/codex/device/start", post(start_codex_device_oauth))
+        .route(
+            "/oauth/codex/device/{flow_id}",
+            get(get_codex_device_oauth_status),
+        )
         .route("/provider-presets", get(list_provider_presets))
         .route(
             "/model-catalog",
@@ -184,6 +191,23 @@ pub async fn relay_gemini_generate_content(
 ) -> Result<Response, AppError> {
     let (model, method) = parse_gemini_model_operation(&operation)?;
     relay_gemini_endpoint(state, headers, uri, body, model, method).await
+}
+
+pub(crate) async fn resolve_codex_authorization(
+    state: &AppState,
+    account: &crate::models::ProviderAccountRecord,
+) -> Result<CodexSubscriptionAuthorization, AppError> {
+    if is_codex_device_oauth_auth(&account.account.auth_mode) {
+        codex_device_oauth::authorization(
+            &state.codex_device_oauth,
+            &state.db,
+            &state.http,
+            account,
+        )
+        .await
+    } else {
+        codex_subscription_authorization(&state.db, &state.http, account).await
+    }
 }
 
 pub async fn list_openai_models(
@@ -421,7 +445,7 @@ async fn relay_json_endpoint(
                     "Codex subscription providers only support openai-responses routes".into(),
                 ));
             }
-            match codex_subscription_authorization(&state.db, &state.http, &account).await {
+            match resolve_codex_authorization(&state, &account).await {
                 Ok(auth) => Some(auth),
                 Err(error) => {
                     let status = error.status();
@@ -925,6 +949,43 @@ pub async fn start_antigravity_oauth(
     ))
 }
 
+pub async fn start_codex_device_oauth(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(input): Json<CodexDeviceOAuthStartRequest>,
+) -> Result<Json<CodexDeviceOAuthStartResponse>, AppError> {
+    let owner_token = crate::auth::extract_bearer(&headers)
+        .ok_or_else(|| AppError::Unauthorized("missing admin bearer token".into()))?;
+    Ok(Json(
+        codex_device_oauth::begin(
+            &state.codex_device_oauth,
+            &state.http,
+            &owner_token,
+            input.name,
+        )
+        .await?,
+    ))
+}
+
+pub async fn get_codex_device_oauth_status(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(flow_id): Path<String>,
+) -> Result<Json<CodexDeviceOAuthStatusResponse>, AppError> {
+    let owner_token = crate::auth::extract_bearer(&headers)
+        .ok_or_else(|| AppError::Unauthorized("missing admin bearer token".into()))?;
+    Ok(Json(
+        codex_device_oauth::status(
+            &state.codex_device_oauth,
+            &state.db,
+            &state.http,
+            &owner_token,
+            &flow_id,
+        )
+        .await?,
+    ))
+}
+
 #[derive(Debug, Deserialize)]
 pub struct AntigravityOAuthCallbackQuery {
     code: Option<String>,
@@ -1001,7 +1062,7 @@ pub async fn get_codex_account_quota(
     Path(id): Path<String>,
 ) -> Result<Json<CodexAccountQuotaResponse>, AppError> {
     Ok(Json(
-        codex_account_quota(&state.db, &state.http, &id).await?,
+        codex_account_quota(&state.db, &state.http, &state.codex_device_oauth, &id).await?,
     ))
 }
 
@@ -1366,9 +1427,9 @@ where
         let api_key = HeaderValue::from_str(api_key)
             .map_err(|error| AppError::Internal(format!("invalid provider API key: {error}")))?;
         Ok(request.header(HeaderName::from_static("x-goog-api-key"), api_key))
-    } else if auth_mode == "codex-oauth" {
+    } else if is_codex_subscription_auth(auth_mode) {
         Err(AppError::Internal(
-            "codex-oauth provider auth must be resolved before proxying".into(),
+            "Codex OAuth provider auth must be resolved before proxying".into(),
         ))
     } else {
         let api_key = HeaderValue::from_str(api_key)
@@ -1387,7 +1448,7 @@ where
 {
     let mut request = request.bearer_auth(&auth.access_token).header(
         HeaderName::from_static("originator"),
-        HeaderValue::from_static("opencode"),
+        HeaderValue::from_static(auth.originator),
     );
     if let Some(account_id) = &auth.account_id {
         let account_id = HeaderValue::from_str(account_id).map_err(|error| {
@@ -2184,6 +2245,7 @@ mod tests {
             websocket_http: crate::websocket_transport::build_client(Duration::from_secs(3))
                 .unwrap(),
             antigravity_oauth: AntigravityOAuthStore::default(),
+            codex_device_oauth: crate::codex_device_oauth::CodexDeviceOAuthStore::default(),
             relay_metrics: Default::default(),
             account_concurrency: Default::default(),
             relay_stream_idle_timeout: Duration::from_secs(5),

@@ -218,11 +218,11 @@ impl Db {
             "strip_params",
             "TEXT NOT NULL DEFAULT '[]'",
         )?;
-        let migrated_codex_accounts = migrate_legacy_codex_base_urls(&mut conn)?;
+        let migrated_codex_accounts = migrate_legacy_codex_accounts(&mut conn)?;
         if migrated_codex_accounts > 0 {
             tracing::info!(
                 migrated_codex_accounts,
-                "migrated legacy Codex account base URLs"
+                "migrated legacy Codex account modes and base URLs"
             );
         }
         conn.execute_batch(
@@ -1223,7 +1223,7 @@ impl Db {
              JOIN provider_accounts a ON a.id = l.provider_account_id
              WHERE a.is_active = 1
                AND a.status != 'blocked'
-               AND a.auth_mode = 'codex-oauth'
+               AND a.auth_mode IN ('codex-manual-refresh', 'codex-device-oauth', 'codex-oauth')
                AND l.next_check_at <= ?1
              ORDER BY l.next_check_at ASC
              LIMIT ?2",
@@ -1404,11 +1404,12 @@ fn ensure_column(
     Ok(())
 }
 
-fn migrate_legacy_codex_base_urls(conn: &mut Connection) -> Result<usize, rusqlite::Error> {
+fn migrate_legacy_codex_accounts(conn: &mut Connection) -> Result<usize, rusqlite::Error> {
     let transaction = conn.transaction()?;
     let candidates = {
         let mut statement = transaction.prepare(
-            "SELECT id, base_url FROM provider_accounts WHERE auth_mode = 'codex-oauth'",
+            "SELECT id, base_url FROM provider_accounts
+             WHERE auth_mode IN ('codex-oauth', 'codex-manual-refresh')",
         )?;
         let rows = statement.query_map([], |row| {
             Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
@@ -1417,12 +1418,14 @@ fn migrate_legacy_codex_base_urls(conn: &mut Connection) -> Result<usize, rusqli
     };
     let mut migrated = 0;
     for (id, base_url) in candidates {
-        let Some(base_url) = canonicalize_legacy_codex_base_url(&base_url) else {
-            continue;
-        };
+        let canonical_base_url = canonicalize_legacy_codex_base_url(&base_url);
         migrated += transaction.execute(
-            "UPDATE provider_accounts SET base_url = ?1 WHERE id = ?2",
-            params![base_url, id],
+            "UPDATE provider_accounts
+             SET auth_mode = 'codex-manual-refresh', base_url = COALESCE(?1, base_url)
+             WHERE id = ?2
+               AND (auth_mode != 'codex-manual-refresh'
+                    OR (?1 IS NOT NULL AND base_url != ?1))",
+            params![canonical_base_url, id],
         )?;
     }
     transaction.commit()?;
@@ -1736,7 +1739,10 @@ fn normalize_auth_mode(value: &str) -> String {
         "x-goog-api-key" | "google-api-key" | "goog-api-key" | "gemini-api-key" => {
             "x-goog-api-key".to_string()
         }
-        "codex" | "codex-oauth" | "chatgpt" | "chatgpt-oauth" => "codex-oauth".to_string(),
+        "codex" | "codex-oauth" | "codex-manual-refresh" | "chatgpt" | "chatgpt-oauth" => {
+            "codex-manual-refresh".to_string()
+        }
+        "codex-device-oauth" => "codex-device-oauth".to_string(),
         "antigravity" | "antigravity-oauth" | "google-antigravity" => {
             "antigravity-oauth".to_string()
         }
@@ -2434,7 +2440,11 @@ mod tests {
     #[test]
     fn codex_subscription_aliases_default_to_responses() {
         assert_eq!(normalize_provider("codex"), "codex-subscription");
-        assert_eq!(normalize_auth_mode("chatgpt-oauth"), "codex-oauth");
+        assert_eq!(normalize_auth_mode("chatgpt-oauth"), "codex-manual-refresh");
+        assert_eq!(
+            normalize_auth_mode("codex-device-oauth"),
+            "codex-device-oauth"
+        );
         assert_eq!(
             normalize_wire_api("", "codex-subscription"),
             "openai-responses"
@@ -2560,6 +2570,14 @@ mod tests {
                 .expect("first Codex account")
                 .base_url,
             "https://relay.example/backend-api"
+        );
+        assert_eq!(
+            db.get_provider_account(&legacy_codex.id)
+                .await
+                .expect("load first Codex account mode")
+                .expect("first Codex account mode")
+                .auth_mode,
+            "codex-manual-refresh"
         );
         assert_eq!(
             db.get_provider_account(&legacy_responses.id)

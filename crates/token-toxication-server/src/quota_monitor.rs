@@ -3,13 +3,21 @@ use std::time::Duration;
 use chrono::{Duration as ChronoDuration, Utc};
 use tokio::task::JoinHandle;
 
-use crate::{codex_subscription::codex_account_quota, db::Db, server::ShutdownSignal};
+use crate::{
+    codex_device_oauth::CodexDeviceOAuthStore, codex_subscription::codex_account_quota, db::Db,
+    server::ShutdownSignal,
+};
 
 const SCAN_INTERVAL: Duration = Duration::from_secs(30);
 const FAILED_CHECK_RETRY: ChronoDuration = ChronoDuration::minutes(15);
 const CHECK_BATCH_SIZE: usize = 100;
 
-pub fn spawn(db: Db, http: aioduct::TokioClient, shutdown: ShutdownSignal) -> JoinHandle<()> {
+pub fn spawn(
+    db: Db,
+    http: aioduct::TokioClient,
+    device_store: CodexDeviceOAuthStore,
+    shutdown: ShutdownSignal,
+) -> JoinHandle<()> {
     tokio::spawn(async move {
         let mut shutdown_rx = shutdown.subscribe();
         let mut interval = tokio::time::interval(SCAN_INTERVAL);
@@ -23,14 +31,18 @@ pub fn spawn(db: Db, http: aioduct::TokioClient, shutdown: ShutdownSignal) -> Jo
                     }
                 }
                 _ = interval.tick() => {
-                    check_due_accounts(&db, &http).await;
+                    check_due_accounts(&db, &http, &device_store).await;
                 }
             }
         }
     })
 }
 
-async fn check_due_accounts(db: &Db, http: &aioduct::TokioClient) {
+async fn check_due_accounts(
+    db: &Db,
+    http: &aioduct::TokioClient,
+    device_store: &CodexDeviceOAuthStore,
+) {
     let account_ids = match db
         .due_codex_limit_account_ids(Utc::now(), CHECK_BATCH_SIZE)
         .await
@@ -43,7 +55,7 @@ async fn check_due_accounts(db: &Db, http: &aioduct::TokioClient) {
     };
 
     for account_id in account_ids {
-        if let Err(error) = codex_account_quota(db, http, &account_id).await {
+        if let Err(error) = codex_account_quota(db, http, device_store, &account_id).await {
             tracing::warn!(
                 account_id = %account_id,
                 error = %error,

@@ -271,7 +271,7 @@ async fn relay_connection(
         &base_endpoint,
     ));
     let auth = if is_codex_subscription_auth(&account.account.auth_mode) {
-        match codex_subscription_authorization(&state.db, &state.http, account).await {
+        match resolve_codex_authorization(state, account).await {
             Ok(auth) => Some(auth),
             Err(error) => return Stop::Authorization(error.status()),
         }
@@ -320,7 +320,7 @@ async fn relay_connection(
             };
             upstream_headers.insert("chatgpt-account-id", value);
         }
-        upstream_headers.insert("originator", HeaderValue::from_static("opencode"));
+        upstream_headers.insert("originator", HeaderValue::from_static(auth.originator));
     }
     upstream_headers.insert(
         "openai-beta",

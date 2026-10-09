@@ -7,6 +7,7 @@ import { api, clearStoredToken, getStoredToken, setStoredToken } from "../api";
 import {
   commaSeparatedValues,
   isAntigravityAccountAuth,
+  isCodexDeviceOAuthAuth,
   numberFromInput,
   routeCountForAccount,
 } from "./helpers";
@@ -296,6 +297,10 @@ export function useAdminWorkspace() {
 
   async function handleSaveAccount(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!editingAccount && isCodexDeviceOAuthAuth(createAccountForm.authMode)) {
+      await launchCodexDeviceOAuth({ name: createAccountForm.name });
+      return;
+    }
     if (!editingAccount && isAntigravityAccountAuth(createAccountForm.authMode)) {
       await launchAntigravityOAuth({
         name: createAccountForm.name,
@@ -329,6 +334,48 @@ export function useAdminWorkspace() {
     }
     closeAccountSheet();
     await refresh();
+  }
+
+  async function launchCodexDeviceOAuth({ name }: { name: string }) {
+    const popup = window.open(
+      "about:blank",
+      "token-toxication-codex-device-login",
+      "popup,width=560,height=720",
+    );
+    if (!popup) {
+      toast.error(t`Allow popups to open the Codex sign-in page`);
+    }
+    try {
+      const flow = await api.startCodexDeviceOAuth({ name });
+      if (popup) {
+        popup.location.replace(flow.verificationUrl);
+      }
+      try {
+        await navigator.clipboard.writeText(flow.userCode);
+      } catch {
+        // Clipboard permissions are optional; the code remains visible in the toast.
+      }
+      toast.info(t`Enter the Codex device code ${flow.userCode} at ${flow.verificationUrl}`);
+
+      const deadline = Date.parse(flow.expiresAt);
+      while (Date.now() < deadline) {
+        await new Promise((resolve) => window.setTimeout(resolve, flow.pollIntervalSeconds * 1000));
+        const status = await api.codexDeviceOAuthStatus(flow.flowId);
+        if (status.status === "succeeded") {
+          toast.success(t`Codex account connected`);
+          closeAccountSheet();
+          await refresh();
+          return;
+        }
+        if (status.status === "failed" || status.status === "expired") {
+          throw new Error(status.error ?? t`Codex device login expired`);
+        }
+      }
+      throw new Error(t`Codex device login expired`);
+    } catch (error) {
+      popup?.close();
+      toast.error(error instanceof Error ? error.message : t`Unable to connect Codex account`);
+    }
   }
 
   async function launchAntigravityOAuth({ accountId, name }: { accountId?: string; name: string }) {

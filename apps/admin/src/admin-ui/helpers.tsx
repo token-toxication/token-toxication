@@ -302,7 +302,13 @@ export function upstreamPathForWireApi(value: string, authMode?: string) {
 }
 
 export function isCodexSubscriptionAuth(value: string) {
-  return value === "codex-oauth";
+  return (
+    value === "codex-device-oauth" || value === "codex-manual-refresh" || value === "codex-oauth"
+  );
+}
+
+export function isCodexDeviceOAuthAuth(value: string) {
+  return value === "codex-device-oauth";
 }
 
 export function isAntigravityAccountAuth(value: string) {

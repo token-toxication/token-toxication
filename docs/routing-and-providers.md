@@ -54,9 +54,11 @@ Choose **OpenAI API key**, keep `https://api.openai.com` as the base URL, and us
 
 ### Codex subscriptions
 
-Create one **Codex subscription** account per ChatGPT Plus or Pro subscription. Use `https://chatgpt.com/backend-api`, `codex-oauth`, and the `openai-responses` wire protocol.
+Create one **Codex subscription** account per ChatGPT Plus or Pro subscription with the **Codex device login** preset. The backend starts the official device-code flow, exchanges the authorization code, and stores the credential under `codex-device-oauth`; no refresh token needs to be pasted.
 
-Paste only the raw refresh token. Codex CLI stores it in `~/.codex/auth.json` at `tokens.refresh_token`; opencode stores it in `~/.local/share/opencode/auth.json` at `openai.refresh`.
+Existing accounts created with the old manual flow are migrated to `codex-manual-refresh` and remain compatible during the deprecation window. New accounts should use device login.
+
+The two modes have separate credential envelopes and refresh behavior. Device OAuth stores the exchanged access and refresh tokens, refreshes with the official JSON request, and sends the Codex account header with `originator: codex_cli_rs`. The legacy mode accepts the old manually entered refresh token and keeps its existing form refresh request and `originator: opencode` behavior while it is deprecated.
 
 Subscription requests are sent to `{base_url}/codex/responses`, while quota data comes from `{base_url}/wham/usage`. Legacy base URLs ending in `/codex` or `/codex/responses` are normalized automatically.
 

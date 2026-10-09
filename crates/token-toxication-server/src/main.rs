@@ -82,6 +82,7 @@ async fn run_server(config: Config) -> Result<(), MainError> {
         gemini_http,
         websocket_http,
         antigravity_oauth: Default::default(),
+        codex_device_oauth: Default::default(),
         relay_metrics: Default::default(),
         account_concurrency: Default::default(),
         relay_stream_idle_timeout,
@@ -93,6 +94,7 @@ async fn run_server(config: Config) -> Result<(), MainError> {
     let quota_monitor = token_toxication_server::quota_monitor::spawn(
         state.db.clone(),
         state.http.clone(),
+        state.codex_device_oauth.clone(),
         shutdown.clone(),
     );
     let app = app(state, config.static_dir.clone());

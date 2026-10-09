@@ -19,6 +19,7 @@ const API_KEY_HELP: &str = "Paste an upstream API key for this provider account.
 const BEARER_HELP: &str = "Paste an upstream API key. The relay sends it as a Bearer token.";
 const ANTIGRAVITY_ACCOUNT_HELP: &str = "Sign in with the Google account used by Antigravity. OAuth tokens are exchanged and stored by the backend. The backend must set TT_ANTIGRAVITY_OAUTH_CLIENT_SECRET.";
 const SUBSCRIPTION_HELP: &str = "Paste only the raw refresh token. The CLI stores it at ~/.codex/auth.json as tokens.refresh_token; opencode stores it at ~/.local/share/opencode/auth.json as openai.refresh.";
+const CODEX_DEVICE_OAUTH_HELP: &str = "Sign in with ChatGPT using the Codex device login flow. The backend stores and refreshes the credential; no token paste is required.";
 
 const PROVIDER_PRESETS: &[ProviderPresetSpec] = &[
     ProviderPresetSpec {
@@ -48,12 +49,25 @@ const PROVIDER_PRESETS: &[ProviderPresetSpec] = &[
         aliases: &["openai", "gpt"],
     },
     ProviderPresetSpec {
-        id: "codex-subscription",
-        label: "Codex subscription",
+        id: "codex-device-oauth",
+        label: "Codex device login",
         name: "Codex subscription",
         provider: "codex-subscription",
         base_url: "https://chatgpt.com/backend-api",
-        auth_mode: "codex-oauth",
+        auth_mode: "codex-device-oauth",
+        wire_api: "openai-responses",
+        credential_label: "Device login",
+        credential_placeholder: "Start the device login flow",
+        credential_help: CODEX_DEVICE_OAUTH_HELP,
+        aliases: &["codex-device", "chatgpt-device"],
+    },
+    ProviderPresetSpec {
+        id: "codex-subscription",
+        label: "Codex subscription (legacy)",
+        name: "Codex subscription",
+        provider: "codex-subscription",
+        base_url: "https://chatgpt.com/backend-api",
+        auth_mode: "codex-manual-refresh",
         wire_api: "openai-responses",
         credential_label: "Raw refresh token",
         credential_placeholder: "Paste the value from tokens.refresh_token or openai.refresh",

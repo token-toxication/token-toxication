@@ -6,7 +6,8 @@ use crate::models::{
     AntigravityOAuthStartResponse, ApiKeyListResponse, ApiKeyResponse, ApiKeyView,
     CodexAccountCredits, CodexAccountQuotaLimit, CodexAccountQuotaResponse,
     CodexAccountQuotaWindow, CodexAccountResetCredit, CodexAccountResetCredits,
-    CodexAccountSpendControl, CodexAccountSpendControlLimit, CreateApiKeyRequest,
+    CodexAccountSpendControl, CodexAccountSpendControlLimit, CodexDeviceOAuthStartRequest,
+    CodexDeviceOAuthStartResponse, CodexDeviceOAuthStatusResponse, CreateApiKeyRequest,
     CreateApiKeyResponse, CreateModelCatalogEntryRequest, CreateProviderAccountRequest,
     CreateProviderModelRouteRequest, Dashboard, ErrorDetail, ErrorResponse, GeminiAccountModel,
     GeminiAccountModelsResponse, GeminiAccountQuota, GeminiAccountQuotaBucket,
@@ -48,6 +49,8 @@ use crate::models::{
         update_provider_account,
         delete_provider_account,
         start_antigravity_oauth,
+        start_codex_device_oauth,
+        get_codex_device_oauth_status,
         antigravity_oauth_callback,
         get_gemini_account_models,
         get_gemini_account_quota,
@@ -91,6 +94,9 @@ use crate::models::{
         CodexAccountQuotaWindow,
         CodexAccountSpendControl,
         CodexAccountSpendControlLimit,
+        CodexDeviceOAuthStartRequest,
+        CodexDeviceOAuthStartResponse,
+        CodexDeviceOAuthStatusResponse,
         CreateApiKeyRequest,
         CreateApiKeyResponse,
         CreateProviderAccountRequest,
@@ -316,6 +322,32 @@ pub fn delete_provider_account() {}
     ),
 )]
 pub fn start_antigravity_oauth() {}
+
+#[utoipa::path(
+    post,
+    path = "/admin/api/oauth/codex/device/start",
+    tag = "Admin",
+    request_body = CodexDeviceOAuthStartRequest,
+    responses(
+        (status = 200, description = "Codex device login instructions", body = CodexDeviceOAuthStartResponse),
+        (status = 400, description = "Device login unavailable", body = ErrorResponse),
+        (status = 401, description = "Missing or invalid admin session", body = ErrorResponse),
+    ),
+)]
+pub fn start_codex_device_oauth() {}
+
+#[utoipa::path(
+    get,
+    path = "/admin/api/oauth/codex/device/{flow_id}",
+    tag = "Admin",
+    params(("flow_id" = String, Path, description = "One-time device flow id")),
+    responses(
+        (status = 200, description = "Codex device login status", body = CodexDeviceOAuthStatusResponse),
+        (status = 401, description = "Missing or invalid admin session", body = ErrorResponse),
+        (status = 404, description = "Device flow not found", body = ErrorResponse),
+    ),
+)]
+pub fn get_codex_device_oauth_status() {}
 
 #[utoipa::path(
     get,
