@@ -212,6 +212,12 @@ impl Db {
         ensure_column(&conn, "request_logs", "overload_retry_skip_reason", "TEXT")?;
         ensure_column(
             &conn,
+            "request_logs",
+            "client_retry_advice_injected",
+            "INTEGER NOT NULL DEFAULT 0",
+        )?;
+        ensure_column(
+            &conn,
             "provider_model_routes",
             "status",
             "TEXT NOT NULL DEFAULT 'healthy'",
@@ -1321,8 +1327,9 @@ impl Db {
              (id, api_key_id, provider_account_id, method, path, model, upstream_model,
               upstream_url, request_summary, status_code, latency_ms, input_tokens,
               cached_input_tokens, output_tokens, cost_usd, created_at, error, queue_wait_ms,
-              overload_retry_count, overload_retry_started, overload_retry_exhausted, overload_retry_skip_reason)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)",
+              overload_retry_count, overload_retry_started, overload_retry_exhausted, overload_retry_skip_reason,
+              client_retry_advice_injected)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)",
             params![
                 log.id,
                 log.api_key_id,
@@ -1350,6 +1357,7 @@ impl Db {
                 log.overload_retry_started,
                 log.overload_retry_exhausted,
                 log.overload_retry_skip_reason,
+                log.client_retry_advice_injected,
             ],
         )?;
         Ok(())
@@ -1361,7 +1369,8 @@ impl Db {
             "SELECT id, api_key_id, provider_account_id, method, path, model, upstream_model,
                     upstream_url, request_summary, status_code, latency_ms, input_tokens,
                     cached_input_tokens, output_tokens, cost_usd, created_at, error, queue_wait_ms,
-                    overload_retry_count, overload_retry_started, overload_retry_exhausted, overload_retry_skip_reason
+                    overload_retry_count, overload_retry_started, overload_retry_exhausted, overload_retry_skip_reason,
+                    client_retry_advice_injected
              FROM request_logs
              ORDER BY created_at DESC
              LIMIT ?1",
@@ -1630,6 +1639,7 @@ fn request_log_from_row(row: &rusqlite::Row<'_>) -> Result<RequestLog, rusqlite:
         overload_retry_started: row.get::<_, i64>(19)? != 0,
         overload_retry_exhausted: row.get::<_, i64>(20)? != 0,
         overload_retry_skip_reason: row.get(21)?,
+        client_retry_advice_injected: row.get::<_, i64>(22)? != 0,
     })
 }
 
@@ -1893,6 +1903,7 @@ mod tests {
                 overload_retry_started: false,
                 overload_retry_exhausted: false,
                 overload_retry_skip_reason: None,
+                client_retry_advice_injected: false,
                 input_tokens,
                 cached_input_tokens,
                 output_tokens,
@@ -2013,6 +2024,7 @@ mod tests {
                 overload_retry_started: false,
                 overload_retry_exhausted: false,
                 overload_retry_skip_reason: None,
+                client_retry_advice_injected: false,
                 input_tokens: 1,
                 cached_input_tokens: 0,
                 output_tokens: 1,

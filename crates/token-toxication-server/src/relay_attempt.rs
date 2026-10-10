@@ -32,6 +32,7 @@ pub(crate) struct RelayAttemptLog {
     pub overload_retry_started: bool,
     pub overload_retry_exhausted: bool,
     pub overload_retry_skip_reason: Option<String>,
+    pub client_retry_advice_injected: bool,
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -251,6 +252,7 @@ impl RelayAttempt {
                 overload_retry_started: log.overload_retry_started,
                 overload_retry_exhausted: log.overload_retry_exhausted,
                 overload_retry_skip_reason: log.overload_retry_skip_reason.clone(),
+                client_retry_advice_injected: log.client_retry_advice_injected,
                 input_tokens: usage.input_tokens,
                 cached_input_tokens: usage.cached_input_tokens,
                 output_tokens: usage.output_tokens,

@@ -339,6 +339,16 @@ async fn codex_http_overload_retries_same_account_before_output() {
             expected_skip_reason,
             "{mode}"
         );
+        assert_eq!(
+            logs[0].client_retry_advice_injected,
+            mode == "after_event",
+            "{mode}"
+        );
+        assert_eq!(
+            String::from_utf8_lossy(&body).contains("\"Retry-After\":\"0\""),
+            mode == "after_event",
+            "{mode}"
+        );
         let route = state
             .db
             .get_provider_model_route(&seed.route_id)

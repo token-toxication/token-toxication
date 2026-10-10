@@ -590,6 +590,7 @@ fn start_response(
             overload_retry_started: false,
             overload_retry_exhausted: false,
             overload_retry_skip_reason: None,
+            client_retry_advice_injected: false,
         },
         usage: UsageUpdate::default(),
         response_id: None,
