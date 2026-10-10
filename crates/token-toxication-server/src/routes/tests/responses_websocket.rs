@@ -658,7 +658,7 @@ async fn codex_overload_reconnects_with_bounded_random_delay() {
                         let event = if recover && requests.len() == 6 {
                             json!({"type":"response.completed","response":{"id":"resp_ok"}})
                         } else {
-                            json!({"type":"error","status":502,"error":{"code":"server_is_overloaded","headers":{"Retry-After":"1"}}})
+                            json!({"type":"error","status":502,"error":{"code":"server_is_overloaded"}})
                         };
                         drop(requests);
                         socket.send(Message::Text(event.to_string().into())).await.unwrap();

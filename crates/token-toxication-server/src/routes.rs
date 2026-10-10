@@ -2236,17 +2236,7 @@ fn retryable_overload(value: &Value) -> bool {
     {
         return false;
     }
-    error
-        .pointer("/headers/Retry-After")
-        .or_else(|| error.pointer("/headers/retry-after"))
-        .and_then(|value| {
-            value
-                .as_str()
-                .map(str::to_owned)
-                .or_else(|| value.as_u64().map(|value| value.to_string()))
-        })
-        .and_then(|value| value.parse::<u64>().ok())
-        .is_some()
+    true
 }
 
 async fn wait_for_codex_overload_retry(state: &AppState, retry: u8) -> Result<(), AppError> {
