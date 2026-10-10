@@ -633,7 +633,7 @@ async fn relay_json_endpoint(
                 .cloned()
             {
                 if codex_auth.is_some()
-                    && failure.retryable_overload
+                    && (failure.retryable_overload || failure.retryable_without_error_code())
                     && observation.message_count == 1
                     && observation.buffer.is_empty()
                     && attempt_index < MAX_OVERLOAD_RETRIES
@@ -642,8 +642,17 @@ async fn relay_json_endpoint(
                 {
                     drop(upstream_stream);
                     drop(attempt);
-                    overload_retry_count += 1;
-                    wait_for_codex_overload_retry(&state, attempt_index + 1).await?;
+                    if failure.retryable_overload {
+                        overload_retry_count += 1;
+                        wait_for_codex_overload_retry(&state, attempt_index + 1).await?;
+                    } else {
+                        wait_for_codex_transient_retry(
+                            &state,
+                            attempt_index + 1,
+                            failure.code.as_deref(),
+                        )
+                        .await?;
+                    }
                     continue;
                 }
                 if codex_auth.is_some() && failure.retryable_overload {
@@ -1950,6 +1959,14 @@ where
                 );
             }
             let usage = observation.tokens();
+            tracing::warn!(
+                codex_subscription,
+                event_type = failure.event_type,
+                error_code = failure.code.as_deref().unwrap_or("<none>"),
+                response_events = observation.message_count,
+                output_tokens = usage.output_tokens,
+                "upstream application stream failure"
+            );
             let error = failure.log_error();
             let route_failure = classify_upstream_application_failure(
                 failure.code.as_deref(),
@@ -2201,11 +2218,16 @@ impl StreamingResponseObservation {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct StreamingApplicationFailure {
+    event_type: &'static str,
     code: Option<String>,
     retryable_overload: bool,
 }
 
 impl StreamingApplicationFailure {
+    fn retryable_without_error_code(&self) -> bool {
+        !self.retryable_overload && self.code.is_none()
+    }
+
     fn log_error(&self) -> String {
         self.code.as_ref().map_or_else(
             || "upstream stream failed".to_string(),
@@ -2215,13 +2237,17 @@ impl StreamingApplicationFailure {
 }
 
 fn openai_responses_stream_failure(value: &Value) -> Option<StreamingApplicationFailure> {
-    let error = match value.get("type").and_then(Value::as_str)? {
-        "error" => value.get("error").unwrap_or(value),
-        "response.failed" => value.pointer("/response/error").unwrap_or(value),
+    let (event_type, error) = match value.get("type").and_then(Value::as_str)? {
+        "error" => ("error", value.get("error").unwrap_or(value)),
+        "response.failed" => (
+            "response.failed",
+            value.pointer("/response/error").unwrap_or(value),
+        ),
         _ => return None,
     };
 
     Some(StreamingApplicationFailure {
+        event_type,
         code: normalized_stream_error_code(error),
         retryable_overload: retryable_overload(value),
     })
@@ -2406,12 +2432,21 @@ fn retryable_overload(value: &Value) -> bool {
 }
 
 async fn wait_for_codex_overload_retry(state: &AppState, retry: u8) -> Result<(), AppError> {
+    wait_for_codex_transient_retry(state, retry, Some("server_is_overloaded")).await
+}
+
+async fn wait_for_codex_transient_retry(
+    state: &AppState,
+    retry: u8,
+    error_code: Option<&str>,
+) -> Result<(), AppError> {
     use rand::Rng;
     let delay = rand::rng().random_range(2..=5);
     tracing::info!(
         retry,
         delay_seconds = delay,
-        "retrying Codex subscription overload"
+        error_code = error_code.unwrap_or("<none>"),
+        "retrying Codex subscription transient stream failure"
     );
     let mut shutdown = state.shutdown.subscribe();
     if *shutdown.borrow() {

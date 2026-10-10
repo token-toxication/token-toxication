@@ -243,6 +243,7 @@ async fn codex_http_overload_retries_same_account_before_output() {
         "http",
         "sse",
         "no_advice",
+        "generic",
         "after_event",
         "continuation",
         "bearer",
@@ -260,9 +261,10 @@ async fn codex_http_overload_retries_same_account_before_output() {
             async move {
                 let mut requests = capture.lock().await;
                 requests.push(body);
-                let recover = requests.len() == 6;
+                let recover = requests.len() == if mode == "generic" { 2 } else { 6 };
                 let mut event = json!({"type":"error","error":{"code":"server_is_overloaded","headers":{"Retry-After":"1"}}});
                 if mode == "no_advice" { event["error"].as_object_mut().unwrap().remove("headers"); }
+                if mode == "generic" { event = json!({"type":"error","error":{"message":"temporary upstream failure"}}); }
                 if mode == "disabled" { event["error"]["message"] = json!("This model is disabled."); }
                 if mode == "http" && !recover {
                     Response::builder().status(502).header("retry-after", "1").body(Body::from(event.to_string())).unwrap()
@@ -301,10 +303,16 @@ async fn codex_http_overload_retries_same_account_before_output() {
         .await
         .unwrap();
         let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-        let retries = matches!(mode, "http" | "sse" | "no_advice");
+        let retries = matches!(mode, "http" | "sse" | "no_advice" | "generic");
         assert_eq!(
             captures.lock().await.len(),
-            if retries { 6 } else { 1 },
+            if mode == "generic" {
+                2
+            } else if retries {
+                6
+            } else {
+                1
+            },
             "{mode}"
         );
         assert_eq!(
@@ -325,10 +333,14 @@ async fn codex_http_overload_retries_same_account_before_output() {
         );
         assert_eq!(
             logs[0].overload_retry_count,
-            if retries { 5 } else { 0 },
+            if retries && mode != "generic" { 5 } else { 0 },
             "{mode}"
         );
-        assert_eq!(logs[0].overload_retry_started, retries, "{mode}");
+        assert_eq!(
+            logs[0].overload_retry_started,
+            retries && mode != "generic",
+            "{mode}"
+        );
         let expected_skip_reason = match mode {
             "after_event" => Some("response_already_started"),
             "continuation" => Some("request_not_replay_safe"),
