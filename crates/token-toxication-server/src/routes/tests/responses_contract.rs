@@ -236,3 +236,101 @@ fn responses_lite_rejects_ambiguous_or_missing_protocol_markers() {
     assert!(validate_responses_protocol(&headers, &input).is_err());
     assert!(validate_responses_protocol(&HeaderMap::new(), &coding_request()).is_ok());
 }
+
+#[tokio::test]
+async fn codex_http_overload_retries_same_account_before_output() {
+    for mode in [
+        "http",
+        "sse",
+        "no_advice",
+        "after_event",
+        "continuation",
+        "bearer",
+        "disabled",
+    ] {
+        let captures = Arc::new(Mutex::new(Vec::<Value>::new()));
+        let capture = captures.clone();
+        let path = if mode == "bearer" {
+            "/v1/responses"
+        } else {
+            "/codex/responses"
+        };
+        let upstream = Router::new().route(path, post(move |Json(body): Json<Value>| {
+            let capture = capture.clone();
+            async move {
+                let mut requests = capture.lock().await;
+                requests.push(body);
+                let recover = requests.len() == 6;
+                let mut event = json!({"type":"error","error":{"code":"server_is_overloaded","headers":{"Retry-After":"1"}}});
+                if mode == "no_advice" { event["error"].as_object_mut().unwrap().remove("headers"); }
+                if mode == "disabled" { event["error"]["message"] = json!("This model is disabled."); }
+                if mode == "http" && !recover {
+                    Response::builder().status(502).header("retry-after", "1").body(Body::from(event.to_string())).unwrap()
+                } else {
+                    let text = if recover { "data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_ok\"}}\n\n".to_owned() }
+                    else { format!("{}data: {event}\n\n", if mode == "after_event" { "data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_first\"}}\n\n" } else { "" }) };
+                    Response::builder().header(header::CONTENT_TYPE,"text/event-stream").body(Body::from(text)).unwrap()
+                }
+            }
+        }));
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let base_url = format!("http://{}", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move { axum::serve(listener, upstream).await });
+        let database_path = test_database_path();
+        let db = Db::open(&database_path).await.unwrap();
+        let seed = seed_relay_route(&db, RelayRouteSeed {
+            base_url,
+            provider: "codex-subscription",
+            auth_mode: if mode == "bearer" { "bearer" } else { "codex-oauth" },
+            provider_secret: json!({"type":"token-toxication-codex-oauth-v1","refresh":"synthetic-refresh","access":"synthetic-access","expires":Utc::now().timestamp_millis()+3_600_000}).to_string(),
+            wire_api: "openai-responses",
+            public_model: "public-coding",
+            upstream_model: "mock",
+        }).await;
+        let state = test_state(db, database_path.clone());
+        let mut input = json!({"model":"public-coding","input":"synthetic","stream":true});
+        if mode == "continuation" {
+            input["previous_response_id"] = json!("resp_previous");
+        }
+        let response = relay_openai_responses(
+            State(state.clone()),
+            relay_headers(&seed.relay_secret),
+            Uri::from_static("/openai/v1/responses"),
+            Bytes::from(input.to_string()),
+        )
+        .await
+        .unwrap();
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let retries = matches!(mode, "http" | "sse");
+        assert_eq!(
+            captures.lock().await.len(),
+            if retries { 6 } else { 1 },
+            "{mode}"
+        );
+        assert_eq!(
+            String::from_utf8_lossy(&body).contains("resp_ok"),
+            retries,
+            "{mode}"
+        );
+        if retries {
+            let requests = captures.lock().await;
+            assert_eq!(requests[0], requests[1]);
+        }
+        let logs = state.db.list_request_logs(10).await.unwrap();
+        assert_eq!(logs.len(), 1, "{mode}");
+        assert_eq!(
+            logs[0].status_code,
+            if retries { 200 } else { 502 },
+            "{mode}"
+        );
+        let route = state
+            .db
+            .get_provider_model_route(&seed.route_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(route.cooldown_until.is_none(), "{mode}");
+        server.abort();
+        remove_test_database(&database_path);
+    }
+}

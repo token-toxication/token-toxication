@@ -3,6 +3,7 @@ use crate::relay_attempt::QueuedPermit;
 use crate::websocket_transport::{self, ConnectError};
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use futures_util::{SinkExt, StreamExt};
+use rand::Rng;
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::time::{Instant, timeout};
@@ -39,6 +40,9 @@ struct ActiveResponse {
     log: RelayAttemptLog,
     usage: UsageUpdate,
     response_id: Option<String>,
+    request: Value,
+    overload_retries: u8,
+    has_event: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -338,7 +342,7 @@ async fn relay_connection(
     }
     let mut upstream = match timeout(
         idle,
-        websocket_transport::connect(&state.websocket_http, &endpoint, upstream_headers),
+        websocket_transport::connect(&state.websocket_http, &endpoint, upstream_headers.clone()),
     )
     .await
     {
@@ -402,7 +406,14 @@ async fn relay_connection(
                         let kind = value.get("type").and_then(Value::as_str).unwrap_or("");
                         let duplicate = value.pointer("/response/id").and_then(Value::as_str).is_some_and(|id| previous.contains(id));
                         if duplicate { continue; }
+                        let overload_retry = active.as_ref().is_some_and(|current| {
+                            !current.has_event
+                                && is_codex_subscription_auth(&binding.selection().account.account.auth_mode)
+                                && request_is_replay_safe(WireApi::OpenAiResponses, &current.request)
+                                && retryable_overload(&value)
+                        });
                         if let Some(current) = active.as_mut() {
+                            current.has_event = true;
                             current.usage.merge(usage_update(&value));
                             if let Some(id) = value.pointer("/response/id").and_then(Value::as_str) {
                                 if id.is_empty() || id.len() > 512 { return Stop::Upstream; }
@@ -416,7 +427,40 @@ async fn relay_connection(
                                     .flatten().and_then(Value::as_u64).and_then(|status| u16::try_from(status).ok())
                                     .and_then(|status| StatusCode::from_u16(status).ok())
                                     .filter(|status| status.is_client_error() || status.is_server_error());
-                                let result = if let Some(status) = wrapped_status {
+                                if overload_retry && current.overload_retries < MAX_OVERLOAD_RETRIES {
+                                    let mut current = current;
+                                    current.overload_retries += 1;
+                                    let delay = rand::rng().random_range(2..=5);
+                                    tracing::info!(retry = current.overload_retries, delay_seconds = delay, "retrying Codex subscription overload");
+                                    current.usage = UsageUpdate::default();
+                                    current.response_id = None;
+                                    current.has_event = false;
+                                    let _ = current.attempt.take_queued_permit();
+                                    if let Err(stop) = while_queued(client, None, idle, tokio::time::sleep(Duration::from_secs(delay))).await {
+                                        return stop;
+                                    }
+                                    let permit = match while_queued(client, None, idle, binding.acquire_permit()).await {
+                                        Ok(Ok(permit)) => permit,
+                                        Ok(Err(_)) => return Stop::Shutdown,
+                                        Err(stop) => return stop,
+                                    };
+                                    current.attempt = binding.continuation(permit);
+                                    *active = Some(current);
+                                    upstream = match while_queued(client, None, idle, connect_upstream(state, &endpoint, &upstream_headers, idle)).await {
+                                        Ok(Ok(socket)) => socket,
+                                        Ok(Err(stop)) | Err(stop) => return stop,
+                                    };
+                                    let request = active.as_ref().expect("retry is active").request.to_string();
+                                    if !matches!(timeout(idle, upstream.send(tungstenite::Message::Text(request.into()))).await, Ok(Ok(()))) {
+                                        return Stop::Upstream;
+                                    }
+                                    idle_deadline = Instant::now() + idle;
+                                    continue;
+                                }
+                                let result = if is_codex_subscription_auth(&binding.selection().account.account.auth_mode)
+                                    && openai_responses_stream_failure(&value).is_some_and(|failure| failure.code.as_deref() == Some("server_is_overloaded")) {
+                                    current.attempt.record_application_failure(&current.log, wrapped_status.unwrap_or(StatusCode::BAD_GATEWAY), current.usage.tokens(), "upstream stream failed (server_is_overloaded)".into()).await
+                                } else if let Some(status) = wrapped_status {
                                     current.attempt.record_response(&current.log, status, &HeaderMap::new(), b"{}", current.usage.tokens()).await
                                 } else if let Some(failure) = openai_responses_stream_failure(&value) {
                                     let error = failure.log_error();
@@ -519,5 +563,27 @@ fn start_response(
         },
         usage: UsageUpdate::default(),
         response_id: None,
+        request: value.clone(),
+        overload_retries: 0,
+        has_event: false,
+    }
+}
+
+async fn connect_upstream(
+    state: &AppState,
+    endpoint: &str,
+    headers: &HeaderMap,
+    idle: Duration,
+) -> Result<UpstreamSocket, Stop> {
+    match timeout(
+        idle,
+        websocket_transport::connect(&state.websocket_http, endpoint, headers.clone()),
+    )
+    .await
+    {
+        Ok(Ok(socket)) => Ok(socket),
+        Ok(Err(ConnectError::Http { status, .. })) => Err(Stop::Http(status)),
+        Err(_) => Err(Stop::Timeout),
+        _ => Err(Stop::Upstream),
     }
 }

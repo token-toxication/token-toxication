@@ -642,3 +642,110 @@ async fn websocket_queued_response_keeps_upstream_alive_and_respects_limit() {
     drop(client);
     remove_test_database(&database_path);
 }
+
+#[tokio::test]
+async fn codex_overload_reconnects_with_bounded_random_delay() {
+    for recover in [true, false] {
+        let captures = Arc::new(Mutex::new(Vec::<(std::time::Instant, Value)>::new()));
+        let capture = captures.clone();
+        let upstream = Router::new().route("/codex/responses", get(move |ws: WebSocketUpgrade| {
+            let capture = capture.clone();
+            async move {
+                ws.on_upgrade(move |mut socket| async move {
+                    if let Some(Ok(Message::Text(text))) = socket.next().await {
+                        let mut requests = capture.lock().await;
+                        requests.push((std::time::Instant::now(), serde_json::from_str(&text).unwrap()));
+                        let event = if recover && requests.len() == 6 {
+                            json!({"type":"response.completed","response":{"id":"resp_ok"}})
+                        } else {
+                            json!({"type":"error","status":502,"error":{"code":"server_is_overloaded","headers":{"Retry-After":"1"}}})
+                        };
+                        drop(requests);
+                        socket.send(Message::Text(event.to_string().into())).await.unwrap();
+                        while let Some(Ok(message)) = socket.next().await {
+                            if matches!(message, Message::Close(_)) { break; }
+                        }
+                    }
+                })
+            }
+        }));
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let base_url = format!("http://{}", listener.local_addr().unwrap());
+        let upstream_task = tokio::spawn(async move { axum::serve(listener, upstream).await });
+        let database_path = test_database_path();
+        let db = Db::open(&database_path).await.unwrap();
+        let seed = seed_relay_route(&db, RelayRouteSeed {
+            base_url,
+            provider: "codex-subscription",
+            auth_mode: "codex-oauth",
+            provider_secret: json!({"type":"token-toxication-codex-oauth-v1","refresh":"synthetic-refresh","access":"synthetic-access","expires":Utc::now().timestamp_millis()+3_600_000}).to_string(),
+            wire_api: "openai-responses",
+            public_model: "public-coding",
+            upstream_model: "mock",
+        }).await;
+        let state = test_state(db, database_path.clone());
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let mut request = format!(
+            "ws://{}/openai/v1/responses",
+            listener.local_addr().unwrap()
+        )
+        .into_client_request()
+        .unwrap();
+        request.headers_mut().insert(
+            header::AUTHORIZATION,
+            HeaderValue::from_str(&format!("Bearer {}", seed.relay_secret)).unwrap(),
+        );
+        let relay = crate::app(state.clone(), PathBuf::from("nonexistent-static-test-dir"));
+        let relay_task = tokio::spawn(async move { axum::serve(listener, relay).await });
+        let (mut client, _) = connect_async(request).await.unwrap();
+        client
+            .send(tungstenite::Message::Text(
+                json!({"type":"response.create","model":"public-coding","input":"synthetic"})
+                    .to_string()
+                    .into(),
+            ))
+            .await
+            .unwrap();
+        let event = tokio::time::timeout(Duration::from_secs(35), async {
+            loop {
+                if let Some(Ok(tungstenite::Message::Text(text))) = client.next().await {
+                    break serde_json::from_str::<Value>(&text).unwrap();
+                }
+            }
+        })
+        .await
+        .unwrap();
+        assert_eq!(
+            event["type"],
+            if recover {
+                "response.completed"
+            } else {
+                "error"
+            }
+        );
+        let requests = captures.lock().await;
+        assert_eq!(requests.len(), 6);
+        for pair in requests.windows(2) {
+            assert_eq!(pair[0].1, pair[1].1);
+            let delay = pair[1].0.duration_since(pair[0].0);
+            assert!(
+                delay >= Duration::from_secs(2) && delay < Duration::from_secs(6),
+                "{delay:?}"
+            );
+        }
+        let logs = state.db.list_request_logs(10).await.unwrap();
+        assert_eq!(logs.len(), 1);
+        assert_eq!(logs[0].status_code, if recover { 200 } else { 502 });
+        let route = state
+            .db
+            .get_provider_model_route(&seed.route_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(route.cooldown_until.is_none());
+        drop(requests);
+        relay_task.abort();
+        upstream_task.abort();
+        remove_test_database(&database_path);
+    }
+}
