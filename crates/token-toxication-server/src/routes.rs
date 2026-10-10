@@ -394,6 +394,7 @@ async fn relay_json_endpoint(
     let mut failover_deadline: Option<Instant> = None;
     let mut excluded_account_ids = HashSet::new();
     let mut last_rate_limit_response = None;
+    let mut overload_retry_count = 0u8;
 
     for attempt_index in 0..=MAX_OVERLOAD_RETRIES {
         let attempt = match authenticated_attempt
@@ -439,6 +440,10 @@ async fn relay_json_endpoint(
             path: wire_api.public_path().to_string(),
             upstream_url: Some(base_upstream_url.clone()),
             request_summary: Some(request_summary),
+            overload_retry_count,
+            overload_retry_started: overload_retry_count > 0,
+            overload_retry_exhausted: false,
+            overload_retry_skip_reason: None,
         };
         let codex_auth = if is_codex_subscription_auth(&account.account.auth_mode) {
             if wire_api != WireApi::OpenAiResponses {
@@ -546,9 +551,23 @@ async fn relay_json_endpoint(
                     && Instant::now() <= failover_deadline
                 {
                     drop(attempt);
+                    overload_retry_count += 1;
                     wait_for_codex_overload_retry(&state, attempt_index + 1).await?;
                     continue;
                 }
+                log.overload_retry_exhausted = attempt_index >= MAX_OVERLOAD_RETRIES;
+                log.overload_retry_skip_reason = Some(
+                    if log.overload_retry_exhausted {
+                        "retry_budget_exhausted"
+                    } else if Instant::now() > failover_deadline {
+                        "retry_deadline_exhausted"
+                    } else if !replay_safe {
+                        "request_not_replay_safe"
+                    } else {
+                        "overload_not_replayable"
+                    }
+                    .to_string(),
+                );
                 attempt
                     .record_application_failure(
                         &log,
@@ -580,11 +599,15 @@ async fn relay_json_endpoint(
             let mut buffered_bytes = 0;
             let mut observation = StreamingResponseObservation::default();
             let preflight_deadline = Instant::now() + STREAM_FAILOVER_WAIT;
+            let mut preflight_timed_out = false;
             while buffered_bytes < STREAM_FAILOVER_BUFFER_BYTES && !observation.has_message() {
                 let next = match time::timeout_at(preflight_deadline, upstream_stream.next()).await
                 {
                     Ok(next) => next,
-                    Err(_) => break,
+                    Err(_) => {
+                        preflight_timed_out = true;
+                        break;
+                    }
                 };
                 match next {
                     Some(Ok(chunk)) => {
@@ -618,8 +641,24 @@ async fn relay_json_endpoint(
                 {
                     drop(upstream_stream);
                     drop(attempt);
+                    overload_retry_count += 1;
                     wait_for_codex_overload_retry(&state, attempt_index + 1).await?;
                     continue;
+                }
+                if codex_auth.is_some() && failure.retryable_overload {
+                    log.overload_retry_exhausted = attempt_index >= MAX_OVERLOAD_RETRIES;
+                    log.overload_retry_skip_reason = Some(
+                        if log.overload_retry_exhausted {
+                            "retry_budget_exhausted"
+                        } else if Instant::now() > failover_deadline {
+                            "retry_deadline_exhausted"
+                        } else if !replay_safe {
+                            "request_not_replay_safe"
+                        } else {
+                            "overload_not_replayable"
+                        }
+                        .to_string(),
+                    );
                 }
                 let error = failure.log_error();
                 if let Some(route_failure) = classify_upstream_application_failure(
@@ -663,6 +702,8 @@ async fn relay_json_endpoint(
                     status,
                     response_headers,
                     wire_api,
+                    codex_subscription: codex_auth.is_some(),
+                    preflight_timed_out,
                     idle_timeout: state.relay_stream_idle_timeout,
                     max_duration: state.relay_stream_max_duration,
                     shutdown: state.shutdown.clone(),
@@ -763,6 +804,10 @@ async fn relay_gemini_endpoint(
         path: public_path,
         upstream_url: Some(fallback_upstream_url),
         request_summary: None,
+        overload_retry_count: 0,
+        overload_retry_started: false,
+        overload_retry_exhausted: false,
+        overload_retry_skip_reason: None,
     };
 
     let authorization =
@@ -886,6 +931,8 @@ async fn relay_gemini_endpoint(
                 status,
                 response_headers,
                 wire_api: WireApi::GeminiGenerateContent,
+                codex_subscription: false,
+                preflight_timed_out: false,
                 idle_timeout: stream_idle_timeout,
                 max_duration: stream_max_duration,
                 shutdown,
@@ -1719,6 +1766,8 @@ struct StreamingResponseContext {
     status: StatusCode,
     response_headers: HeaderMap,
     wire_api: WireApi,
+    codex_subscription: bool,
+    preflight_timed_out: bool,
     idle_timeout: Duration,
     max_duration: Duration,
     shutdown: crate::server::ShutdownSignal,
@@ -1735,10 +1784,12 @@ where
 
     let StreamingResponseContext {
         attempt,
-        log,
+        mut log,
         status,
         response_headers,
         wire_api,
+        codex_subscription,
+        preflight_timed_out,
         idle_timeout,
         max_duration,
         shutdown,
@@ -1783,6 +1834,21 @@ where
         };
 
         if let Some(failure) = observation.application_failure(wire_api) {
+            if codex_subscription
+                && failure.retryable_overload
+                && log.overload_retry_skip_reason.is_none()
+            {
+                log.overload_retry_skip_reason = Some(
+                    if observation.message_count > 1 {
+                        "response_already_started"
+                    } else if preflight_timed_out {
+                        "preflight_timeout"
+                    } else {
+                        "overload_not_replayable"
+                    }
+                    .to_string(),
+                );
+            }
             let usage = observation.tokens();
             let error = failure.log_error();
             let route_failure = classify_upstream_application_failure(

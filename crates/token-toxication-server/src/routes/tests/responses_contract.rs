@@ -323,6 +323,22 @@ async fn codex_http_overload_retries_same_account_before_output() {
             if retries { 200 } else { 502 },
             "{mode}"
         );
+        assert_eq!(
+            logs[0].overload_retry_count,
+            if retries { 5 } else { 0 },
+            "{mode}"
+        );
+        assert_eq!(logs[0].overload_retry_started, retries, "{mode}");
+        let expected_skip_reason = match mode {
+            "after_event" => Some("response_already_started"),
+            "continuation" => Some("request_not_replay_safe"),
+            _ => None,
+        };
+        assert_eq!(
+            logs[0].overload_retry_skip_reason.as_deref(),
+            expected_skip_reason,
+            "{mode}"
+        );
         let route = state
             .db
             .get_provider_model_route(&seed.route_id)

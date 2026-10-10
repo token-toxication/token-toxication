@@ -28,6 +28,10 @@ pub(crate) struct RelayAttemptLog {
     pub path: String,
     pub upstream_url: Option<String>,
     pub request_summary: Option<RequestSummary>,
+    pub overload_retry_count: u8,
+    pub overload_retry_started: bool,
+    pub overload_retry_exhausted: bool,
+    pub overload_retry_skip_reason: Option<String>,
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -243,6 +247,10 @@ impl RelayAttempt {
                 status_code,
                 latency_ms: self.started.elapsed().as_millis() as u64,
                 queue_wait_ms: self.queue_wait.as_millis() as u64,
+                overload_retry_count: log.overload_retry_count,
+                overload_retry_started: log.overload_retry_started,
+                overload_retry_exhausted: log.overload_retry_exhausted,
+                overload_retry_skip_reason: log.overload_retry_skip_reason.clone(),
                 input_tokens: usage.input_tokens,
                 cached_input_tokens: usage.cached_input_tokens,
                 output_tokens: usage.output_tokens,
