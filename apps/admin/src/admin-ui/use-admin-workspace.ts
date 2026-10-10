@@ -278,6 +278,24 @@ export function useAdminWorkspace() {
     setIsAccountSheetOpen(true);
   }
 
+  function openCreateCodexDeviceAccount() {
+    const preset = providerPresets.find((item) => item.authMode === "codex-device-oauth");
+    setEditingAccount(null);
+    setCreateAccountForm(
+      preset
+        ? {
+            ...emptyAccountForm,
+            name: preset.name,
+            provider: preset.provider,
+            baseUrl: preset.baseUrl,
+            authMode: preset.authMode,
+            wireApi: preset.wireApi,
+          }
+        : { ...emptyAccountForm, authMode: "codex-device-oauth" },
+    );
+    setIsAccountSheetOpen(true);
+  }
+
   function openEditAccount(account: ProviderAccount) {
     setEditingAccount(account);
     setCreateAccountForm(accountFormFromAccount(account));
@@ -653,6 +671,7 @@ export function useAdminWorkspace() {
     handleLogout,
     handleCreateKey,
     openCreateAccount,
+    openCreateCodexDeviceAccount,
     openEditAccount,
     handleAccountSheetOpenChange,
     cancelCodexDeviceLogin,
