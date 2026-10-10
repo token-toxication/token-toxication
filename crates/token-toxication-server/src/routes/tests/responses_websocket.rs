@@ -736,6 +736,9 @@ async fn codex_overload_reconnects_with_bounded_random_delay() {
         let logs = state.db.list_request_logs(10).await.unwrap();
         assert_eq!(logs.len(), 1);
         assert_eq!(logs[0].status_code, if recover { 200 } else { 502 });
+        assert_eq!(logs[0].overload_retry_count, 5);
+        assert!(logs[0].overload_retry_started);
+        assert_eq!(logs[0].overload_retry_exhausted, !recover);
         let route = state
             .db
             .get_provider_model_route(&seed.route_id)

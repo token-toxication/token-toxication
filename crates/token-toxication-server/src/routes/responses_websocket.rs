@@ -422,7 +422,7 @@ async fn relay_connection(
                             }
                         }
                         if matches!(kind, "response.completed" | "response.failed" | "response.incomplete" | "error") && !duplicate
-                            && let Some(current) = active.take() {
+                            && let Some(mut current) = active.take() {
                                 let wrapped_status = (kind == "error").then(|| value.get("status").or_else(|| value.get("status_code")))
                                     .flatten().and_then(Value::as_u64).and_then(|status| u16::try_from(status).ok())
                                     .and_then(|status| StatusCode::from_u16(status).ok())
@@ -430,6 +430,8 @@ async fn relay_connection(
                                 if overload_retry && current.overload_retries < MAX_OVERLOAD_RETRIES {
                                     let mut current = current;
                                     current.overload_retries += 1;
+                                    current.log.overload_retry_count = current.overload_retries;
+                                    current.log.overload_retry_started = true;
                                     let delay = rand::rng().random_range(2..=5);
                                     tracing::info!(retry = current.overload_retries, delay_seconds = delay, "retrying Codex subscription overload");
                                     current.usage = UsageUpdate::default();
@@ -456,6 +458,30 @@ async fn relay_connection(
                                     }
                                     idle_deadline = Instant::now() + idle;
                                     continue;
+                                }
+                                let terminal_overload = is_codex_subscription_auth(
+                                    &binding.selection().account.account.auth_mode,
+                                ) && openai_responses_stream_failure(&value).is_some_and(
+                                    |failure| {
+                                        failure.code.as_deref() == Some("server_is_overloaded")
+                                    },
+                                );
+                                if terminal_overload {
+                                    current.log.overload_retry_exhausted =
+                                        current.overload_retries >= MAX_OVERLOAD_RETRIES;
+                                    current.log.overload_retry_skip_reason = Some(
+                                        if current.log.overload_retry_exhausted {
+                                            "retry_budget_exhausted"
+                                        } else if !request_is_replay_safe(
+                                            WireApi::OpenAiResponses,
+                                            &current.request,
+                                        ) {
+                                            "request_not_replay_safe"
+                                        } else {
+                                            "overload_not_replayable"
+                                        }
+                                        .to_string(),
+                                    );
                                 }
                                 let result = if is_codex_subscription_auth(&binding.selection().account.account.auth_mode)
                                     && openai_responses_stream_failure(&value).is_some_and(|failure| failure.code.as_deref() == Some("server_is_overloaded")) {
@@ -560,6 +586,10 @@ fn start_response(
                 value.to_string().len() as u64,
                 stripped,
             )),
+            overload_retry_count: 0,
+            overload_retry_started: false,
+            overload_retry_exhausted: false,
+            overload_retry_skip_reason: None,
         },
         usage: UsageUpdate::default(),
         response_id: None,

@@ -142,6 +142,14 @@ pub struct RequestLog {
     /// Time spent queued for a running-request slot before relaying.
     #[serde(default)]
     pub queue_wait_ms: u64,
+    #[serde(default)]
+    pub overload_retry_count: u8,
+    #[serde(default)]
+    pub overload_retry_started: bool,
+    #[serde(default)]
+    pub overload_retry_exhausted: bool,
+    #[serde(default)]
+    pub overload_retry_skip_reason: Option<String>,
     pub input_tokens: u64,
     pub cached_input_tokens: u64,
     pub output_tokens: u64,
