@@ -444,6 +444,7 @@ async fn relay_json_endpoint(
             overload_retry_started: overload_retry_count > 0,
             overload_retry_exhausted: false,
             overload_retry_skip_reason: None,
+            client_retry_advice_injected: false,
         };
         let codex_auth = if is_codex_subscription_auth(&account.account.auth_mode) {
             if wire_api != WireApi::OpenAiResponses {
@@ -808,6 +809,7 @@ async fn relay_gemini_endpoint(
         overload_retry_started: false,
         overload_retry_exhausted: false,
         overload_retry_skip_reason: None,
+        client_retry_advice_injected: false,
     };
 
     let authorization =
@@ -1648,6 +1650,92 @@ fn take_sse_event(buffer: &str) -> Option<(String, String)> {
     None
 }
 
+#[derive(Default)]
+struct CodexRetryAdviceRewriter {
+    buffer: Vec<u8>,
+    response_events_seen: usize,
+}
+
+impl CodexRetryAdviceRewriter {
+    fn process(&mut self, chunk: &Bytes, codex_subscription: bool) -> (Bytes, bool) {
+        self.buffer.extend_from_slice(chunk.as_ref());
+        let mut output = String::new();
+        let mut injected = false;
+        while let Some((event_end, delimiter_len)) = find_sse_event(&self.buffer) {
+            let event = String::from_utf8_lossy(&self.buffer[..event_end]).into_owned();
+            self.buffer.drain(..event_end + delimiter_len);
+            let response_started = self.response_events_seen > 0;
+            let (event, event_injected, is_response_event) =
+                rewrite_codex_retry_advice_event(&event, codex_subscription, response_started);
+            injected |= event_injected;
+            if is_response_event {
+                self.response_events_seen += 1;
+            }
+            output.push_str(&event);
+            output.push_str("\n\n");
+        }
+        (Bytes::from(output), injected)
+    }
+
+    fn finish(&mut self) -> Bytes {
+        Bytes::from(std::mem::take(&mut self.buffer))
+    }
+}
+
+fn find_sse_event(buffer: &[u8]) -> Option<(usize, usize)> {
+    buffer.windows(2).enumerate().find_map(|(index, pair)| {
+        if pair == b"\n\n" {
+            Some((index, 2))
+        } else if pair == b"\r\n" && buffer.get(index + 2..index + 4) == Some(b"\r\n") {
+            Some((index, 4))
+        } else {
+            None
+        }
+    })
+}
+
+fn rewrite_codex_retry_advice_event(
+    event: &str,
+    codex_subscription: bool,
+    response_started: bool,
+) -> (String, bool, bool) {
+    let mut lines = event.lines().map(str::to_owned).collect::<Vec<_>>();
+    let Some(data_index) = lines.iter().position(|line| line.starts_with("data:")) else {
+        return (event.to_owned(), false, false);
+    };
+    let data = lines[data_index]["data:".len()..].trim();
+    let Ok(mut value) = serde_json::from_str::<Value>(data) else {
+        return (event.to_owned(), false, false);
+    };
+    let is_response_event = value.get("type").and_then(Value::as_str).is_some();
+    let overload = matches!(
+        value.get("type").and_then(Value::as_str),
+        Some("error" | "response.failed")
+    ) && value
+        .pointer("/error/code")
+        .or_else(|| value.pointer("/response/error/code"))
+        .and_then(Value::as_str)
+        == Some("server_is_overloaded");
+    if !(codex_subscription && response_started && overload) {
+        return (event.to_owned(), false, is_response_event);
+    }
+    let error = if value.get("type").and_then(Value::as_str) == Some("response.failed") {
+        value.pointer_mut("/response/error")
+    } else {
+        value.pointer_mut("/error")
+    };
+    if let Some(error) = error.and_then(Value::as_object_mut) {
+        let headers = error
+            .entry("headers")
+            .or_insert_with(|| Value::Object(Default::default()));
+        if let Some(headers) = headers.as_object_mut() {
+            headers.insert("Retry-After".to_string(), Value::String("0".to_string()));
+        }
+    }
+    lines[data_index] = format!("data: {value}");
+    (lines.join("\n"), true, is_response_event)
+}
+
 fn transform_code_assist_sse_event(event: &str) -> String {
     let mut transformed = String::new();
     for line in event.lines() {
@@ -1801,6 +1889,7 @@ where
     tokio::spawn(async move {
         let mut body_stream = Box::pin(body_stream);
         let mut observation = StreamingResponseObservation::default();
+        let mut retry_advice_rewriter = CodexRetryAdviceRewriter::default();
         let deadline = Instant::now() + max_duration;
         let mut shutdown_rx = shutdown.subscribe();
         let stream_end = if *shutdown_rx.borrow() {
@@ -1823,12 +1912,23 @@ where
                 match next {
                     Some(Ok(chunk)) => {
                         observation.observe(&chunk);
-                        if sender.send(Ok(chunk)).await.is_err() {
+                        let (chunk, injected) =
+                            retry_advice_rewriter.process(&chunk, codex_subscription);
+                        if injected {
+                            log.client_retry_advice_injected = true;
+                        }
+                        if !chunk.is_empty() && sender.send(Ok(chunk)).await.is_err() {
                             break StreamEnd::ClientDisconnected;
                         }
                     }
                     Some(Err(error)) => break StreamEnd::UpstreamError(error),
-                    None => break StreamEnd::Complete,
+                    None => {
+                        let chunk = retry_advice_rewriter.finish();
+                        if !chunk.is_empty() && sender.send(Ok(chunk)).await.is_err() {
+                            break StreamEnd::ClientDisconnected;
+                        }
+                        break StreamEnd::Complete;
+                    }
                 }
             }
         };

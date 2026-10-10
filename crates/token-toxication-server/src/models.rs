@@ -150,6 +150,8 @@ pub struct RequestLog {
     pub overload_retry_exhausted: bool,
     #[serde(default)]
     pub overload_retry_skip_reason: Option<String>,
+    #[serde(default)]
+    pub client_retry_advice_injected: bool,
     pub input_tokens: u64,
     pub cached_input_tokens: u64,
     pub output_tokens: u64,
