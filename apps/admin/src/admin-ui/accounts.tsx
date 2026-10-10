@@ -6,8 +6,11 @@ import { Trans } from "@lingui/react/macro";
 import {
   ActivityIcon,
   CableIcon,
+  ClipboardCopyIcon,
+  ExternalLinkIcon,
   GaugeIcon,
   KeyRoundIcon,
+  LoaderCircleIcon,
   LogInIcon,
   PencilIcon,
   PlusIcon,
@@ -45,9 +48,10 @@ import {
   statusBadge,
   upstreamPathForWireApi,
   wireApiLabel,
+  copyText,
 } from "./helpers";
 import { EmptyNotice, Field, MissingRecordView, SettingRow } from "./shared";
-import type { CodexQuotaRow, CreateAccountForm } from "./types";
+import type { CodexDeviceLogin, CodexQuotaRow, CreateAccountForm } from "./types";
 import type {
   CodexAccountQuotaResponse,
   CodexAccountQuotaWindow,
@@ -65,6 +69,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -788,6 +793,95 @@ export function GeminiAccountDialog({
             </div>
           </div>
         )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function CodexDeviceLoginDialogBody({
+  login,
+  onCancel,
+}: {
+  login: CodexDeviceLogin | null;
+  onCancel: () => void;
+}) {
+  const isPending = login?.status === "pending";
+
+  if (!login) {
+    return null;
+  }
+
+  return (
+    <>
+      <div className="flex flex-col gap-3 rounded-lg border bg-muted/30 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+            <Trans>Device code</Trans>
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => void copyText(login.userCode)}
+          >
+            <ClipboardCopyIcon data-icon="inline-start" />
+            <Trans>Copy code</Trans>
+          </Button>
+        </div>
+        <code className="break-all text-center font-mono text-2xl font-semibold tracking-[0.2em]">
+          {login.userCode}
+        </code>
+        <p className="text-center text-xs text-muted-foreground">
+          <Trans>Expires {formatDate(login.expiresAt)}</Trans>
+        </p>
+      </div>
+      <Button asChild className="w-full">
+        <a href={login.verificationUrl} target="_blank" rel="noreferrer">
+          <ExternalLinkIcon data-icon="inline-start" />
+          <Trans>Open Codex verification page</Trans>
+        </a>
+      </Button>
+      {isPending ? (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
+          <LoaderCircleIcon className="animate-spin" />
+          <Trans>Waiting for Codex sign-in to complete…</Trans>
+        </div>
+      ) : (
+        <Alert variant="destructive">
+          <AlertTitle>
+            {login.status === "expired" ? t`Device code expired` : t`Codex sign-in failed`}
+          </AlertTitle>
+          <AlertDescription>{login.error ?? t`Start a new sign-in to try again.`}</AlertDescription>
+        </Alert>
+      )}
+      <DialogFooter>
+        <Button type="button" variant="outline" onClick={onCancel}>
+          {isPending ? t`Cancel sign-in` : t`Close`}
+        </Button>
+      </DialogFooter>
+    </>
+  );
+}
+
+export function CodexDeviceLoginDialog({
+  login,
+  onCancel,
+}: {
+  login: CodexDeviceLogin | null;
+  onCancel: () => void;
+}) {
+  return (
+    <Dialog open={Boolean(login)} onOpenChange={(open) => !open && onCancel()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>
+            <Trans>Sign in with Codex</Trans>
+          </DialogTitle>
+          <DialogDescription>
+            <Trans>Enter this code on the official Codex verification page.</Trans>
+          </DialogDescription>
+        </DialogHeader>
+        <CodexDeviceLoginDialogBody login={login} onCancel={onCancel} />
       </DialogContent>
     </Dialog>
   );

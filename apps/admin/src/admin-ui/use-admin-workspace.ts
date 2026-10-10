@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type React from "react";
 import { t } from "@lingui/core/macro";
 import { toast } from "sonner";
@@ -18,6 +18,7 @@ import {
   emptyModelForm,
   emptyRouteForm,
   type AntigravityOAuthMessage,
+  type CodexDeviceLogin,
   type CreateAccountForm,
   type CreateKeyForm,
   type ModelCatalogForm,
@@ -125,6 +126,8 @@ export function useAdminWorkspace() {
   const [isLoading, setIsLoading] = useState(Boolean(token));
   const [isKeySheetOpen, setIsKeySheetOpen] = useState(false);
   const [isAccountSheetOpen, setIsAccountSheetOpen] = useState(false);
+  const [codexDeviceLogin, setCodexDeviceLogin] = useState<CodexDeviceLogin | null>(null);
+  const codexDeviceLoginAttempt = useRef(0);
   const [editingAccount, setEditingAccount] = useState<ProviderAccount | null>(null);
   const [isModelSheetOpen, setIsModelSheetOpen] = useState(false);
   const [isRouteSheetOpen, setIsRouteSheetOpen] = useState(false);
@@ -295,6 +298,11 @@ export function useAdminWorkspace() {
     }
   }
 
+  function cancelCodexDeviceLogin() {
+    codexDeviceLoginAttempt.current += 1;
+    setCodexDeviceLogin(null);
+  }
+
   async function handleSaveAccount(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!editingAccount && isCodexDeviceOAuthAuth(createAccountForm.authMode)) {
@@ -337,44 +345,81 @@ export function useAdminWorkspace() {
   }
 
   async function launchCodexDeviceOAuth({ name }: { name: string }) {
-    const popup = window.open(
-      "about:blank",
-      "token-toxication-codex-device-login",
-      "popup,width=560,height=720",
-    );
-    if (!popup) {
-      toast.error(t`Allow popups to open the Codex sign-in page`);
-    }
+    const attempt = codexDeviceLoginAttempt.current + 1;
+    codexDeviceLoginAttempt.current = attempt;
+    let flowStarted = false;
     try {
       const flow = await api.startCodexDeviceOAuth({ name });
-      if (popup) {
-        popup.location.replace(flow.verificationUrl);
+      if (codexDeviceLoginAttempt.current !== attempt) {
+        return;
       }
+      flowStarted = true;
+      setCodexDeviceLogin({
+        flowId: flow.flowId,
+        verificationUrl: flow.verificationUrl,
+        userCode: flow.userCode,
+        expiresAt: flow.expiresAt,
+        status: "pending",
+        error: null,
+      });
+      closeAccountSheet();
       try {
         await navigator.clipboard.writeText(flow.userCode);
       } catch {
-        // Clipboard permissions are optional; the code remains visible in the toast.
+        // Clipboard permissions are optional; the code remains visible in the dialog.
       }
-      toast.info(t`Enter the Codex device code ${flow.userCode} at ${flow.verificationUrl}`);
 
       const deadline = Date.parse(flow.expiresAt);
-      while (Date.now() < deadline) {
+      while (Date.now() < deadline && codexDeviceLoginAttempt.current === attempt) {
         await new Promise((resolve) => window.setTimeout(resolve, flow.pollIntervalSeconds * 1000));
+        if (codexDeviceLoginAttempt.current !== attempt) {
+          return;
+        }
         const status = await api.codexDeviceOAuthStatus(flow.flowId);
+        if (codexDeviceLoginAttempt.current !== attempt) {
+          return;
+        }
         if (status.status === "succeeded") {
+          codexDeviceLoginAttempt.current += 1;
+          setCodexDeviceLogin(null);
           toast.success(t`Codex account connected`);
-          closeAccountSheet();
           await refresh();
           return;
         }
         if (status.status === "failed" || status.status === "expired") {
-          throw new Error(status.error ?? t`Codex device login expired`);
+          const terminalStatus = status.status === "expired" ? "expired" : "failed";
+          setCodexDeviceLogin((current) =>
+            current?.flowId === flow.flowId
+              ? { ...current, status: terminalStatus, error: status.error }
+              : current,
+          );
+          return;
         }
       }
-      throw new Error(t`Codex device login expired`);
+      if (codexDeviceLoginAttempt.current === attempt) {
+        setCodexDeviceLogin((current) =>
+          current?.flowId === flow.flowId
+            ? { ...current, status: "expired", error: t`Codex device login expired` }
+            : current,
+        );
+      }
     } catch (error) {
-      popup?.close();
-      toast.error(error instanceof Error ? error.message : t`Unable to connect Codex account`);
+      if (codexDeviceLoginAttempt.current === attempt) {
+        const message = error instanceof Error ? error.message : t`Unable to connect Codex account`;
+        if (!flowStarted) {
+          toast.error(message);
+          return;
+        }
+        setCodexDeviceLogin((current) =>
+          current
+            ? {
+                ...current,
+                status: "failed",
+                error: message,
+              }
+            : current,
+        );
+      }
     }
   }
 
@@ -574,6 +619,7 @@ export function useAdminWorkspace() {
     isKeySheetOpen,
     setIsKeySheetOpen,
     isAccountSheetOpen,
+    codexDeviceLogin,
     editingAccount,
     isModelSheetOpen,
     setIsModelSheetOpen,
@@ -609,6 +655,7 @@ export function useAdminWorkspace() {
     openCreateAccount,
     openEditAccount,
     handleAccountSheetOpenChange,
+    cancelCodexDeviceLogin,
     handleSaveAccount,
     reconnectAntigravityAccount,
     inspectGeminiAccount,
