@@ -72,6 +72,15 @@ export type AntigravityOAuthMessage = {
   error?: string;
 };
 
+export type CodexDeviceLogin = {
+  flowId: string;
+  verificationUrl: string;
+  userCode: string;
+  expiresAt: string;
+  status: "pending" | "failed" | "expired";
+  error?: string | null;
+};
+
 export const emptyKeyForm: CreateKeyForm = {
   name: "",
   description: "",

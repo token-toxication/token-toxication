@@ -55,6 +55,7 @@ import {
   AccountDetailView,
   AccountsView,
   CodexAccountDialog,
+  CodexDeviceLoginDialog,
   CreateAccountSheet,
   GeminiAccountDialog,
 } from "./admin-ui/accounts";
@@ -111,6 +112,7 @@ function App() {
     isKeySheetOpen,
     setIsKeySheetOpen,
     isAccountSheetOpen,
+    codexDeviceLogin,
     editingAccount,
     isModelSheetOpen,
     setIsModelSheetOpen,
@@ -146,6 +148,7 @@ function App() {
     openCreateAccount,
     openEditAccount,
     handleAccountSheetOpenChange,
+    cancelCodexDeviceLogin,
     handleSaveAccount,
     reconnectAntigravityAccount,
     inspectGeminiAccount,
@@ -430,6 +433,7 @@ function App() {
         onOpenChange={handleAccountSheetOpenChange}
         onSubmit={handleSaveAccount}
       />
+      <CodexDeviceLoginDialog login={codexDeviceLogin} onCancel={cancelCodexDeviceLogin} />
       <CreateModelSheet
         open={isModelSheetOpen}
         form={createModelForm}
