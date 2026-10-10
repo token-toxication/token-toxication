@@ -311,6 +311,61 @@ export function isCodexDeviceOAuthAuth(value: string) {
   return value === "codex-device-oauth";
 }
 
+export function isCodexManualRefreshAuth(value: string) {
+  return value === "codex-manual-refresh" || value === "codex-oauth";
+}
+
+export function authModeLabel(value: string) {
+  switch (value) {
+    case "codex-device-oauth":
+      return t`Codex device login`;
+    case "codex-manual-refresh":
+    case "codex-oauth":
+      return t`Manual refresh token`;
+    case "antigravity-oauth":
+      return t`Antigravity OAuth`;
+    case "x-api-key":
+      return t`API key`;
+    case "x-goog-api-key":
+      return t`Google API key`;
+    case "bearer":
+      return t`Bearer token`;
+    default:
+      return value;
+  }
+}
+
+export function authModeLifecycleLabel(value: string) {
+  if (isCodexManualRefreshAuth(value)) {
+    return t`Deprecated`;
+  }
+  if (isCodexDeviceOAuthAuth(value) || isAntigravityAccountAuth(value)) {
+    return t`Managed`;
+  }
+  if (value === "x-api-key" || value === "x-goog-api-key" || value === "bearer") {
+    return t`Manual`;
+  }
+  return t`Unknown`;
+}
+
+export function authModeDescription(value: string) {
+  switch (value) {
+    case "codex-device-oauth":
+      return t`The relay manages the Codex device-login credential; no token is editable here.`;
+    case "codex-manual-refresh":
+    case "codex-oauth":
+      return t`This account uses a manually entered refresh token. New accounts should use Codex device login.`;
+    case "antigravity-oauth":
+      return t`OAuth tokens are exchanged and managed by the relay.`;
+    case "x-api-key":
+    case "x-goog-api-key":
+    case "bearer":
+      return t`The relay stores the credential and applies this authentication mode to upstream requests.`;
+    default:
+      return t`The relay uses this authentication mode for upstream requests.`;
+  }
+}
+
 export function isAntigravityAccountAuth(value: string) {
   return value === "antigravity-oauth";
 }

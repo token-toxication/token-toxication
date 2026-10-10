@@ -146,6 +146,7 @@ function App() {
     handleLogout,
     handleCreateKey,
     openCreateAccount,
+    openCreateCodexDeviceAccount,
     openEditAccount,
     handleAccountSheetOpenChange,
     cancelCodexDeviceLogin,
@@ -364,6 +365,7 @@ function App() {
                         onToggle={toggleAccount}
                         onDelete={deleteAccount}
                         onEdit={openEditAccount}
+                        onCreateCodexDeviceAccount={openCreateCodexDeviceAccount}
                         onInspectCodex={inspectCodexAccount}
                         onInspectGemini={inspectGeminiAccount}
                         onReconnectAntigravity={reconnectAntigravityAccount}

@@ -15,6 +15,7 @@ import {
   PencilIcon,
   PlusIcon,
   ShieldCheckIcon,
+  TriangleAlertIcon,
   Trash2Icon,
 } from "lucide-react";
 
@@ -24,6 +25,9 @@ import {
   codexUsedPercent,
   accountPresetValue,
   applyAccountPreset,
+  authModeDescription,
+  authModeLabel,
+  authModeLifecycleLabel,
   formatCodexCredits,
   formatCodexResetCreditExpiration,
   formatCodexResetCreditTimestamp,
@@ -40,6 +44,7 @@ import {
   isGeminiAccount,
   isAntigravityAccountAuth,
   isCodexDeviceOAuthAuth,
+  isCodexManualRefreshAuth,
   isCodexSubscriptionAuth,
   providerPresetForForm,
   quotaPercent,
@@ -122,233 +127,163 @@ export function AccountsView({
   onInspectGemini: (account: ProviderAccount) => void;
   onReconnectAntigravity: (account: ProviderAccount) => void;
 }) {
+  const legacyAccounts = accounts.filter((account) => isCodexManualRefreshAuth(account.authMode));
+
   return (
-    <Card>
-      <CardHeader className="flex-row items-start justify-between gap-4">
-        <div className="flex flex-col gap-1">
-          <CardTitle>
-            <Trans>Provider Accounts</Trans>
-          </CardTitle>
-          <CardDescription>
-            <Trans>Upstream credentials used by model routes.</Trans>
-          </CardDescription>
-        </div>
-        <Button type="button" onClick={onCreate}>
-          <PlusIcon data-icon="inline-start" />
-          <Trans>Add Account</Trans>
-        </Button>
-      </CardHeader>
-      <CardContent>
-        <div className="hidden md:block">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>
-                  <Trans>Name</Trans>
-                </TableHead>
-                <TableHead>
-                  <Trans>Provider</Trans>
-                </TableHead>
-                <TableHead>
-                  <Trans>Protocol</Trans>
-                </TableHead>
-                <TableHead>
-                  <Trans>Base URL</Trans>
-                </TableHead>
-                <TableHead>
-                  <Trans>Routes</Trans>
-                </TableHead>
-                <TableHead>
-                  <Trans>Running</Trans>
-                </TableHead>
-                <TableHead>
-                  <Trans>Status</Trans>
-                </TableHead>
-                <TableHead className="text-right">
-                  <Trans>Actions</Trans>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {accounts.map((account) => (
-                <TableRow key={account.id}>
-                  <TableCell className="font-medium">
-                    <Link
-                      to={adminPaths.account(account.id)}
-                      className="underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      {account.name}
-                    </Link>
-                  </TableCell>
-                  <TableCell>{account.provider}</TableCell>
-                  <TableCell>{wireApiLabel(account.wireApi)}</TableCell>
-                  <TableCell className="max-w-[280px] truncate">{account.baseUrl}</TableCell>
-                  <TableCell>{routeCountForAccount(routes, account.id)}</TableCell>
-                  <TableCell className="tabular-nums">{runningRequestsLabel(account)}</TableCell>
-                  <TableCell>{statusBadge(account.status, account.isActive)}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      {isCodexAccount(account) ? (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="icon-sm"
-                              aria-label={t`Codex quota`}
-                              onClick={() => onInspectCodex(account)}
-                            >
-                              <GaugeIcon />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <Trans>Codex quota</Trans>
-                          </TooltipContent>
-                        </Tooltip>
-                      ) : null}
-                      {isGeminiAccount(account) ? (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="icon-sm"
-                              aria-label={t`Models and quota`}
-                              onClick={() => onInspectGemini(account)}
-                            >
-                              <GaugeIcon />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <Trans>Models and quota</Trans>
-                          </TooltipContent>
-                        </Tooltip>
-                      ) : null}
-                      {isGeminiAccount(account) ? (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="icon-sm"
-                              aria-label={t`Reconnect Antigravity`}
-                              onClick={() => onReconnectAntigravity(account)}
-                            >
-                              <LogInIcon />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <Trans>Reconnect Antigravity</Trans>
-                          </TooltipContent>
-                        </Tooltip>
-                      ) : null}
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => onToggle(account)}
-                      >
-                        {account.isActive ? t`Enabled` : t`Disabled`}
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {accounts.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={7}>
-                    <EmptyNotice
-                      title={t`No provider accounts`}
-                      body={t`Add an account to make the relay schedulable.`}
-                    />
-                  </TableCell>
-                </TableRow>
-              ) : null}
-            </TableBody>
-          </Table>
-        </div>
-        <div className="grid gap-3 md:hidden">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
+      <Card>
+        <CardHeader className="flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+          <div className="flex min-w-0 flex-col gap-1">
+            <CardTitle>
+              <Trans>Provider Accounts</Trans>
+            </CardTitle>
+            <CardDescription>
+              <Trans>Upstream credentials used by model routes.</Trans>
+            </CardDescription>
+          </div>
+          <Button type="button" onClick={onCreate} className="shrink-0">
+            <PlusIcon data-icon="inline-start" />
+            <Trans>Add Account</Trans>
+          </Button>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          {legacyAccounts.length > 0 ? (
+            <Alert variant="destructive">
+              <TriangleAlertIcon className="size-4" />
+              <AlertTitle>
+                <Trans>Legacy Codex credentials need migration</Trans>
+              </AlertTitle>
+              <AlertDescription>
+                <Trans>
+                  Manual refresh tokens are deprecated. New accounts should use Codex device login.
+                </Trans>
+              </AlertDescription>
+            </Alert>
+          ) : null}
           {accounts.length === 0 ? (
             <EmptyNotice
               title={t`No provider accounts`}
               body={t`Add an account to make the relay schedulable.`}
             />
           ) : (
-            accounts.map((account) => (
-              <div key={account.id} className="flex flex-col gap-3 rounded-md border p-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <Link
-                      to={adminPaths.account(account.id)}
-                      className="block truncate text-sm font-medium underline-offset-4 hover:underline"
-                    >
-                      {account.name}
-                    </Link>
-                    <div className="truncate text-xs text-muted-foreground">{account.baseUrl}</div>
+            <div className="grid gap-2">
+              {accounts.map((account) => {
+                const legacy = isCodexManualRefreshAuth(account.authMode);
+                const routeCount = routeCountForAccount(routes, account.id);
+                return (
+                  <div
+                    key={account.id}
+                    className="grid gap-3 rounded-lg border bg-card p-3 transition-colors hover:bg-muted/30 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)_auto] lg:items-center"
+                  >
+                    <div className="min-w-0">
+                      <Link
+                        to={adminPaths.account(account.id)}
+                        className="block truncate font-medium underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        {account.name}
+                      </Link>
+                      <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                        <Badge variant="outline">{account.provider}</Badge>
+                        <Badge variant={legacy ? "destructive" : "secondary"}>
+                          {authModeLabel(account.authMode)}
+                        </Badge>
+                        <Badge variant={legacy ? "destructive" : "outline"}>
+                          {authModeLifecycleLabel(account.authMode)}
+                        </Badge>
+                      </div>
+                    </div>
+                    <div className="min-w-0 text-sm">
+                      <div className="truncate" title={account.baseUrl}>
+                        {account.baseUrl}
+                      </div>
+                      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                        <span>{wireApiLabel(account.wireApi)}</span>
+                        <span>
+                          {plural(routeCount, {
+                            one: "# route",
+                            other: "# routes",
+                          })}
+                        </span>
+                        <span className="tabular-nums">
+                          {runningRequestsLabel(account)} <Trans>running</Trans>
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-between gap-2 lg:justify-end">
+                      {statusBadge(account.status, account.isActive)}
+                      <div className="flex items-center gap-1.5">
+                        {isCodexAccount(account) ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon-sm"
+                                aria-label={t`Codex quota`}
+                                onClick={() => onInspectCodex(account)}
+                              >
+                                <GaugeIcon />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <Trans>Codex quota</Trans>
+                            </TooltipContent>
+                          </Tooltip>
+                        ) : null}
+                        {isGeminiAccount(account) ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon-sm"
+                                aria-label={t`Models and quota`}
+                                onClick={() => onInspectGemini(account)}
+                              >
+                                <GaugeIcon />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <Trans>Models and quota</Trans>
+                            </TooltipContent>
+                          </Tooltip>
+                        ) : null}
+                        {isGeminiAccount(account) ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon-sm"
+                                aria-label={t`Reconnect Antigravity`}
+                                onClick={() => onReconnectAntigravity(account)}
+                              >
+                                <LogInIcon />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <Trans>Reconnect Antigravity</Trans>
+                            </TooltipContent>
+                          </Tooltip>
+                        ) : null}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => onToggle(account)}
+                        >
+                          {account.isActive ? t`Enabled` : t`Disabled`}
+                        </Button>
+                      </div>
+                    </div>
                   </div>
-                  {statusBadge(account.status, account.isActive)}
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Badge variant="outline">{account.provider}</Badge>
-                  <Badge variant="secondary">{wireApiLabel(account.wireApi)}</Badge>
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-xs text-muted-foreground">
-                    {plural(routeCountForAccount(routes, account.id), {
-                      one: "# route",
-                      other: "# routes",
-                    })}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    {isCodexAccount(account) ? (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon-sm"
-                        aria-label={t`Codex quota`}
-                        onClick={() => onInspectCodex(account)}
-                      >
-                        <GaugeIcon />
-                      </Button>
-                    ) : null}
-                    {isGeminiAccount(account) ? (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon-sm"
-                        aria-label={t`Models and quota`}
-                        onClick={() => onInspectGemini(account)}
-                      >
-                        <GaugeIcon />
-                      </Button>
-                    ) : null}
-                    {isGeminiAccount(account) ? (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon-sm"
-                        aria-label={t`Reconnect Antigravity`}
-                        onClick={() => onReconnectAntigravity(account)}
-                      >
-                        <LogInIcon />
-                      </Button>
-                    ) : null}
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => onToggle(account)}
-                    >
-                      {account.isActive ? t`Enabled` : t`Disabled`}
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            ))
+                );
+              })}
+            </div>
           )}
-        </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
@@ -358,6 +293,7 @@ export function AccountDetailView({
   onToggle,
   onDelete,
   onEdit,
+  onCreateCodexDeviceAccount,
   onInspectCodex,
   onInspectGemini,
   onReconnectAntigravity,
@@ -367,6 +303,7 @@ export function AccountDetailView({
   onToggle: (account: ProviderAccount) => void;
   onDelete: (account: ProviderAccount) => Promise<boolean>;
   onEdit: (account: ProviderAccount) => void;
+  onCreateCodexDeviceAccount: () => void;
   onInspectCodex: (account: ProviderAccount) => void;
   onInspectGemini: (account: ProviderAccount) => void;
   onReconnectAntigravity: (account: ProviderAccount) => void;
@@ -395,8 +332,10 @@ export function AccountDetailView({
     }
   }
 
+  const legacy = isCodexManualRefreshAuth(account.authMode);
+
   return (
-    <div className="flex flex-col gap-5">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
         <div className="flex min-w-0 flex-col gap-2">
           <Button asChild type="button" variant="ghost" size="sm" className="w-fit">
@@ -446,50 +385,107 @@ export function AccountDetailView({
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[0.75fr_1.25fr]">
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              <Trans>Connection</Trans>
-            </CardTitle>
-            <CardDescription>
-              <Trans>Configured upstream identity and scheduling state.</Trans>
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <dl className="grid gap-4 text-sm">
-              <div>
-                <dt className="text-xs text-muted-foreground">
-                  <Trans>Provider</Trans>
-                </dt>
-                <dd className="mt-1">{account.provider}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-muted-foreground">
-                  <Trans>Protocol</Trans>
-                </dt>
-                <dd className="mt-1">{wireApiLabel(account.wireApi)}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-muted-foreground">
-                  <Trans>Status</Trans>
-                </dt>
-                <dd className="mt-1">{statusBadge(account.status, account.isActive)}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-muted-foreground">
-                  <Trans>Running requests</Trans>
-                </dt>
-                <dd className="mt-1 tabular-nums">{runningRequestsLabel(account)}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-muted-foreground">
-                  <Trans>Created</Trans>
-                </dt>
-                <dd className="mt-1">{formatDate(account.createdAt)}</dd>
-              </div>
-            </dl>
-          </CardContent>
-        </Card>
+        <div className="flex flex-col gap-5">
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                <Trans>Connection</Trans>
+              </CardTitle>
+              <CardDescription>
+                <Trans>Configured upstream identity and scheduling state.</Trans>
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <dl className="grid gap-4 text-sm">
+                <div>
+                  <dt className="text-xs text-muted-foreground">
+                    <Trans>Provider</Trans>
+                  </dt>
+                  <dd className="mt-1">{account.provider}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">
+                    <Trans>Authentication</Trans>
+                  </dt>
+                  <dd className="mt-1 flex flex-wrap items-center gap-1.5">
+                    <Badge variant={legacy ? "destructive" : "secondary"}>
+                      {authModeLabel(account.authMode)}
+                    </Badge>
+                    <Badge variant={legacy ? "destructive" : "outline"}>
+                      {authModeLifecycleLabel(account.authMode)}
+                    </Badge>
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">
+                    <Trans>Protocol</Trans>
+                  </dt>
+                  <dd className="mt-1">{wireApiLabel(account.wireApi)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">
+                    <Trans>Base URL</Trans>
+                  </dt>
+                  <dd className="mt-1 break-all">{account.baseUrl}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">
+                    <Trans>Status</Trans>
+                  </dt>
+                  <dd className="mt-1">{statusBadge(account.status, account.isActive)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">
+                    <Trans>Running requests</Trans>
+                  </dt>
+                  <dd className="mt-1 tabular-nums">{runningRequestsLabel(account)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">
+                    <Trans>Created</Trans>
+                  </dt>
+                  <dd className="mt-1">{formatDate(account.createdAt)}</dd>
+                </div>
+              </dl>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                <Trans>Credential lifecycle</Trans>
+              </CardTitle>
+              <CardDescription>{authModeDescription(account.authMode)}</CardDescription>
+            </CardHeader>
+            {legacy ? (
+              <CardContent className="pt-0">
+                <Alert variant="destructive">
+                  <TriangleAlertIcon className="size-4" />
+                  <AlertTitle>
+                    <Trans>Legacy Codex credential</Trans>
+                  </AlertTitle>
+                  <AlertDescription>
+                    <div className="flex flex-col items-start gap-3">
+                      <Trans>
+                        Manual refresh tokens are deprecated. Create a new account with Codex device
+                        login when possible.
+                      </Trans>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={onCreateCodexDeviceAccount}
+                      >
+                        <PlusIcon data-icon="inline-start" />
+                        <Trans>Create a new Codex device-login account</Trans>
+                      </Button>
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              </CardContent>
+            ) : null}
+          </Card>
+        </div>
 
         <Card>
           <CardHeader>
@@ -1159,71 +1155,113 @@ export function CreateAccountSheet({
               : t`Register an upstream credential for relay scheduling.`}
           </SheetDescription>
         </SheetHeader>
-        <form className="flex flex-col gap-4 px-4" onSubmit={onSubmit}>
-          <Field label={t`Preset`} htmlFor="account-preset">
-            <Select
-              value={accountPresetValue(form, presets)}
-              onValueChange={(value) => {
-                if (value !== "custom") {
-                  applyAccountPreset(value, presets, setForm);
-                }
-              }}
-            >
-              <SelectTrigger id="account-preset">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  {visiblePresets.map((preset) => (
-                    <SelectItem key={preset.id} value={preset.id}>
-                      {preset.label}
-                    </SelectItem>
-                  ))}
-                  <SelectItem value="custom">
-                    <Trans>Custom</Trans>
-                  </SelectItem>
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field label={t`Name`} htmlFor="account-name">
-            <Input
-              id="account-name"
-              value={form.name}
-              onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
-              required
-            />
-          </Field>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label={t`Provider`} htmlFor="account-provider">
-              <Input
-                id="account-provider"
-                value={form.provider}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, provider: event.target.value }))
-                }
-              />
-            </Field>
-            <Field label={t`Protocol`} htmlFor="account-wire-api">
+        <form className="flex flex-col gap-5 px-4" onSubmit={onSubmit}>
+          <section className="flex flex-col gap-4">
+            <div>
+              <h3 className="text-sm font-medium">
+                <Trans>Account</Trans>
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                <Trans>Identify the upstream account and connection endpoint.</Trans>
+              </p>
+            </div>
+            <Field label={t`Preset`} htmlFor="account-preset">
               <Select
-                value={form.wireApi}
-                onValueChange={(value) => setForm((current) => ({ ...current, wireApi: value }))}
+                value={accountPresetValue(form, presets)}
+                onValueChange={(value) => {
+                  if (value !== "custom") {
+                    applyAccountPreset(value, presets, setForm);
+                  }
+                }}
               >
-                <SelectTrigger id="account-wire-api">
+                <SelectTrigger id="account-preset">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
-                    <SelectItem value="anthropic-messages">Anthropic Messages</SelectItem>
-                    <SelectItem value="openai-responses">OpenAI Responses</SelectItem>
-                    <SelectItem value="openai-chat">OpenAI Chat</SelectItem>
-                    <SelectItem value="gemini-generate-content">Gemini GenerateContent</SelectItem>
+                    {visiblePresets.map((preset) => (
+                      <SelectItem key={preset.id} value={preset.id}>
+                        {preset.label}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="custom">
+                      <Trans>Custom</Trans>
+                    </SelectItem>
                   </SelectGroup>
                 </SelectContent>
               </Select>
             </Field>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label={t`Name`} htmlFor="account-name">
+              <Input
+                id="account-name"
+                value={form.name}
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, name: event.target.value }))
+                }
+                required
+              />
+            </Field>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label={t`Provider`} htmlFor="account-provider">
+                <Input
+                  id="account-provider"
+                  value={form.provider}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, provider: event.target.value }))
+                  }
+                />
+              </Field>
+              <Field label={t`Protocol`} htmlFor="account-wire-api">
+                <Select
+                  value={form.wireApi}
+                  onValueChange={(value) => setForm((current) => ({ ...current, wireApi: value }))}
+                >
+                  <SelectTrigger id="account-wire-api">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      <SelectItem value="anthropic-messages">Anthropic Messages</SelectItem>
+                      <SelectItem value="openai-responses">OpenAI Responses</SelectItem>
+                      <SelectItem value="openai-chat">OpenAI Chat</SelectItem>
+                      <SelectItem value="gemini-generate-content">
+                        Gemini GenerateContent
+                      </SelectItem>
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </Field>
+            </div>
+            <Field
+              label={
+                isCodexSubscription
+                  ? t`Codex account API base`
+                  : isAntigravityAccount
+                    ? t`Gemini endpoint base`
+                    : t`Base URL`
+              }
+              htmlFor="account-base-url"
+            >
+              <Input
+                id="account-base-url"
+                value={form.baseUrl}
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, baseUrl: event.target.value }))
+                }
+                required
+              />
+            </Field>
+          </section>
+
+          <section className="flex flex-col gap-4 border-t pt-5">
+            <div>
+              <h3 className="text-sm font-medium">
+                <Trans>Authentication</Trans>
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                <Trans>Choose how the relay obtains and sends the upstream credential.</Trans>
+              </p>
+            </div>
             <Field label={t`Auth mode`} htmlFor="account-auth-mode">
               <Select
                 value={form.authMode}
@@ -1234,139 +1272,137 @@ export function CreateAccountSheet({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
-                    <SelectItem value="x-api-key">x-api-key</SelectItem>
-                    <SelectItem value="x-goog-api-key">x-goog-api-key</SelectItem>
-                    <SelectItem value="bearer">Bearer</SelectItem>
+                    <SelectItem value="x-api-key">{authModeLabel("x-api-key")}</SelectItem>
+                    <SelectItem value="x-goog-api-key">
+                      {authModeLabel("x-goog-api-key")}
+                    </SelectItem>
+                    <SelectItem value="bearer">{authModeLabel("bearer")}</SelectItem>
                     {(!editing || form.authMode === "codex-device-oauth") && (
-                      <SelectItem value="codex-device-oauth">Codex device login</SelectItem>
+                      <SelectItem value="codex-device-oauth">
+                        {authModeLabel("codex-device-oauth")}
+                      </SelectItem>
                     )}
-                    {editing && form.authMode === "codex-manual-refresh" ? (
+                    {editing && isCodexManualRefreshAuth(form.authMode) ? (
                       <SelectItem value="codex-manual-refresh">
-                        Codex manual refresh (legacy)
+                        {authModeLabel("codex-manual-refresh")} (
+                        {authModeLifecycleLabel("codex-manual-refresh")})
                       </SelectItem>
                     ) : null}
-                    <SelectItem value="antigravity-oauth">Antigravity OAuth</SelectItem>
+                    <SelectItem value="antigravity-oauth">
+                      {authModeLabel("antigravity-oauth")}
+                    </SelectItem>
                   </SelectGroup>
                 </SelectContent>
               </Select>
             </Field>
+            {selectedPreset?.credentialHelp ? (
+              <Alert>
+                <KeyRoundIcon className="size-4" />
+                <AlertTitle>{t`${selectedPreset.label} credential`}</AlertTitle>
+                <AlertDescription>{selectedPreset.credentialHelp}</AlertDescription>
+              </Alert>
+            ) : null}
+            {editing && isCodexManualRefreshAuth(form.authMode) ? (
+              <Alert variant="destructive">
+                <TriangleAlertIcon className="size-4" />
+                <AlertTitle>
+                  <Trans>Legacy Codex credential</Trans>
+                </AlertTitle>
+                <AlertDescription>
+                  <Trans>
+                    Manual refresh tokens are deprecated. Create a new account with Codex device
+                    login, then remove this legacy account.
+                  </Trans>
+                </AlertDescription>
+              </Alert>
+            ) : null}
+            {!isAntigravityAccount && !isCodexDeviceOAuth ? (
+              <Field label={credentialLabel} htmlFor="account-api-key">
+                {usesTextareaCredential ? (
+                  <Textarea
+                    id="account-api-key"
+                    className="min-h-28 font-mono text-xs"
+                    value={form.apiKey}
+                    onChange={(event) =>
+                      setForm((current) => ({ ...current, apiKey: event.target.value }))
+                    }
+                    placeholder={credentialPlaceholder}
+                    required={!editing}
+                  />
+                ) : (
+                  <Input
+                    id="account-api-key"
+                    type="password"
+                    value={form.apiKey}
+                    onChange={(event) =>
+                      setForm((current) => ({ ...current, apiKey: event.target.value }))
+                    }
+                    placeholder={credentialPlaceholder}
+                    required={!editing}
+                  />
+                )}
+              </Field>
+            ) : null}
+            {editing && !isAntigravityAccount ? (
+              <p className="text-xs text-muted-foreground">
+                <Trans>Leave the credential blank to keep the current value.</Trans>
+              </p>
+            ) : null}
+          </section>
+
+          <section className="flex flex-col gap-4 border-t pt-5">
+            <div>
+              <h3 className="text-sm font-medium">
+                <Trans>Routing and limits</Trans>
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                <Trans>Control where requests go and how much work this account can run.</Trans>
+              </p>
+            </div>
             <SettingRow label={t`Route binding`} value={t`Configured in Model Catalog`} />
-          </div>
-          {selectedPreset?.credentialHelp ? (
-            <Alert>
-              <KeyRoundIcon className="size-4" />
-              <AlertTitle>{t`${selectedPreset.label} credential`}</AlertTitle>
-              <AlertDescription>{selectedPreset.credentialHelp}</AlertDescription>
-            </Alert>
-          ) : null}
-          {editing && form.authMode === "codex-manual-refresh" ? (
-            <Alert variant="destructive">
-              <AlertTitle>
-                <Trans>Legacy Codex credential</Trans>
-              </AlertTitle>
-              <AlertDescription>
-                <Trans>
-                  Manual refresh tokens are deprecated. Create a new account with Codex device
-                  login, then remove this legacy account.
-                </Trans>
-              </AlertDescription>
-            </Alert>
-          ) : null}
-          <Field
-            label={
-              isCodexSubscription
-                ? t`Codex account API base`
-                : isAntigravityAccount
-                  ? t`Gemini endpoint base`
-                  : t`Base URL`
-            }
-            htmlFor="account-base-url"
-          >
-            <Input
-              id="account-base-url"
-              value={form.baseUrl}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, baseUrl: event.target.value }))
-              }
-              required
-            />
-          </Field>
-          {!isAntigravityAccount && !isCodexDeviceOAuth ? (
-            <Field label={credentialLabel} htmlFor="account-api-key">
-              {usesTextareaCredential ? (
-                <Textarea
-                  id="account-api-key"
-                  className="min-h-28 font-mono text-xs"
-                  value={form.apiKey}
-                  onChange={(event) =>
-                    setForm((current) => ({ ...current, apiKey: event.target.value }))
-                  }
-                  placeholder={credentialPlaceholder}
-                  required={!editing}
-                />
-              ) : (
-                <Input
-                  id="account-api-key"
-                  type="password"
-                  value={form.apiKey}
-                  onChange={(event) =>
-                    setForm((current) => ({ ...current, apiKey: event.target.value }))
-                  }
-                  placeholder={credentialPlaceholder}
-                  required={!editing}
-                />
-              )}
-            </Field>
-          ) : null}
-          {editing && !isAntigravityAccount ? (
-            <p className="text-xs text-muted-foreground">
-              <Trans>Leave the credential blank to keep the current value.</Trans>
-            </p>
-          ) : null}
-          <div>
             <SettingRow
               label={t`Upstream path`}
               value={upstreamPathForWireApi(form.wireApi, form.authMode)}
             />
-          </div>
-          <Field label={t`Max running requests`} htmlFor="account-max-running-requests">
-            <Input
-              id="account-max-running-requests"
-              type="number"
-              min={0}
-              step={1}
-              inputMode="numeric"
-              value={form.maxRunningRequests}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, maxRunningRequests: event.target.value }))
-              }
-              placeholder={t`Unlimited`}
-              aria-describedby="account-max-running-requests-help"
-            />
-          </Field>
-          <p id="account-max-running-requests-help" className="text-xs text-muted-foreground">
-            <Trans>
-              Extra requests overflow to other accounts in the same tier, then wait in a queue.
-              Leave blank or 0 for unlimited.
-            </Trans>
-          </p>
-          <div className="flex items-center justify-between gap-3 rounded-md border p-3">
-            <div className="flex flex-col gap-1">
-              <Label htmlFor="account-active">
-                <Trans>Schedulable</Trans>
-              </Label>
-              <span className="text-xs text-muted-foreground">
-                <Trans>Use this account for relay traffic</Trans>
-              </span>
+            <Field label={t`Max running requests`} htmlFor="account-max-running-requests">
+              <Input
+                id="account-max-running-requests"
+                type="number"
+                min={0}
+                step={1}
+                inputMode="numeric"
+                value={form.maxRunningRequests}
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, maxRunningRequests: event.target.value }))
+                }
+                placeholder={t`Unlimited`}
+                aria-describedby="account-max-running-requests-help"
+              />
+            </Field>
+            <p id="account-max-running-requests-help" className="text-xs text-muted-foreground">
+              <Trans>
+                Extra requests overflow to other accounts in the same tier, then wait in a queue.
+                Leave blank or 0 for unlimited.
+              </Trans>
+            </p>
+            <div className="flex items-center justify-between gap-3 rounded-md border p-3">
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="account-active">
+                  <Trans>Schedulable</Trans>
+                </Label>
+                <span className="text-xs text-muted-foreground">
+                  <Trans>Use this account for relay traffic</Trans>
+                </span>
+              </div>
+              <Switch
+                id="account-active"
+                checked={form.isActive}
+                onCheckedChange={(checked) =>
+                  setForm((current) => ({ ...current, isActive: checked }))
+                }
+              />
             </div>
-            <Switch
-              id="account-active"
-              checked={form.isActive}
-              onCheckedChange={(checked) =>
-                setForm((current) => ({ ...current, isActive: checked }))
-              }
-            />
-          </div>
+          </section>
           <SheetFooter>
             <Button type="submit">
               {isAntigravityAccount || isCodexDeviceOAuth ? (
