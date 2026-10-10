@@ -301,7 +301,7 @@ async fn codex_http_overload_retries_same_account_before_output() {
         .await
         .unwrap();
         let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-        let retries = matches!(mode, "http" | "sse");
+        let retries = matches!(mode, "http" | "sse" | "no_advice");
         assert_eq!(
             captures.lock().await.len(),
             if retries { 6 } else { 1 },
