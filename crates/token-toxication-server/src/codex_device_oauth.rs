@@ -22,7 +22,7 @@ use crate::{
 const CODEX_ISSUER: &str = "https://auth.openai.com";
 const CODEX_API_ACCOUNTS: &str = "https://auth.openai.com/api/accounts";
 const CODEX_CLIENT_ID: &str = "app_EMoamEEZ73f0CkXaXp7hrann";
-const CODEX_DEVICE_URL: &str = "https://chatgpt.com/codex/device";
+const CODEX_DEVICE_URL: &str = "https://auth.openai.com/codex/device";
 const CODEX_REDIRECT_URI: &str = "https://auth.openai.com/deviceauth/callback";
 const FLOW_TTL_MINUTES: i64 = 15;
 const DEFAULT_POLL_INTERVAL_SECONDS: u64 = 5;

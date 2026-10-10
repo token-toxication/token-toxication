@@ -88,12 +88,12 @@ function unwrapResult<T>(payload: T | ErrorResponse): T {
 }
 
 function isErrorResponse(payload: unknown): payload is ErrorResponse {
-  return (
-    typeof payload === "object" &&
-    payload !== null &&
-    "error" in payload &&
-    typeof (payload as { error?: unknown }).error === "object"
-  );
+  if (typeof payload !== "object" || payload === null || !("error" in payload)) {
+    return false;
+  }
+
+  const error = (payload as { error?: unknown }).error;
+  return typeof error === "object" && error !== null;
 }
 
 export const api = {
