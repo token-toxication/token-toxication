@@ -387,6 +387,17 @@ export function formatNumber(value: number) {
   return new Intl.NumberFormat().format(value);
 }
 
+export function formatOtps(value: number | null | undefined) {
+  return value == null ? "—" : `${value.toFixed(1)} tok/s`;
+}
+
+export function formatCompactNumber(value: number) {
+  return new Intl.NumberFormat(undefined, {
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(value);
+}
+
 export function formatCacheHitRate(cachedInputTokens: number, inputTokens: number) {
   const rate = inputTokens > 0 ? cachedInputTokens / inputTokens : 0;
   return new Intl.NumberFormat(undefined, {

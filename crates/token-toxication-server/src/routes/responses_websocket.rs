@@ -43,6 +43,7 @@ struct ActiveResponse {
     request: Value,
     overload_retries: u8,
     has_event: bool,
+    first_output_at: Option<Instant>,
 }
 
 #[derive(Clone, Copy)]
@@ -124,7 +125,7 @@ async fn serve(mut client: WebSocket, state: AppState, headers: HeaderMap) {
         }
     };
     if let Some(active) = active {
-        let usage = active.usage.tokens();
+        let usage = active.tokens();
         let result = match stop {
             Stop::Client => {
                 active
@@ -414,6 +415,9 @@ async fn relay_connection(
                         });
                         if let Some(current) = active.as_mut() {
                             current.has_event = true;
+                            if current.first_output_at.is_none() && is_output_delta(&value) {
+                                current.first_output_at = Some(Instant::now());
+                            }
                             current.usage.merge(usage_update(&value));
                             if let Some(id) = value.pointer("/response/id").and_then(Value::as_str) {
                                 if id.is_empty() || id.len() > 512 { return Stop::Upstream; }
@@ -435,6 +439,7 @@ async fn relay_connection(
                                     let delay = rand::rng().random_range(2..=5);
                                     tracing::info!(retry = current.overload_retries, delay_seconds = delay, "retrying Codex subscription overload");
                                     current.usage = UsageUpdate::default();
+                                    current.first_output_at = None;
                                     current.response_id = None;
                                     current.has_event = false;
                                     let _ = current.attempt.take_queued_permit();
@@ -485,20 +490,20 @@ async fn relay_connection(
                                 }
                                 let result = if is_codex_subscription_auth(&binding.selection().account.account.auth_mode)
                                     && openai_responses_stream_failure(&value).is_some_and(|failure| failure.code.as_deref() == Some("server_is_overloaded")) {
-                                    current.attempt.record_application_failure(&current.log, wrapped_status.unwrap_or(StatusCode::BAD_GATEWAY), current.usage.tokens(), "upstream stream failed (server_is_overloaded)".into()).await
+                                    current.attempt.record_application_failure(&current.log, wrapped_status.unwrap_or(StatusCode::BAD_GATEWAY), current.tokens(), "upstream stream failed (server_is_overloaded)".into()).await
                                 } else if let Some(status) = wrapped_status {
-                                    current.attempt.record_response(&current.log, status, &HeaderMap::new(), b"{}", current.usage.tokens()).await
+                                    current.attempt.record_response(&current.log, status, &HeaderMap::new(), b"{}", current.tokens()).await
                                 } else if let Some(failure) = openai_responses_stream_failure(&value) {
                                     let error = failure.log_error();
                                     if let Some(failure) = classify_upstream_application_failure(failure.code.as_deref(), error.clone(), Utc::now()) {
-                                        current.attempt.record_failure_with_usage(&current.log, failure, current.usage.tokens()).await
+                                        current.attempt.record_failure_with_usage(&current.log, failure, current.tokens()).await
                                     } else {
-                                        current.attempt.record_application_failure(&current.log, StatusCode::BAD_GATEWAY, current.usage.tokens(), error).await
+                                        current.attempt.record_application_failure(&current.log, StatusCode::BAD_GATEWAY, current.tokens(), error).await
                                     }
                                 } else if kind == "response.incomplete" {
-                                    current.attempt.record_application_failure(&current.log, StatusCode::BAD_GATEWAY, current.usage.tokens(), "upstream response incomplete".into()).await
+                                    current.attempt.record_application_failure(&current.log, StatusCode::BAD_GATEWAY, current.tokens(), "upstream response incomplete".into()).await
                                 } else {
-                                    current.attempt.record_response(&current.log, StatusCode::OK, &HeaderMap::new(), b"{}", current.usage.tokens()).await
+                                    current.attempt.record_response(&current.log, StatusCode::OK, &HeaderMap::new(), b"{}", current.tokens()).await
                                 };
                                 if result.is_err() { return Stop::Upstream; }
                                 if let Some(id) = value.pointer("/response/id").and_then(Value::as_str) { previous.insert(id.to_owned()); }
@@ -597,6 +602,13 @@ fn start_response(
         request: value.clone(),
         overload_retries: 0,
         has_event: false,
+        first_output_at: None,
+    }
+}
+
+impl ActiveResponse {
+    fn tokens(&self) -> TokenUsage {
+        self.usage.tokens_with_generation(self.first_output_at)
     }
 }
 

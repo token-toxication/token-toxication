@@ -40,6 +40,8 @@ pub(crate) struct TokenUsage {
     pub input_tokens: u64,
     pub cached_input_tokens: u64,
     pub output_tokens: u64,
+    /// Time spent generating output after the first output delta was emitted.
+    pub generation_ms: Option<u64>,
 }
 
 const CLIENT_CLOSED_REQUEST_STATUS: u16 = 499;
@@ -256,6 +258,7 @@ impl RelayAttempt {
                 input_tokens: usage.input_tokens,
                 cached_input_tokens: usage.cached_input_tokens,
                 output_tokens: usage.output_tokens,
+                otps: output_tokens_per_second(usage.output_tokens, usage.generation_ms),
                 cost_usd: 0.0,
                 created_at: Utc::now(),
                 error,
@@ -263,6 +266,11 @@ impl RelayAttempt {
             .await?;
         Ok(())
     }
+}
+
+fn output_tokens_per_second(output_tokens: u64, generation_ms: Option<u64>) -> Option<f64> {
+    let elapsed_seconds = generation_ms? as f64 / 1000.0;
+    (output_tokens > 0 && elapsed_seconds > 0.0).then(|| output_tokens as f64 / elapsed_seconds)
 }
 
 impl AuthenticatedRelayAttempt {

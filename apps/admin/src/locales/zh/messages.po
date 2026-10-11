@@ -45,9 +45,10 @@ msgid "{0} bytes · {stream} · keys {keys}{stripped}"
 msgstr "{0} 字节 · {stream} · 字段 {keys}{stripped}"
 
 #. placeholder {0}: formatCacheHitRate(log.cachedInputTokens, log.inputTokens)
-#: src/admin-ui/logs.tsx:395
-msgid "{0} cache hit"
-msgstr "{0} 缓存命中"
+#: src/admin-ui/logs.tsx:258
+#: src/admin-ui/logs.tsx:404
+msgid "{0} cache"
+msgstr "{0} 缓存"
 
 #. placeholder {0}: key.concurrencyLimit
 #: src/admin-ui/api-keys.tsx:123
@@ -66,24 +67,31 @@ msgid "{0} credential"
 msgstr "{0} 凭证"
 
 #. placeholder {0}: (seconds / 86_400).toFixed(1)
-#: src/admin-ui/helpers.tsx:458
+#: src/admin-ui/helpers.tsx:469
 msgid "{0} days"
 msgstr "{0} 天"
 
 #. placeholder {0}: (seconds / 3_600).toFixed(1)
-#: src/admin-ui/helpers.tsx:465
+#: src/admin-ui/helpers.tsx:476
 msgid "{0} hours"
 msgstr "{0} 小时"
+
+#. placeholder {0}: formatCompactNumber(log.inputTokens)
+#. placeholder {1}: formatCompactNumber(log.outputTokens)
+#: src/admin-ui/logs.tsx:252
+#: src/admin-ui/logs.tsx:334
+msgid "{0} in · {1} out"
+msgstr "{0} 输入 · {1} 输出"
 
 #. placeholder {0}: formatNumber(log.inputTokens)
 #. placeholder {1}: formatNumber(log.cachedInputTokens)
 #. placeholder {2}: formatNumber(log.outputTokens)
-#: src/admin-ui/logs.tsx:456
+#: src/admin-ui/logs.tsx:466
 msgid "{0} input · {1} cached · {2} output"
 msgstr "{0} 输入 · {1} 缓存 · {2} 输出"
 
 #. placeholder {0}: limit.remaining
-#: src/admin-ui/helpers.tsx:554
+#: src/admin-ui/helpers.tsx:565
 msgid "{0} remaining"
 msgstr "剩余 {0}"
 
@@ -95,11 +103,6 @@ msgstr "剩余 {0}"
 msgid "{0} rpm"
 msgstr "{0} rpm"
 
-#. placeholder {0}: formatNumber(log.inputTokens + log.outputTokens)
-#: src/admin-ui/logs.tsx:392
-msgid "{0} tokens"
-msgstr "{0} token"
-
 #. placeholder {0}: formatNumber(dashboard.usage.totalRequests)
 #. placeholder {0}: formatNumber(dashboard.usage.totalTokens)
 #: src/admin-ui/dashboard.tsx:49
@@ -109,7 +112,7 @@ msgstr "共 {0}"
 
 #. placeholder {0}: formatNumber(log.inputTokens + log.outputTokens)
 #. placeholder {1}: formatCacheHitRate(log.cachedInputTokens, log.inputTokens)
-#: src/admin-ui/logs.tsx:97
+#: src/admin-ui/logs.tsx:99
 msgid "{0} total · {1} cache hit"
 msgstr "共 {0} · {1} 缓存命中"
 
@@ -121,27 +124,27 @@ msgstr "{0}：{1}"
 
 #. placeholder {0}: log.latencyMs
 #. placeholder {0}: log.queueWaitMs
-#: src/admin-ui/logs.tsx:79
-#: src/admin-ui/logs.tsx:88
-#: src/admin-ui/logs.tsx:253
-#: src/admin-ui/logs.tsx:327
-#: src/admin-ui/logs.tsx:388
+#: src/admin-ui/logs.tsx:81
+#: src/admin-ui/logs.tsx:90
+#: src/admin-ui/logs.tsx:244
+#: src/admin-ui/logs.tsx:326
+#: src/admin-ui/logs.tsx:396
 msgid "{0}ms"
 msgstr "{0}ms"
 
-#: src/admin-ui/helpers.tsx:556
+#: src/admin-ui/helpers.tsx:567
 msgid "{amount}, reached"
 msgstr "{amount}，已达上限"
 
-#: src/admin-ui/helpers.tsx:456
+#: src/admin-ui/helpers.tsx:467
 msgid "{days, plural, one {# day} other {# days}}"
 msgstr "{days, plural, other {# 天}}"
 
-#: src/admin-ui/helpers.tsx:463
+#: src/admin-ui/helpers.tsx:474
 msgid "{hours, plural, one {# hour} other {# hours}}"
 msgstr "{hours, plural, other {# 小时}}"
 
-#: src/admin-ui/helpers.tsx:469
+#: src/admin-ui/helpers.tsx:480
 msgid "{minutes, plural, one {# minute} other {# minutes}}"
 msgstr "{minutes, plural, other {# 分钟}}"
 
@@ -153,11 +156,11 @@ msgstr "{routeCount, plural, one {# 个路由} other {# 个路由}}"
 msgid "{running}/{capacity} · {queued} queued"
 msgstr "{running}/{capacity} · 排队 {queued}"
 
-#: src/admin-ui/helpers.tsx:471
+#: src/admin-ui/helpers.tsx:482
 msgid "{seconds, plural, one {# second} other {# seconds}}"
 msgstr "{seconds, plural, other {# 秒}}"
 
-#: src/admin-ui/helpers.tsx:421
+#: src/admin-ui/helpers.tsx:432
 msgid "{value, plural, one {# request} other {# requests}}"
 msgstr "{value, plural, other {# 次请求}}"
 
@@ -382,12 +385,12 @@ msgstr "认证方式"
 msgid "Authentication"
 msgstr "认证方式"
 
-#: src/admin-ui/helpers.tsx:492
+#: src/admin-ui/helpers.tsx:503
 msgid "available"
 msgstr "可用"
 
-#: src/admin-ui/helpers.tsx:511
 #: src/admin-ui/helpers.tsx:522
+#: src/admin-ui/helpers.tsx:533
 msgid "Available"
 msgstr "可用"
 
@@ -408,7 +411,7 @@ msgstr "返回概览"
 msgid "Back to provider accounts"
 msgstr "返回供应商账号"
 
-#: src/admin-ui/logs.tsx:37
+#: src/admin-ui/logs.tsx:39
 msgid "Back to request log"
 msgstr "返回请求日志"
 
@@ -417,7 +420,7 @@ msgid "Backup"
 msgstr "备用"
 
 #. placeholder {0}: credits.balance
-#: src/admin-ui/helpers.tsx:508
+#: src/admin-ui/helpers.tsx:519
 msgid "Balance {0}"
 msgstr "余额 {0}"
 
@@ -449,11 +452,6 @@ msgstr "将每个模型绑定到与其 OpenAI 路由匹配的 AI SDK。"
 #: src/admin-ui/helpers.tsx:43
 msgid "blocked"
 msgstr "已阻断"
-
-#: src/admin-ui/logs.tsx:200
-#: src/admin-ui/logs.tsx:300
-msgid "Cache hit"
-msgstr "缓存命中"
 
 #: src/admin-ui/dashboard.tsx:59
 msgid "Cache hit rate"
@@ -523,7 +521,7 @@ msgstr "仅 Claude"
 msgid "Client credentials, limits, and service permissions."
 msgstr "客户端凭证、限额与服务权限。"
 
-#: src/admin-ui/logs.tsx:105
+#: src/admin-ui/logs.tsx:113
 msgid "Client key"
 msgstr "客户端密钥"
 
@@ -608,7 +606,7 @@ msgstr "并发"
 msgid "Concurrency limit"
 msgstr "并发上限"
 
-#: src/admin-ui/helpers.tsx:555
+#: src/admin-ui/helpers.tsx:566
 msgid "Configured"
 msgstr "已配置"
 
@@ -628,7 +626,7 @@ msgstr "连接"
 msgid "Control where requests go and how much work this account can run."
 msgstr "控制请求去向以及此账号可以处理的并发工作量。"
 
-#: src/admin-ui/helpers.tsx:582
+#: src/admin-ui/helpers.tsx:593
 msgid "Copied"
 msgstr "已复制"
 
@@ -793,7 +791,7 @@ msgstr "请在官方 Codex 验证页面输入此代码。"
 msgid "Environment"
 msgstr "环境"
 
-#: src/admin-ui/logs.tsx:465
+#: src/admin-ui/logs.tsx:481
 msgid "Error"
 msgstr "错误"
 
@@ -912,9 +910,7 @@ msgstr "最近错误"
 msgid "Last used"
 msgstr "最近使用"
 
-#: src/admin-ui/logs.tsx:76
-#: src/admin-ui/logs.tsx:194
-#: src/admin-ui/logs.tsx:294
+#: src/admin-ui/logs.tsx:78
 msgid "Latency"
 msgstr "延迟"
 
@@ -939,7 +935,7 @@ msgstr "浅色"
 msgid "Limit"
 msgstr "限额"
 
-#: src/admin-ui/helpers.tsx:485
+#: src/admin-ui/helpers.tsx:496
 msgid "limited"
 msgstr "已限流"
 
@@ -994,7 +990,7 @@ msgstr "已路由 Messages"
 
 #: src/admin-ui/accounts.tsx:737
 #: src/admin-ui/client-setup.tsx:387
-#: src/admin-ui/logs.tsx:185
+#: src/admin-ui/logs.tsx:191
 #: src/admin-ui/models.tsx:138
 msgid "Model"
 msgstr "模型"
@@ -1047,11 +1043,11 @@ msgstr "此 Google 账号报告的模型与配额。"
 msgid "Name"
 msgstr "名称"
 
-#: src/admin-ui/helpers.tsx:570
+#: src/admin-ui/helpers.tsx:581
 msgid "never"
 msgstr "从未"
 
-#: src/admin-ui/helpers.tsx:537
+#: src/admin-ui/helpers.tsx:548
 msgid "Never"
 msgstr "永不"
 
@@ -1134,9 +1130,9 @@ msgstr "没有供应商路由"
 msgid "No quota windows returned"
 msgstr "未返回配额窗口"
 
-#: src/admin-ui/logs.tsx:267
-#: src/admin-ui/logs.tsx:341
-#: src/admin-ui/logs.tsx:353
+#: src/admin-ui/logs.tsx:269
+#: src/admin-ui/logs.tsx:349
+#: src/admin-ui/logs.tsx:361
 msgid "No relay traffic"
 msgstr "没有中继流量"
 
@@ -1162,7 +1158,7 @@ msgstr "未剥离参数"
 msgid "non-stream"
 msgstr "非流式"
 
-#: src/admin-ui/helpers.tsx:514
+#: src/admin-ui/helpers.tsx:525
 msgid "None"
 msgstr "无"
 
@@ -1202,6 +1198,11 @@ msgstr "仅 OpenAI 兼容"
 msgid "opencode project config"
 msgstr "opencode 项目配置"
 
+#: src/admin-ui/logs.tsx:107
+#: src/admin-ui/logs.tsx:474
+msgid "OTPS"
+msgstr "OTPS"
+
 #: src/admin-routes.tsx:8
 msgid "Overview"
 msgstr "概览"
@@ -1222,8 +1223,7 @@ msgstr "密码"
 msgid "Paste the value from tokens.refresh_token or openai.refresh"
 msgstr "粘贴 tokens.refresh_token 或 openai.refresh 中的值"
 
-#: src/admin-ui/logs.tsx:182
-#: src/admin-ui/logs.tsx:435
+#: src/admin-ui/logs.tsx:445
 msgid "Path"
 msgstr "路径"
 
@@ -1240,6 +1240,11 @@ msgstr "已暂停"
 #: src/admin-ui/dashboard.tsx:317
 msgid "Peak / {intervalMinutes} min"
 msgstr "峰值 / {intervalMinutes} 分钟"
+
+#: src/admin-ui/logs.tsx:197
+#: src/admin-ui/logs.tsx:295
+msgid "Performance"
+msgstr "性能"
 
 #: src/admin-ui/api-keys.tsx:79
 #: src/admin-ui/api-keys.tsx:285
@@ -1308,7 +1313,7 @@ msgstr "供应商账号"
 
 #: src/admin-routes.tsx:12
 #: src/admin-ui/accounts.tsx:348
-#: src/admin-ui/logs.tsx:112
+#: src/admin-ui/logs.tsx:120
 #: src/admin-ui/models.tsx:245
 #: src/admin-ui/models.tsx:465
 #: src/admin-ui/models.tsx:672
@@ -1388,7 +1393,7 @@ msgstr "公开模型"
 msgid "Public model identity and client-facing metadata."
 msgstr "公开模型标识与面向客户端的元数据。"
 
-#: src/admin-ui/logs.tsx:85
+#: src/admin-ui/logs.tsx:87
 msgid "Queue wait"
 msgstr "排队等待"
 
@@ -1424,11 +1429,11 @@ msgstr "已限流"
 msgid "Raw refresh token"
 msgstr "原始 refresh token"
 
-#: src/admin-ui/helpers.tsx:548
+#: src/admin-ui/helpers.tsx:559
 msgid "Reached"
 msgstr "已达上限"
 
-#: src/admin-ui/logs.tsx:156
+#: src/admin-ui/logs.tsx:164
 msgid "Recent requests"
 msgstr "最近请求"
 
@@ -1445,11 +1450,11 @@ msgstr "重新连接 Antigravity"
 msgid "recovering"
 msgstr "恢复检查中"
 
-#: src/admin-ui/helpers.tsx:526
+#: src/admin-ui/helpers.tsx:537
 msgid "Redeemed"
 msgstr "已兑换"
 
-#: src/admin-ui/helpers.tsx:524
+#: src/admin-ui/helpers.tsx:535
 msgid "Redeeming"
 msgstr "兑换中"
 
@@ -1485,11 +1490,11 @@ msgstr "中继端点"
 msgid "Relay operations console"
 msgstr "中继运维控制台"
 
-#: src/admin-ui/logs.tsx:69
+#: src/admin-ui/logs.tsx:71
 msgid "Relay result and accounting for this completed attempt."
 msgstr "此次完成尝试的中继结果与计量。"
 
-#: src/admin-ui/logs.tsx:158
+#: src/admin-ui/logs.tsx:166
 msgid "Relay status, latency, model, sanitized routing metadata, and token accounting."
 msgstr "中继状态、延迟、模型、脱敏路由元数据与 token 计量。"
 
@@ -1499,7 +1504,7 @@ msgid "Remaining"
 msgstr "剩余"
 
 #: src/admin-ui/logs.tsx:188
-#: src/admin-ui/logs.tsx:288
+#: src/admin-ui/logs.tsx:289
 msgid "Request"
 msgstr "请求"
 
@@ -1518,23 +1523,23 @@ msgstr "请求流量"
 
 #: src/admin-routes.tsx:17
 #: src/admin-routes.tsx:18
-#: src/admin-ui/logs.tsx:48
-#: src/admin-ui/logs.tsx:53
-#: src/admin-ui/logs.tsx:156
+#: src/admin-ui/logs.tsx:50
+#: src/admin-ui/logs.tsx:55
+#: src/admin-ui/logs.tsx:164
 msgid "Request Log"
 msgstr "请求日志"
 
-#: src/admin-ui/logs.tsx:34
+#: src/admin-ui/logs.tsx:36
 msgid "Request Log not found"
 msgstr "未找到请求日志"
 
-#: src/admin-ui/logs.tsx:66
+#: src/admin-ui/logs.tsx:68
 msgid "Request summary"
 msgstr "请求摘要"
 
-#: src/admin-ui/logs.tsx:268
-#: src/admin-ui/logs.tsx:342
-#: src/admin-ui/logs.tsx:354
+#: src/admin-ui/logs.tsx:270
+#: src/admin-ui/logs.tsx:350
+#: src/admin-ui/logs.tsx:362
 msgid "Requests appear here after clients call the relay."
 msgstr "客户端调用中继后，请求会出现在这里。"
 
@@ -1600,8 +1605,8 @@ msgstr "路由"
 msgid "Routing and limits"
 msgstr "路由与限制"
 
-#: src/admin-ui/logs.tsx:131
-#: src/admin-ui/logs.tsx:417
+#: src/admin-ui/logs.tsx:139
+#: src/admin-ui/logs.tsx:427
 msgid "Routing details"
 msgstr "路由详情"
 
@@ -1707,8 +1712,8 @@ msgstr "请重新登录再试。"
 #: src/admin-ui/accounts.tsx:1006
 #: src/admin-ui/accounts.tsx:1053
 #: src/admin-ui/api-keys.tsx:295
-#: src/admin-ui/logs.tsx:191
-#: src/admin-ui/logs.tsx:291
+#: src/admin-ui/logs.tsx:194
+#: src/admin-ui/logs.tsx:292
 #: src/admin-ui/models.tsx:150
 #: src/admin-ui/models.tsx:257
 #: src/admin-ui/models.tsx:430
@@ -1793,7 +1798,7 @@ msgstr "此供应商账号可能已删除，或链接不完整。"
 msgid "This Provider Model Route may have been deleted or the link is incomplete."
 msgstr "此供应商模型路由可能已删除，或链接不完整。"
 
-#: src/admin-ui/logs.tsx:35
+#: src/admin-ui/logs.tsx:37
 msgid "This Request Log may have aged out of the current log collection or the link is incomplete."
 msgstr "此请求日志可能已超出当前日志集合，或链接不完整。"
 
@@ -1805,15 +1810,13 @@ msgstr "此密文只显示一次。"
 msgid "Tier"
 msgstr "档位"
 
-#: src/admin-ui/logs.tsx:179
-#: src/admin-ui/logs.tsx:429
+#: src/admin-ui/logs.tsx:185
+#: src/admin-ui/logs.tsx:439
 msgid "Time"
 msgstr "时间"
 
-#: src/admin-ui/logs.tsx:94
-#: src/admin-ui/logs.tsx:197
-#: src/admin-ui/logs.tsx:297
-#: src/admin-ui/logs.tsx:453
+#: src/admin-ui/logs.tsx:96
+#: src/admin-ui/logs.tsx:463
 msgid "Tokens"
 msgstr "Token"
 
@@ -1858,25 +1861,25 @@ msgstr "密钥前缀不符合预期"
 #: src/admin-ui/accounts.tsx:962
 #: src/admin-ui/accounts.tsx:1075
 #: src/admin-ui/helpers.tsx:133
-#: src/admin-ui/helpers.tsx:429
-#: src/admin-ui/helpers.tsx:431
-#: src/admin-ui/helpers.tsx:451
-#: src/admin-ui/helpers.tsx:498
-#: src/admin-ui/helpers.tsx:516
-#: src/admin-ui/helpers.tsx:533
-#: src/admin-ui/helpers.tsx:548
-#: src/admin-ui/helpers.tsx:560
+#: src/admin-ui/helpers.tsx:440
+#: src/admin-ui/helpers.tsx:442
+#: src/admin-ui/helpers.tsx:462
+#: src/admin-ui/helpers.tsx:509
+#: src/admin-ui/helpers.tsx:527
+#: src/admin-ui/helpers.tsx:544
+#: src/admin-ui/helpers.tsx:559
+#: src/admin-ui/helpers.tsx:571
 msgid "unknown"
 msgstr "未知"
 
 #: src/admin-ui/helpers.tsx:348
-#: src/admin-ui/helpers.tsx:528
-#: src/admin-ui/helpers.tsx:565
+#: src/admin-ui/helpers.tsx:539
+#: src/admin-ui/helpers.tsx:576
 msgid "Unknown"
 msgstr "未知"
 
 #: src/admin-ui/accounts.tsx:1378
-#: src/admin-ui/helpers.tsx:505
+#: src/admin-ui/helpers.tsx:516
 msgid "Unlimited"
 msgstr "无限制"
 
@@ -1893,7 +1896,7 @@ msgstr "直到 {0}"
 msgid "Update routing details or replace the upstream credential."
 msgstr "更新路由详情或替换上游凭证。"
 
-#: src/admin-ui/logs.tsx:444
+#: src/admin-ui/logs.tsx:454
 msgid "Upstream"
 msgstr "上游"
 
@@ -1927,6 +1930,11 @@ msgstr "上游路径"
 #: src/admin-ui/dashboard.tsx:70
 msgid "usable client credentials"
 msgstr "可用客户端凭证"
+
+#: src/admin-ui/logs.tsx:200
+#: src/admin-ui/logs.tsx:298
+msgid "Usage"
+msgstr "用量"
 
 #: src/admin-ui/accounts.tsx:668
 msgid "Usage windows"

@@ -613,7 +613,7 @@ async fn relay_json_endpoint(
                 match next {
                     Some(Ok(chunk)) => {
                         buffered_bytes += chunk.len();
-                        observation.observe(&chunk);
+                        observation.observe(&chunk, Instant::now());
                         buffered.push(chunk);
                     }
                     Some(Err(error)) => {
@@ -714,6 +714,7 @@ async fn relay_json_endpoint(
                     wire_api,
                     codex_subscription: codex_auth.is_some(),
                     preflight_timed_out,
+                    first_output_at: observation.first_output_at,
                     idle_timeout: state.relay_stream_idle_timeout,
                     max_duration: state.relay_stream_max_duration,
                     shutdown: state.shutdown.clone(),
@@ -944,6 +945,7 @@ async fn relay_gemini_endpoint(
                 wire_api: WireApi::GeminiGenerateContent,
                 codex_subscription: false,
                 preflight_timed_out: false,
+                first_output_at: None,
                 idle_timeout: stream_idle_timeout,
                 max_duration: stream_max_duration,
                 shutdown,
@@ -1865,6 +1867,7 @@ struct StreamingResponseContext {
     wire_api: WireApi,
     codex_subscription: bool,
     preflight_timed_out: bool,
+    first_output_at: Option<Instant>,
     idle_timeout: Duration,
     max_duration: Duration,
     shutdown: crate::server::ShutdownSignal,
@@ -1887,6 +1890,7 @@ where
         wire_api,
         codex_subscription,
         preflight_timed_out,
+        first_output_at,
         idle_timeout,
         max_duration,
         shutdown,
@@ -1897,7 +1901,10 @@ where
     let (sender, receiver) = mpsc::channel(BUFFERED_CHUNKS);
     tokio::spawn(async move {
         let mut body_stream = Box::pin(body_stream);
-        let mut observation = StreamingResponseObservation::default();
+        let mut observation = StreamingResponseObservation {
+            first_output_at,
+            ..StreamingResponseObservation::default()
+        };
         let mut retry_advice_rewriter = CodexRetryAdviceRewriter::default();
         let deadline = Instant::now() + max_duration;
         let mut shutdown_rx = shutdown.subscribe();
@@ -1920,7 +1927,7 @@ where
                 };
                 match next {
                     Some(Ok(chunk)) => {
-                        observation.observe(&chunk);
+                        observation.observe(&chunk, Instant::now());
                         let (chunk, injected) =
                             retry_advice_rewriter.process(&chunk, codex_subscription);
                         if injected {
@@ -1999,7 +2006,10 @@ where
         match stream_end {
             StreamEnd::UpstreamError(error) => {
                 let failure = classify_transport_failure(error.to_string(), Utc::now());
-                if let Err(record_error) = attempt.record_failure(&log, failure).await {
+                if let Err(record_error) = attempt
+                    .record_failure_with_usage(&log, failure, observation.tokens())
+                    .await
+                {
                     tracing::error!(
                         error = %record_error,
                         path = %log.path,
@@ -2025,7 +2035,10 @@ where
             StreamEnd::IdleTimeout(duration) => {
                 let error = stream_timeout_error("was idle", duration);
                 let failure = classify_transport_failure(error.to_string(), Utc::now());
-                if let Err(record_error) = attempt.record_failure(&log, failure).await {
+                if let Err(record_error) = attempt
+                    .record_failure_with_usage(&log, failure, observation.tokens())
+                    .await
+                {
                     tracing::error!(
                         error = %record_error,
                         path = %log.path,
@@ -2038,7 +2051,10 @@ where
             StreamEnd::MaximumDuration(duration) => {
                 let error = stream_timeout_error("exceeded its maximum lifetime of", duration);
                 let failure = classify_transport_failure(error.to_string(), Utc::now());
-                if let Err(record_error) = attempt.record_failure(&log, failure).await {
+                if let Err(record_error) = attempt
+                    .record_failure_with_usage(&log, failure, observation.tokens())
+                    .await
+                {
                     tracing::error!(
                         error = %record_error,
                         path = %log.path,
@@ -2086,6 +2102,43 @@ fn stream_timeout_error(reason: &str, duration: Duration) -> io::Error {
     )
 }
 
+fn is_output_delta(value: &Value) -> bool {
+    let event_type = value
+        .get("type")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    if event_type.ends_with(".delta") {
+        return value
+            .get("delta")
+            .is_some_and(|delta| !delta.is_null() && delta != "");
+    }
+    if event_type == "content_block_delta" {
+        return value
+            .pointer("/delta/text")
+            .or_else(|| value.pointer("/delta/thinking"))
+            .or_else(|| value.pointer("/delta/partial_json"))
+            .is_some_and(|delta| delta.as_str().is_some_and(|text| !text.is_empty()));
+    }
+    if let Some(delta) = value.pointer("/choices/0/delta") {
+        return delta.as_object().is_some_and(|delta| {
+            delta.iter().any(|(key, value)| {
+                key != "role"
+                    && !value.is_null()
+                    && match value {
+                        Value::String(text) => !text.is_empty(),
+                        Value::Array(items) => !items.is_empty(),
+                        Value::Object(fields) => !fields.is_empty(),
+                        _ => true,
+                    }
+            })
+        });
+    }
+    value
+        .pointer("/candidates/0/content/parts")
+        .and_then(Value::as_array)
+        .is_some_and(|parts| !parts.is_empty())
+}
+
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 struct UsageUpdate {
     input_tokens: Option<u64>,
@@ -2115,6 +2168,10 @@ impl UsageUpdate {
     }
 
     fn tokens(self) -> TokenUsage {
+        self.tokens_with_generation(None)
+    }
+
+    fn tokens_with_generation(self, first_output_at: Option<Instant>) -> TokenUsage {
         let mut input_tokens = self.input_tokens.unwrap_or(0);
         let cached_input_tokens = self
             .cache_read_input_tokens
@@ -2134,6 +2191,8 @@ impl UsageUpdate {
             input_tokens,
             cached_input_tokens,
             output_tokens: self.output_tokens.unwrap_or(0),
+            generation_ms: first_output_at
+                .map(|started| Instant::now().duration_since(started).as_millis() as u64),
         }
     }
 }
@@ -2144,6 +2203,7 @@ struct StreamingResponseObservation {
     buffer: BytesMut,
     usage: UsageUpdate,
     has_message: bool,
+    first_output_at: Option<Instant>,
     message_count: usize,
     application_failure: Option<StreamingApplicationFailure>,
     replayable_application_failure: Option<StreamingApplicationFailure>,
@@ -2158,6 +2218,7 @@ impl Default for StreamingResponseObservation {
             buffer: BytesMut::new(),
             usage: UsageUpdate::default(),
             has_message: false,
+            first_output_at: None,
             message_count: 0,
             application_failure: None,
             replayable_application_failure: None,
@@ -2166,7 +2227,7 @@ impl Default for StreamingResponseObservation {
 }
 
 impl StreamingResponseObservation {
-    fn observe(&mut self, chunk: &[u8]) {
+    fn observe(&mut self, chunk: &[u8], observed_at: Instant) {
         self.buffer.extend_from_slice(chunk);
         while let Some(event) = self.decoder.decode(&mut self.buffer) {
             let Ok(SseEvent::Message(message)) = event else {
@@ -2178,6 +2239,9 @@ impl StreamingResponseObservation {
             let Ok(value) = serde_json::from_str::<Value>(&message.data) else {
                 continue;
             };
+            if self.first_output_at.is_none() && is_output_delta(&value) {
+                self.first_output_at = Some(observed_at);
+            }
             self.usage.merge(usage_update(&value));
             if let Some(error) = openai_responses_stream_failure(&value) {
                 if message_index == 0 {
@@ -2189,7 +2253,7 @@ impl StreamingResponseObservation {
     }
 
     fn tokens(&self) -> TokenUsage {
-        self.usage.tokens()
+        self.usage.tokens_with_generation(self.first_output_at)
     }
 
     fn has_message(&self) -> bool {
@@ -4347,6 +4411,7 @@ mod tests {
                 input_tokens: 11,
                 cached_input_tokens: 6,
                 output_tokens: 7,
+                generation_ms: None,
             }
         );
     }
@@ -4363,6 +4428,7 @@ mod tests {
                 input_tokens: 9,
                 cached_input_tokens: 0,
                 output_tokens: 4,
+                generation_ms: None,
             }
         );
         assert_eq!(parse_usage(b"not json"), TokenUsage::default());
@@ -4377,7 +4443,7 @@ mod tests {
             &b"event: message_delta\ndata: {\"type\":\"message_delta\",\"usage\":{\"out"[..],
             &b"put_tokens\":9}}\n\n"[..],
         ] {
-            usage.observe(chunk);
+            usage.observe(chunk, Instant::now());
         }
 
         assert_eq!(
@@ -4386,6 +4452,7 @@ mod tests {
                 input_tokens: 120,
                 cached_input_tokens: 100,
                 output_tokens: 9,
+                generation_ms: None,
             }
         );
     }
@@ -4411,6 +4478,7 @@ mod tests {
                 input_tokens: 13,
                 cached_input_tokens: 10,
                 output_tokens: 8,
+                generation_ms: None,
             }
         );
     }
@@ -4420,6 +4488,7 @@ mod tests {
         let mut observation = StreamingResponseObservation::default();
         observation.observe(
             b"event: response.failed\ndata: {\"type\":\"response.failed\",\"response\":{\"status\":\"failed\",\"error\":{\"code\":\"server_error\",\"message\":\"temporary upstream failure\"}}}\n\n",
+            Instant::now(),
         );
 
         let failure = observation
@@ -4430,10 +4499,32 @@ mod tests {
     }
 
     #[test]
+    fn output_delta_marks_the_generation_boundary() {
+        assert!(!is_output_delta(&json!({
+            "type": "response.created"
+        })));
+        assert!(is_output_delta(&json!({
+            "type": "response.output_text.delta",
+            "delta": "token"
+        })));
+        assert!(is_output_delta(&json!({
+            "type": "content_block_delta",
+            "delta": {"text": "token"}
+        })));
+        assert!(!is_output_delta(&json!({
+            "choices": [{"delta": {"role": "assistant", "content": ""}}]
+        })));
+        assert!(is_output_delta(&json!({
+            "choices": [{"delta": {"content": "token"}}]
+        })));
+    }
+
+    #[test]
     fn streaming_failure_after_a_business_event_is_not_replayable() {
         let mut observation = StreamingResponseObservation::default();
         observation.observe(
             b"event: response.created\ndata: {\"type\":\"response.created\",\"response\":{\"id\":\"resp-1\"}}\n\nevent: response.failed\ndata: {\"type\":\"response.failed\",\"response\":{\"id\":\"resp-1\",\"error\":{\"code\":\"usage_limit_reached\"}}}\n\n",
+            Instant::now(),
         );
 
         assert!(
@@ -4465,6 +4556,7 @@ mod tests {
         let mut observation = StreamingResponseObservation::default();
         observation.observe(
             b"event: error\ndata: {\"type\":\"error\",\"code\":\"server_error\",\"message\":\"temporary upstream failure\"}\n\n",
+            Instant::now(),
         );
 
         assert!(

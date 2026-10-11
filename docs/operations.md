@@ -31,7 +31,7 @@ Request logs store the operational metadata required to diagnose routing and pro
 - Streaming mode
 - Public and upstream model IDs
 - Stripped parameter names
-- Status, latency, error category, and provider account
+- Status, latency, average output token throughput (OTPS), error category, and provider account
 
 Request logs do not store:
 
@@ -46,6 +46,9 @@ Request logs do not store:
 When a provider reports usage, the relay stores input, cached-input, and output token counts. It does not estimate or locally tokenize requests.
 
 Streaming logs are finalized after the upstream stream ends so terminal usage events are captured.
+
+`OTPS` is reported as output tokens divided by the time from the first output delta to stream
+completion, excluding TTFT. Requests without an observable output delta display no OTPS value.
 
 ```text
 cache hit rate = cached input tokens / input tokens

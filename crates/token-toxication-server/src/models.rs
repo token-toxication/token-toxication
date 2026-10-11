@@ -155,6 +155,10 @@ pub struct RequestLog {
     pub input_tokens: u64,
     pub cached_input_tokens: u64,
     pub output_tokens: u64,
+    /// Average output tokens per second after the first upstream output token.
+    /// The time to first token is excluded from this measurement.
+    #[serde(default)]
+    pub otps: Option<f64>,
     pub cost_usd: f64,
     pub created_at: DateTime<Utc>,
     pub error: Option<String>,

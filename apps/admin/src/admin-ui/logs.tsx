@@ -4,9 +4,11 @@ import { Link, useParams } from "react-router";
 import { adminPaths } from "../admin-routes";
 import {
   formatCacheHitRate,
+  formatCompactNumber,
   formatDate,
   formatLogModel,
   formatNumber,
+  formatOtps,
   formatRequestSummary,
   statusCodeBadge,
 } from "./helpers";
@@ -102,6 +104,12 @@ export function RequestLogDetailView({ logs }: { logs: readonly RequestLog[] }) 
               </div>
               <div>
                 <dt className="text-xs text-muted-foreground">
+                  <Trans>OTPS</Trans>
+                </dt>
+                <dd className="mt-1">{formatOtps(log.otps)}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted-foreground">
                   <Trans>Client key</Trans>
                 </dt>
                 <dd className="mt-1 font-mono text-xs">{log.apiKeyId}</dd>
@@ -165,11 +173,9 @@ export function RequestLogsView({
           <Table className="table-fixed">
             <colgroup>
               <col className="w-32" />
-              <col className="w-[18%]" />
+              <col className="w-[32%]" />
               <col className="w-[14%]" />
-              <col />
               <col className="w-20" />
-              <col className="w-24" />
               <col className="w-24" />
               <col className="w-24" />
             </colgroup>
@@ -179,25 +185,19 @@ export function RequestLogsView({
                   <Trans>Time</Trans>
                 </TableHead>
                 <TableHead>
-                  <Trans>Path</Trans>
+                  <Trans>Request</Trans>
                 </TableHead>
                 <TableHead>
                   <Trans>Model</Trans>
                 </TableHead>
                 <TableHead>
-                  <Trans>Request</Trans>
-                </TableHead>
-                <TableHead>
                   <Trans>Status</Trans>
                 </TableHead>
                 <TableHead>
-                  <Trans>Latency</Trans>
+                  <Trans>Performance</Trans>
                 </TableHead>
                 <TableHead className="text-right">
-                  <Trans>Tokens</Trans>
-                </TableHead>
-                <TableHead className="text-right">
-                  <Trans>Cache hit</Trans>
+                  <Trans>Usage</Trans>
                 </TableHead>
               </TableRow>
             </TableHeader>
@@ -221,14 +221,12 @@ export function RequestLogsView({
                       >
                         {log.path}
                       </Link>
-                      {log.upstreamUrl ? (
-                        <span
-                          className="truncate font-mono text-xs text-muted-foreground"
-                          title={log.upstreamUrl}
-                        >
-                          {log.upstreamUrl}
-                        </span>
-                      ) : null}
+                      <span
+                        className="block truncate text-xs text-muted-foreground"
+                        title={formatRequestSummary(log)}
+                      >
+                        {formatRequestSummary(log)}
+                      </span>
                     </div>
                   </TableCell>
                   <TableCell>
@@ -240,29 +238,33 @@ export function RequestLogsView({
                       {formatLogModel(log)}
                     </Link>
                   </TableCell>
-                  <TableCell>
-                    <span
-                      className="block truncate text-xs text-muted-foreground"
-                      title={formatRequestSummary(log)}
-                    >
-                      {formatRequestSummary(log)}
-                    </span>
-                  </TableCell>
                   <TableCell>{statusCodeBadge(log.statusCode)}</TableCell>
                   <TableCell className="text-right tabular-nums">
-                    <Trans>{log.latencyMs}ms</Trans>
+                    <span className="block">
+                      <Trans>{log.latencyMs}ms</Trans>
+                    </span>
+                    <span className="block text-xs text-muted-foreground">
+                      {formatOtps(log.otps)}
+                    </span>
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
-                    {formatNumber(log.inputTokens + log.outputTokens)}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {formatCacheHitRate(log.cachedInputTokens, log.inputTokens)}
+                    <span className="block">
+                      <Trans>
+                        {formatCompactNumber(log.inputTokens)} in ·{" "}
+                        {formatCompactNumber(log.outputTokens)} out
+                      </Trans>
+                    </span>
+                    <span className="block text-xs text-muted-foreground">
+                      <Trans>
+                        {formatCacheHitRate(log.cachedInputTokens, log.inputTokens)} cache
+                      </Trans>
+                    </span>
                   </TableCell>
                 </TableRow>
               ))}
               {logs.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8}>
+                  <TableCell colSpan={6}>
                     <EmptyNotice
                       title={t`No relay traffic`}
                       body={t`Requests appear here after clients call the relay.`}
@@ -280,7 +282,6 @@ export function RequestLogsView({
               <col className="w-20" />
               <col className="w-24" />
               <col className="w-24" />
-              <col className="w-24" />
             </colgroup>
             <TableHeader>
               <TableRow>
@@ -291,13 +292,10 @@ export function RequestLogsView({
                   <Trans>Status</Trans>
                 </TableHead>
                 <TableHead className="text-right">
-                  <Trans>Latency</Trans>
+                  <Trans>Performance</Trans>
                 </TableHead>
                 <TableHead className="text-right">
-                  <Trans>Tokens</Trans>
-                </TableHead>
-                <TableHead className="text-right">
-                  <Trans>Cache hit</Trans>
+                  <Trans>Usage</Trans>
                 </TableHead>
               </TableRow>
             </TableHeader>
@@ -324,19 +322,29 @@ export function RequestLogsView({
                   </TableCell>
                   <TableCell>{statusCodeBadge(log.statusCode)}</TableCell>
                   <TableCell className="text-right tabular-nums">
-                    <Trans>{log.latencyMs}ms</Trans>
+                    <span className="block">
+                      <Trans>{log.latencyMs}ms</Trans>
+                    </span>
+                    <span className="block text-xs text-muted-foreground">
+                      {formatOtps(log.otps)}
+                    </span>
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
-                    {formatNumber(log.inputTokens + log.outputTokens)}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {formatCacheHitRate(log.cachedInputTokens, log.inputTokens)}
+                    <span className="block">
+                      <Trans>
+                        {formatCompactNumber(log.inputTokens)} in ·{" "}
+                        {formatCompactNumber(log.outputTokens)} out
+                      </Trans>
+                    </span>
+                    <span className="block text-xs text-muted-foreground">
+                      {formatCacheHitRate(log.cachedInputTokens, log.inputTokens)} cache
+                    </span>
                   </TableCell>
                 </TableRow>
               ))}
               {logs.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5}>
+                  <TableCell colSpan={4}>
                     <EmptyNotice
                       title={t`No relay traffic`}
                       body={t`Requests appear here after clients call the relay.`}
@@ -389,13 +397,15 @@ export function RequestLogsView({
                   </span>
                   <span className="text-right tabular-nums">
                     <span className="block">
-                      <Trans>{formatNumber(log.inputTokens + log.outputTokens)} tokens</Trans>
+                      {formatCompactNumber(log.inputTokens)} in ·{" "}
+                      {formatCompactNumber(log.outputTokens)} out
                     </span>
                     <span className="block">
                       <Trans>
-                        {formatCacheHitRate(log.cachedInputTokens, log.inputTokens)} cache hit
+                        {formatCacheHitRate(log.cachedInputTokens, log.inputTokens)} cache
                       </Trans>
                     </span>
+                    <span className="block">OTPS {formatOtps(log.otps)}</span>
                   </span>
                 </div>
                 <div className="break-words text-xs leading-5 text-muted-foreground">
@@ -458,6 +468,12 @@ function RequestLogFacts({ log }: { log: RequestLog }) {
             {formatNumber(log.outputTokens)} output
           </Trans>
         </dd>
+      </div>
+      <div className="flex gap-2">
+        <dt className="shrink-0">
+          <Trans>OTPS</Trans>
+        </dt>
+        <dd>{formatOtps(log.otps)}</dd>
       </div>
       {log.error ? (
         <div className="flex min-w-0 gap-2 text-destructive">

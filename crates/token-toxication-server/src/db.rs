@@ -105,6 +105,7 @@ impl Db {
                 input_tokens INTEGER NOT NULL DEFAULT 0,
                 cached_input_tokens INTEGER NOT NULL DEFAULT 0,
                 output_tokens INTEGER NOT NULL DEFAULT 0,
+                otps REAL,
                 cost_usd REAL NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL,
                 error TEXT
@@ -191,6 +192,7 @@ impl Db {
             "cached_input_tokens",
             "INTEGER NOT NULL DEFAULT 0",
         )?;
+        ensure_column(&conn, "request_logs", "otps", "REAL")?;
         ensure_column(
             &conn,
             "request_logs",
@@ -1326,10 +1328,10 @@ impl Db {
             "INSERT INTO request_logs
              (id, api_key_id, provider_account_id, method, path, model, upstream_model,
               upstream_url, request_summary, status_code, latency_ms, input_tokens,
-              cached_input_tokens, output_tokens, cost_usd, created_at, error, queue_wait_ms,
+              cached_input_tokens, output_tokens, otps, cost_usd, created_at, error, queue_wait_ms,
               overload_retry_count, overload_retry_started, overload_retry_exhausted, overload_retry_skip_reason,
               client_retry_advice_injected)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)",
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24)",
             params![
                 log.id,
                 log.api_key_id,
@@ -1349,6 +1351,7 @@ impl Db {
                 log.input_tokens,
                 log.cached_input_tokens,
                 log.output_tokens,
+                log.otps,
                 log.cost_usd,
                 log.created_at.to_rfc3339(),
                 log.error,
@@ -1368,7 +1371,7 @@ impl Db {
         let mut stmt = conn.prepare(
             "SELECT id, api_key_id, provider_account_id, method, path, model, upstream_model,
                     upstream_url, request_summary, status_code, latency_ms, input_tokens,
-                    cached_input_tokens, output_tokens, cost_usd, created_at, error, queue_wait_ms,
+                    cached_input_tokens, output_tokens, otps, cost_usd, created_at, error, queue_wait_ms,
                     overload_retry_count, overload_retry_started, overload_retry_exhausted, overload_retry_skip_reason,
                     client_retry_advice_injected
              FROM request_logs
@@ -1614,6 +1617,9 @@ fn route_selection_from_row(
 
 fn request_log_from_row(row: &rusqlite::Row<'_>) -> Result<RequestLog, rusqlite::Error> {
     let request_summary: Option<String> = row.get(8)?;
+    let latency_ms = row.get::<_, i64>(10)? as u64;
+    let output_tokens = row.get::<_, i64>(13)? as u64;
+    let otps = row.get::<_, Option<f64>>(14)?;
     Ok(RequestLog {
         id: row.get(0)?,
         api_key_id: row.get(1)?,
@@ -1627,19 +1633,20 @@ fn request_log_from_row(row: &rusqlite::Row<'_>) -> Result<RequestLog, rusqlite:
             .as_deref()
             .and_then(|value| serde_json::from_str::<RequestSummary>(value).ok()),
         status_code: row.get::<_, i64>(9)? as u16,
-        latency_ms: row.get::<_, i64>(10)? as u64,
+        latency_ms,
         input_tokens: row.get::<_, i64>(11)? as u64,
         cached_input_tokens: row.get::<_, i64>(12)? as u64,
-        output_tokens: row.get::<_, i64>(13)? as u64,
-        cost_usd: row.get(14)?,
-        created_at: parse_time(row.get::<_, String>(15)?.as_str()),
-        error: row.get(16)?,
-        queue_wait_ms: row.get::<_, i64>(17)? as u64,
-        overload_retry_count: row.get::<_, i64>(18)? as u8,
-        overload_retry_started: row.get::<_, i64>(19)? != 0,
-        overload_retry_exhausted: row.get::<_, i64>(20)? != 0,
-        overload_retry_skip_reason: row.get(21)?,
-        client_retry_advice_injected: row.get::<_, i64>(22)? != 0,
+        output_tokens,
+        otps,
+        cost_usd: row.get(15)?,
+        created_at: parse_time(row.get::<_, String>(16)?.as_str()),
+        error: row.get(17)?,
+        queue_wait_ms: row.get::<_, i64>(18)? as u64,
+        overload_retry_count: row.get::<_, i64>(19)? as u8,
+        overload_retry_started: row.get::<_, i64>(20)? != 0,
+        overload_retry_exhausted: row.get::<_, i64>(21)? != 0,
+        overload_retry_skip_reason: row.get(22)?,
+        client_retry_advice_injected: row.get::<_, i64>(23)? != 0,
     })
 }
 
@@ -1907,6 +1914,7 @@ mod tests {
                 input_tokens,
                 cached_input_tokens,
                 output_tokens,
+                otps: Some(100.0),
                 cost_usd: 0.0,
                 created_at: DateTime::parse_from_rfc3339(timestamp)
                     .expect("parse request timestamp")
@@ -1980,6 +1988,7 @@ mod tests {
         assert_eq!(logs[0].input_tokens, 12);
         assert_eq!(logs[0].cached_input_tokens, 0);
         assert_eq!(logs[0].output_tokens, 4);
+        assert_eq!(logs[0].otps, None);
 
         drop(db);
         let _ = std::fs::remove_file(path);
@@ -2028,6 +2037,7 @@ mod tests {
                 input_tokens: 1,
                 cached_input_tokens: 0,
                 output_tokens: 1,
+                otps: Some(100.0),
                 cost_usd: 0.0,
                 created_at: DateTime::parse_from_rfc3339(timestamp)
                     .expect("parse request timestamp")
