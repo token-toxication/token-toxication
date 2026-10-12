@@ -141,9 +141,9 @@ export function dshModelCapabilities(
 ): DshModelCapabilities | undefined {
   // GPT-6 coding models require the Responses tool contract. Keep matching
   // exact, as aliases and provider prefixes have not been qualified here.
-  if (["gpt-6-astra", "gpt-6-sol", "gpt-6-luna"].includes(model.id)) {
+  if (["gpt-6-astra", "gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna"].includes(model.id)) {
     if (protocol !== "responses") return undefined;
-    return model.id === "gpt-6-astra"
+    return model.id === "gpt-6-astra" || model.id === "gpt-6.1-sol"
       ? subscription56LowCapabilities
       : subscription56MediumCapabilities;
   }

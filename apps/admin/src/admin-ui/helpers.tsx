@@ -227,7 +227,7 @@ export function dshModelOptions(
   models: ModelCatalogEntry[],
   routableModels: RoutableModelCatalogEntry[],
 ): DshModelOption[] {
-  const responsesOnlyModels = new Set(["gpt-6-astra", "gpt-6-sol", "gpt-6-luna"]);
+  const responsesOnlyModels = new Set(["gpt-6-astra", "gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna"]);
   const chat = new Set(routableModelIdsForWireApi(routableModels, "openai-chat"));
   const responses = new Set(routableModelIdsForWireApi(routableModels, "openai-responses"));
   const anthropic = new Set(routableModelIdsForWireApi(routableModels, "anthropic-messages"));

@@ -33,6 +33,7 @@ const subscription56Efforts = [...subscriptionStandardEfforts, "max:max"];
 describe("dshModelCapabilities", () => {
   it.each([
     ["gpt-6-astra", "low"],
+    ["gpt-6.1-sol", "low"],
     ["gpt-6-sol", "medium"],
     ["gpt-6-luna", "medium"],
   ])("offers %s Responses efforts regardless of family", (id, defaultEffort) => {
@@ -51,6 +52,9 @@ describe("dshModelCapabilities", () => {
     "OpenAI/GPT-6-ASTRA",
     "gpt-6-astra-2026-09-10",
     "custom-astra",
+    "OpenAI/GPT-6.1-SOL",
+    "gpt-6.1-sol-2026-09-10",
+    "custom-sol-61",
     "OpenAI/GPT-6-SOL",
     "gpt-6-sol-2026-09-10",
     "custom-sol",

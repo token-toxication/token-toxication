@@ -79,6 +79,7 @@ describe("dshModelOptions", () => {
 
   it.each([
     ["gpt-6-astra", "low"],
+    ["gpt-6.1-sol", "low"],
     ["gpt-6-sol", "medium"],
     ["gpt-6-luna", "medium"],
   ])("requires Responses for %s agent routes", (id) => {

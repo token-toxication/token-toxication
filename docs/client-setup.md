@@ -37,7 +37,7 @@ Custom clients should send `Token-Toxication-Session-ID` exactly as written (wit
 
 ## Codex
 
-This setup targets the latest Codex reference inspected at commit `c44deff7b1`.
+This setup targets the Codex reference inspected at commit `0c7362d121`.
 Codex owns its model catalog, instructions, reasoning options, Responses Lite,
 Code Mode, and multi-agent behavior. The relay setup supplies only a provider
 endpoint and an environment-based relay key; it does not select a default model
@@ -104,7 +104,7 @@ Model capabilities are generated conservatively:
 - Known non-reasoning models declare `reasoningEfforts: false`.
 - Unknown model IDs remain undeclared instead of inheriting guessed capabilities.
 
-The exact `gpt-6-astra`, `gpt-6-sol`, and `gpt-6-luna` IDs are offered to DSH only on Responses routes, which provide their coding-tool contract. Chat-only and Anthropic-only routes are not offered. All three declare image input and the `low`, `medium`, `high`, `xhigh`, and `max` reasoning effort options. The generated fragment does not set a default model or reasoning effort. These IDs do not inherit the older models' prefix/date normalization.
+The exact `gpt-6-astra`, `gpt-6.1-sol`, `gpt-6-sol`, and `gpt-6-luna` IDs are offered to DSH only on Responses routes, which provide their coding-tool contract. Chat-only and Anthropic-only routes are not offered. These models declare image input and the `low`, `medium`, `high`, `xhigh`, and `max` reasoning effort options. The generated fragment does not set a default model or reasoning effort. These IDs do not inherit the older models' prefix/date normalization.
 
 For example, a recognized multimodal reasoning model receives both declarations:
 
