@@ -620,6 +620,17 @@ pub struct OpenAiModelListResponse {
     pub data: Vec<OpenAiModel>,
 }
 
+/// Codex-native model metadata returned by the provider catalog endpoint.
+///
+/// The model entries intentionally remain JSON values here because Codex adds
+/// optional metadata fields over time. Keeping the relay's public contract
+/// forward-compatible lets newer Codex clients consume fields they know while
+/// older clients continue to deserialize the same response.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct CodexModelCatalogResponse {
+    pub models: Vec<serde_json::Value>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct GeminiModel {

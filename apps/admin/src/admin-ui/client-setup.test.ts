@@ -247,6 +247,9 @@ describe("Codex provider configuration snippet", () => {
     );
     expect(snippets.codexConfig).toContain('model_provider = "token-toxication"');
     expect(snippets.codexConfig).toContain('env_key = "TOKEN_TOXICATION_API_KEY"');
+    expect(snippets.codexConfig).toContain(
+      'model_catalog_url = "http://relay.example:3000/codex/models"',
+    );
     expect(snippets.codexConfig).not.toContain("tokentoxication-test");
     expect(snippets.codexConfig).not.toMatch(/^\s*(?:model|model_catalog_json)\s*=/m);
     expect(snippets.codexConfig).not.toMatch(

@@ -30,7 +30,7 @@ use crate::{
         gemini_account_models, gemini_account_quota,
     },
     auth::{generate_secret, login, logout, me, require_admin},
-    codex_device_oauth,
+    codex_catalog, codex_device_oauth,
     codex_subscription::{
         CodexSubscriptionAuthorization, codex_account_quota, codex_subscription_authorization,
         is_codex_device_oauth_auth, is_codex_subscription_auth,
@@ -221,6 +221,19 @@ pub async fn list_openai_models(
         object: "list".to_string(),
         data: openai_models(&state).await?,
     }))
+}
+
+pub async fn list_codex_models(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    uri: Uri,
+) -> Result<Json<crate::models::CodexModelCatalogResponse>, AppError> {
+    authenticate_relay_api_key(&state, &headers, uri.query()).await?;
+    let models = state
+        .db
+        .list_routable_model_catalog(&["openai-responses"])
+        .await?;
+    Ok(Json(codex_catalog::catalog_response(models)))
 }
 
 pub async fn get_openai_model(
@@ -2916,6 +2929,49 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn codex_model_catalog_requires_relay_auth_and_advertises_fast() {
+        let database_path = test_database_path();
+        let db = Db::open(&database_path).await.expect("open test database");
+        let state = test_state(db, database_path.clone());
+        let seeded = seed_relay_route(
+            &state.db,
+            RelayRouteSeed {
+                base_url: "https://provider.example".to_string(),
+                provider: "openai",
+                auth_mode: "bearer",
+                provider_secret: "synthetic-provider-key".to_string(),
+                wire_api: "openai-responses",
+                public_model: "gpt-6.1-sol",
+                upstream_model: "gpt-6.1-sol",
+            },
+        )
+        .await;
+
+        let unauthenticated = list_codex_models(
+            State(state.clone()),
+            HeaderMap::new(),
+            Uri::from_static("/codex/models"),
+        )
+        .await
+        .expect_err("catalog requires a relay API key");
+        assert_eq!(unauthenticated.status(), StatusCode::UNAUTHORIZED);
+
+        let Json(catalog) = list_codex_models(
+            State(state.clone()),
+            relay_headers(&seeded.relay_secret),
+            Uri::from_static("/codex/models"),
+        )
+        .await
+        .expect("catalog request");
+        assert_eq!(catalog.models.len(), 1);
+        assert_eq!(catalog.models[0]["slug"], "gpt-6.1-sol");
+        assert_eq!(catalog.models[0]["service_tiers"][0]["id"], "priority");
+
+        drop(state);
+        remove_test_database(&database_path);
+    }
+
+    #[tokio::test]
     async fn openai_chat_relay_rewrites_the_model_and_records_the_attempt() {
         let seen = Arc::new(Mutex::new(None));
         let handler_seen = Arc::clone(&seen);
@@ -4291,6 +4347,21 @@ mod tests {
 
         assert!(body.get("max_output_tokens").is_none());
         assert_eq!(stripped, vec!["max_output_tokens"]);
+    }
+
+    #[test]
+    fn codex_subscription_responses_preserve_service_tier() {
+        let mut body = json!({
+            "model": "gpt-6.1-sol",
+            "service_tier": "priority",
+            "input": "hello"
+        });
+
+        let stripped =
+            strip_upstream_params(&mut body, &[], WireApi::OpenAiResponses, "codex-oauth");
+
+        assert_eq!(body["service_tier"], "priority");
+        assert!(stripped.is_empty());
     }
 
     #[test]

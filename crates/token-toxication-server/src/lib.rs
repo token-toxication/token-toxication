@@ -2,6 +2,7 @@ pub mod account_concurrency;
 pub mod acme;
 pub mod antigravity_oauth;
 pub mod auth;
+pub mod codex_catalog;
 pub mod codex_device_oauth;
 pub mod codex_subscription;
 pub mod config;
@@ -29,8 +30,8 @@ use config::Config;
 use db::Db;
 use routes::{
     admin_routes, antigravity_oauth_callback, get_anthropic_model, get_gemini_model,
-    get_openai_model, health, list_anthropic_models, list_gemini_models, list_openai_models,
-    metrics, relay_gemini_generate_content, relay_messages, relay_openai_chat,
+    get_openai_model, health, list_anthropic_models, list_codex_models, list_gemini_models,
+    list_openai_models, metrics, relay_gemini_generate_content, relay_messages, relay_openai_chat,
     relay_openai_responses,
 };
 use tower_http::{
@@ -98,6 +99,7 @@ pub fn app(state: AppState, static_dir: PathBuf) -> Router {
                 .get(routes::relay_responses_websocket)
                 .layer(DefaultBodyLimit::max(RELAY_BODY_LIMIT_BYTES)),
         )
+        .route("/codex/models", axum::routing::get(list_codex_models))
         .route(
             "/gemini/v1beta/models",
             axum::routing::get(list_gemini_models),
