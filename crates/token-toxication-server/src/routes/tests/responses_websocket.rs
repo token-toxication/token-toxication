@@ -1,4 +1,5 @@
 use super::*;
+use crate::models::RequestOutcomeMetric;
 use axum::extract::ws::{Message, WebSocketUpgrade};
 use axum::response::IntoResponse;
 use futures_util::SinkExt;
@@ -529,6 +530,16 @@ async fn websocket_binds_account_and_preserves_tool_and_steering_continuations()
                 (13, 2, 3)
             );
         }
+        let (_, _, request_outcomes) = state.relay_metrics.snapshot();
+        assert_eq!(
+            request_outcomes,
+            vec![RequestOutcomeMetric {
+                transport: "websocket".into(),
+                status_code: 200,
+                outcome: "success".into(),
+                count: 3,
+            }]
+        );
         assert!(
             !serde_json::to_string(&logs)
                 .unwrap()

@@ -1,5 +1,5 @@
 use super::*;
-use crate::relay_attempt::QueuedPermit;
+use crate::relay_attempt::{QueuedPermit, WEBSOCKET_TRANSPORT};
 use crate::websocket_transport::{self, ConnectError};
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use futures_util::{SinkExt, StreamExt};
@@ -607,6 +607,7 @@ fn start_response(
         attempt: binding.continuation(permit),
         log: RelayAttemptLog {
             path: "/openai/v1/responses".into(),
+            transport: WEBSOCKET_TRANSPORT,
             upstream_url: Some(endpoint.into()),
             request_summary: Some(build_request_summary(
                 value,

@@ -57,7 +57,10 @@ use crate::{
         UpdateProviderModelRouteRequest,
     },
     provider_catalog::provider_presets,
-    relay_attempt::{RelayAttempt, RelayAttemptLog, TokenUsage, authenticate_relay_api_key},
+    relay_attempt::{
+        HTTP_SSE_TRANSPORT, HTTP_TRANSPORT, RelayAttempt, RelayAttemptLog, TokenUsage,
+        authenticate_relay_api_key,
+    },
     routing::{RouteFailure, classify_transport_failure, classify_upstream_application_failure},
     session_affinity::{SessionAffinity, client_kind, extract as extract_session_affinity},
 };
@@ -143,7 +146,7 @@ pub async fn health(State(state): State<AppState>) -> Json<HealthResponse> {
 
 pub async fn metrics(State(state): State<AppState>) -> Result<Json<MetricsResponse>, AppError> {
     let dashboard = state.db.dashboard().await?;
-    let (session_affinity, route_selections) = state.relay_metrics.snapshot();
+    let (session_affinity, route_selections, request_outcomes) = state.relay_metrics.snapshot();
     Ok(Json(MetricsResponse {
         active_api_keys: dashboard.active_api_keys,
         total_api_keys: dashboard.total_api_keys,
@@ -152,6 +155,7 @@ pub async fn metrics(State(state): State<AppState>) -> Result<Json<MetricsRespon
         usage: dashboard.usage,
         session_affinity,
         route_selections,
+        request_outcomes,
         timestamp: Utc::now(),
     }))
 }
@@ -452,6 +456,11 @@ async fn relay_json_endpoint(
             path: wire_api.public_path().to_string(),
             upstream_url: Some(base_upstream_url.clone()),
             request_summary: Some(request_summary),
+            transport: if wire_api == WireApi::OpenAiResponses && is_stream {
+                HTTP_SSE_TRANSPORT
+            } else {
+                HTTP_TRANSPORT
+            },
             overload_retry_count,
             overload_retry_started: overload_retry_count > 0,
             overload_retry_exhausted: false,
@@ -871,6 +880,7 @@ async fn relay_gemini_endpoint(
         path: public_path,
         upstream_url: Some(fallback_upstream_url),
         request_summary: None,
+        transport: HTTP_TRANSPORT,
         overload_retry_count: 0,
         overload_retry_started: false,
         overload_retry_exhausted: false,

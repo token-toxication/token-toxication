@@ -682,6 +682,7 @@ pub struct MetricsResponse {
     pub usage: UsageSummary,
     pub session_affinity: Vec<SessionAffinityMetric>,
     pub route_selections: Vec<RouteSelectionMetric>,
+    pub request_outcomes: Vec<RequestOutcomeMetric>,
     pub timestamp: DateTime<Utc>,
 }
 
@@ -700,6 +701,15 @@ pub struct RouteSelectionMetric {
     pub wire_api: String,
     pub role: String,
     pub affinity: String,
+    pub count: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RequestOutcomeMetric {
+    pub transport: String,
+    pub status_code: u16,
+    pub outcome: String,
     pub count: u64,
 }
 

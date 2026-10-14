@@ -1,5 +1,5 @@
 use super::*;
-use crate::models::UpdateProviderModelRouteRequest;
+use crate::models::{RequestOutcomeMetric, UpdateProviderModelRouteRequest};
 
 // Synthetic protocol data only. Never substitute captured user requests here.
 fn coding_request() -> Value {
@@ -255,6 +255,16 @@ async fn coding_models_preserve_payloads_and_auth_boundaries() {
                 logs[0].cached_input_tokens
             ),
             (13, 2, 3)
+        );
+        let (_, _, request_outcomes) = state.relay_metrics.snapshot();
+        assert_eq!(
+            request_outcomes,
+            vec![RequestOutcomeMetric {
+                transport: "http_sse".into(),
+                status_code: 200,
+                outcome: "success".into(),
+                count: 1,
+            }]
         );
         let serialized_logs = serde_json::to_string(&logs).expect("serialize logs");
         for private_value in [

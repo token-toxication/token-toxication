@@ -19,7 +19,7 @@ Model discovery is available at `/anthropic/v1/models`, `/openai/v1/models`, and
 | Endpoint | Description |
 | --- | --- |
 | `/health` | Service status, version, uptime, and timestamp |
-| `/metrics` | JSON totals for API keys, provider health, usage, bounded session-affinity counters, and route-selection counters |
+| `/metrics` | JSON totals for API keys, provider health, usage, session-affinity and route-selection counters, and request outcome counters by transport |
 | `/openapi.json` | OpenAPI document for the admin and relay APIs |
 
 ## Authentication
@@ -63,6 +63,12 @@ The relay keeps overload retries bounded and does not replay a continuation or a
 request after output has started. HTTP compression parity for very large
 fallback requests remains a separate compatibility item; WebSockets are the
 preferred path for Device OAuth clients.
+
+`/metrics.requestOutcomes` records the transport (`http`, `http_sse`, or
+`websocket`), upstream-facing status code, and bounded outcome class for every
+completed relay attempt. Non-success attempts also emit a structured journal
+record with the same transport, status, outcome, and retry count. These fields
+are metadata-only; prompts, tokens, and upstream bodies are never logged.
 
 ## Request examples
 

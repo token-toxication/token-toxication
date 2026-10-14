@@ -17,11 +17,11 @@ use crate::models::{
     ModelCatalogListResponse, OpenAiModel, OpenAiModelListResponse, ProviderAccount,
     ProviderAccountListResponse, ProviderAccountResponse, ProviderModelRoute,
     ProviderModelRouteListResponse, ProviderModelRouteResponse, ProviderPreset,
-    ProviderPresetListResponse, RequestLog, RequestLogListResponse, RequestSummary, RequestTrend,
-    RequestTrendBucket, RoutableModelCatalogEntry, RoutableModelCatalogListResponse,
-    RouteSelectionMetric, SessionAffinityMetric, UpdateApiKeyRequest,
-    UpdateModelCatalogEntryRequest, UpdateProviderAccountRequest, UpdateProviderModelRouteRequest,
-    UsageSummary,
+    ProviderPresetListResponse, RequestLog, RequestLogListResponse, RequestOutcomeMetric,
+    RequestSummary, RequestTrend, RequestTrendBucket, RoutableModelCatalogEntry,
+    RoutableModelCatalogListResponse, RouteSelectionMetric, SessionAffinityMetric,
+    UpdateApiKeyRequest, UpdateModelCatalogEntryRequest, UpdateProviderAccountRequest,
+    UpdateProviderModelRouteRequest, UsageSummary,
 };
 
 #[derive(OpenApi)]
@@ -121,6 +121,7 @@ use crate::models::{
         MetricsResponse,
         RouteSelectionMetric,
         SessionAffinityMetric,
+        RequestOutcomeMetric,
         ModelCatalogEntry,
         ModelCatalogEntryResponse,
         ModelCatalogListResponse,

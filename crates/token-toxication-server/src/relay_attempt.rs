@@ -23,9 +23,14 @@ use crate::{
     session_affinity::SessionAffinity,
 };
 
+pub(crate) const HTTP_TRANSPORT: &str = "http";
+pub(crate) const HTTP_SSE_TRANSPORT: &str = "http_sse";
+pub(crate) const WEBSOCKET_TRANSPORT: &str = "websocket";
+
 #[derive(Clone)]
 pub(crate) struct RelayAttemptLog {
     pub path: String,
+    pub transport: &'static str,
     pub upstream_url: Option<String>,
     pub request_summary: Option<RequestSummary>,
     pub overload_retry_count: u8,
@@ -235,6 +240,20 @@ impl RelayAttempt {
         usage: TokenUsage,
         error: Option<String>,
     ) -> Result<(), AppError> {
+        let outcome = crate::relay_metrics::request_outcome(status_code, error.as_deref());
+        self.state
+            .relay_metrics
+            .record_request(log.transport, status_code, error.as_deref());
+        if status_code >= 400 {
+            tracing::warn!(
+                transport = log.transport,
+                status_code,
+                outcome,
+                error_present = error.is_some(),
+                overload_retry_count = log.overload_retry_count,
+                "relay request completed with non-success status"
+            );
+        }
         self.state
             .db
             .insert_request_log(RequestLog {

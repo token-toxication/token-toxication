@@ -4,7 +4,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::models::{RouteSelectionMetric, SessionAffinityMetric};
+use crate::models::{RequestOutcomeMetric, RouteSelectionMetric, SessionAffinityMetric};
 
 const WARNING_INTERVAL: Duration = Duration::from_secs(300);
 
@@ -17,6 +17,7 @@ pub struct RelayMetrics {
 struct RelayMetricsInner {
     affinity: BTreeMap<(String, String, String), u64>,
     selections: BTreeMap<(String, String, String), u64>,
+    requests: BTreeMap<(String, u16, String), u64>,
     last_missing_warning: BTreeMap<(String, String), Instant>,
 }
 
@@ -54,7 +55,22 @@ impl RelayMetrics {
             .or_default() += 1;
     }
 
-    pub fn snapshot(&self) -> (Vec<SessionAffinityMetric>, Vec<RouteSelectionMetric>) {
+    pub fn record_request(&self, transport: &str, status_code: u16, error: Option<&str>) {
+        let outcome = request_outcome(status_code, error);
+        let mut inner = self.inner.lock().expect("relay metrics lock poisoned");
+        *inner
+            .requests
+            .entry((transport.to_string(), status_code, outcome.to_string()))
+            .or_default() += 1;
+    }
+
+    pub fn snapshot(
+        &self,
+    ) -> (
+        Vec<SessionAffinityMetric>,
+        Vec<RouteSelectionMetric>,
+        Vec<RequestOutcomeMetric>,
+    ) {
         let inner = self.inner.lock().expect("relay metrics lock poisoned");
         let affinity = inner
             .affinity
@@ -78,6 +94,113 @@ impl RelayMetrics {
                 count: *count,
             })
             .collect();
-        (affinity, selections)
+        let requests = inner
+            .requests
+            .iter()
+            .map(
+                |((transport, status_code, outcome), count)| RequestOutcomeMetric {
+                    transport: transport.clone(),
+                    status_code: *status_code,
+                    outcome: outcome.clone(),
+                    count: *count,
+                },
+            )
+            .collect();
+        (affinity, selections, requests)
+    }
+}
+
+pub fn request_outcome(status_code: u16, error: Option<&str>) -> &'static str {
+    if (200..300).contains(&status_code) {
+        return "success";
+    }
+    if error.is_some_and(|value| value.contains("server shut down")) {
+        return "server_shutdown";
+    }
+    if status_code == 499 || error.is_some_and(|value| value.contains("client disconnected")) {
+        return "client_disconnect";
+    }
+    let error = error.unwrap_or_default().to_ascii_lowercase();
+    if status_code == 429
+        || error.contains("rate limit")
+        || error.contains("quota")
+        || error.contains("429")
+    {
+        return "rate_limited";
+    }
+    if error.contains("server_is_overloaded") || error.contains("overload") {
+        return "overload";
+    }
+    if error.contains("incomplete") {
+        return "incomplete";
+    }
+    if matches!(status_code, 401 | 403)
+        || error.contains("unauthorized")
+        || error.contains("forbidden")
+        || error.contains("authorization")
+    {
+        return "authorization";
+    }
+    if error.contains("timeout") || error.contains("transport") || error.contains("connect") {
+        return "transport";
+    }
+    if status_code >= 500 {
+        return "upstream_error";
+    }
+    if status_code >= 400 {
+        return "client_error";
+    }
+    "other"
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn records_transport_and_outcome_dimensions() {
+        let metrics = RelayMetrics::default();
+        metrics.record_request("http_sse", 200, None);
+        metrics.record_request("websocket", 502, Some("upstream stream failed"));
+        metrics.record_request("websocket", 502, Some("upstream stream failed"));
+        let (_, _, requests) = metrics.snapshot();
+        assert_eq!(
+            requests,
+            vec![
+                RequestOutcomeMetric {
+                    transport: "http_sse".into(),
+                    status_code: 200,
+                    outcome: "success".into(),
+                    count: 1,
+                },
+                RequestOutcomeMetric {
+                    transport: "websocket".into(),
+                    status_code: 502,
+                    outcome: "upstream_error".into(),
+                    count: 2,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn classifies_known_failure_boundaries() {
+        assert_eq!(request_outcome(499, None), "client_disconnect");
+        assert_eq!(
+            request_outcome(
+                499,
+                Some("server shut down before the upstream stream completed")
+            ),
+            "server_shutdown"
+        );
+        assert_eq!(
+            request_outcome(429, Some("upstream returned 429")),
+            "rate_limited"
+        );
+        assert_eq!(
+            request_outcome(502, Some("server_is_overloaded")),
+            "overload"
+        );
+        assert_eq!(request_outcome(401, None), "authorization");
     }
 }
