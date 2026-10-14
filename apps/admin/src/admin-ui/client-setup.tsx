@@ -497,6 +497,7 @@ export function buildClientSetupSnippets({
       `base_url = ${tomlString(openaiBaseUrl)}`,
       `env_key = ${tomlString("TOKEN_TOXICATION_API_KEY")}`,
       `wire_api = ${tomlString("responses")}`,
+      "supports_websockets = true",
     ].join("\n"),
     claudeCode: [
       `export ANTHROPIC_BASE_URL=${shellQuote(anthropicBaseUrl)}`,

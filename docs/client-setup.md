@@ -80,9 +80,10 @@ rejects malformed Lite markers and never retries a Lite request as ordinary
 Responses. Qualify all candidate upstream routes with the intended protocol
 before using them; isolated mock tests do not establish live upstream support.
 
-The provider TOML defaults to HTTP/SSE. To use Responses WebSockets, confirm
-all candidate routes support the transport, then set `supports_websockets = true`
-inside `[model_providers.token-toxication]` according to your Codex version.
+The generated provider TOML enables `supports_websockets = true` so matching
+Codex versions prefer the Responses WebSocket path. Keep the setting only when
+all candidate routes support the transport; older Codex versions continue to
+use the HTTP/SSE path.
 The first request binds a connection to one model, route, and account;
 there is no cross-connection response resume or automatic replay. See relay
 transport tests for connection lifecycle and error handling.

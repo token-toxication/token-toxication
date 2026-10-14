@@ -2,6 +2,7 @@ pub mod account_concurrency;
 pub mod acme;
 pub mod antigravity_oauth;
 pub mod auth;
+pub(crate) mod codex_context;
 pub mod codex_device_oauth;
 pub mod codex_subscription;
 pub mod config;

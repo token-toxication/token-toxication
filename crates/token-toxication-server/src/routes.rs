@@ -30,7 +30,7 @@ use crate::{
         gemini_account_models, gemini_account_quota,
     },
     auth::{generate_secret, login, logout, me, require_admin},
-    codex_device_oauth,
+    codex_context, codex_device_oauth,
     codex_subscription::{
         CodexSubscriptionAuthorization, codex_account_quota, codex_subscription_authorization,
         is_codex_device_oauth_auth, is_codex_subscription_auth,
@@ -409,8 +409,14 @@ async fn relay_json_endpoint(
             Ok(attempt) => attempt,
             Err(error @ AppError::ServiceUnavailable(_)) => return Err(error),
             Err(error) => {
-                if let Some((status, content_type, bytes)) = last_rate_limit_response {
-                    return response_with_bytes(status, content_type, bytes, "no-store");
+                if let Some((status, content_type, bytes, headers)) = last_rate_limit_response {
+                    return response_with_upstream_headers(
+                        status,
+                        content_type,
+                        &headers,
+                        bytes,
+                        "no-store",
+                    );
                 }
                 return Err(error);
             }
@@ -422,6 +428,12 @@ async fn relay_json_endpoint(
         let upstream_model_id = attempt.selection().upstream_model_id.clone();
         let strip_params = attempt.selection().strip_params.clone();
         let account = attempt.selection().account.clone();
+        let codex_context_headers = if is_codex_device_oauth_auth(&account.account.auth_mode) {
+            codex_context::request_headers(&headers)
+                .map_err(|error| AppError::BadRequest(error.to_string()))?
+        } else {
+            HeaderMap::new()
+        };
         let mut request_json = original_request_json.clone();
         request_json["model"] = Value::String(upstream_model_id);
         enable_stream_usage_if_supported(&mut request_json, wire_api, &account.account.provider);
@@ -499,7 +511,7 @@ async fn relay_json_endpoint(
                 return Err(AppError::Upstream(error));
             }
         };
-        let request = apply_protocol_headers(request, wire_api, &headers);
+        let request = apply_protocol_headers(request, wire_api, &codex_context_headers, &headers);
         let request = match codex_auth.as_ref() {
             Some(auth) => apply_codex_subscription_auth(request, auth),
             None => apply_provider_auth(request, &account.account.auth_mode, &account.api_key),
@@ -577,7 +589,13 @@ async fn relay_json_endpoint(
                         "upstream stream failed (server_is_overloaded)".into(),
                     )
                     .await?;
-                return response_with_bytes(status, content_type, bytes, "no-store");
+                return response_with_upstream_headers(
+                    status,
+                    content_type,
+                    &response_headers,
+                    bytes,
+                    "no-store",
+                );
             }
             attempt
                 .record_response(&log, status, &response_headers, &bytes, usage)
@@ -588,14 +606,26 @@ async fn relay_json_endpoint(
                 && Instant::now() <= failover_deadline
             {
                 excluded_account_ids.insert(account.account.id);
-                last_rate_limit_response = Some((status, content_type, bytes));
+                last_rate_limit_response = Some((
+                    status,
+                    content_type,
+                    bytes,
+                    codex_response_headers(&response_headers),
+                ));
                 continue;
             }
-            return response_with_bytes(status, content_type, bytes, "no-store");
+            return response_with_upstream_headers(
+                status,
+                content_type,
+                &response_headers,
+                bytes,
+                "no-store",
+            );
         }
 
         if is_stream {
             let mut upstream_stream = response.into_bytes_stream();
+            let client_response_headers = codex_response_headers(&response_headers);
             let mut buffered = Vec::new();
             let mut buffered_bytes = 0;
             let mut observation = StreamingResponseObservation::default();
@@ -690,6 +720,7 @@ async fn relay_json_endpoint(
                         Bytes::from_static(
                             br#"{"error":{"type":429,"message":"all matching provider accounts are rate limited"}}"#,
                         ),
+                        HeaderMap::new(),
                     ));
                     continue;
                 }
@@ -730,6 +761,7 @@ async fn relay_json_endpoint(
                 header::CACHE_CONTROL,
                 HeaderValue::from_static("no-cache, no-transform"),
             );
+            codex_context::copy_response_headers(&client_response_headers, relay.headers_mut());
             return Ok(relay);
         }
 
@@ -738,7 +770,13 @@ async fn relay_json_endpoint(
         attempt
             .record_response(&log, status, &response_headers, &bytes, usage)
             .await?;
-        return response_with_bytes(status, content_type, bytes, "no-store");
+        return response_with_upstream_headers(
+            status,
+            content_type,
+            &response_headers,
+            bytes,
+            "no-store",
+        );
     }
 
     Err(AppError::TooManyRequests(
@@ -769,6 +807,24 @@ fn response_with_bytes(
         HeaderValue::from_static(cache_control),
     );
     Ok(relay)
+}
+
+fn response_with_upstream_headers(
+    status: StatusCode,
+    content_type: HeaderValue,
+    upstream_headers: &HeaderMap,
+    bytes: Bytes,
+    cache_control: &'static str,
+) -> Result<Response, AppError> {
+    let mut relay = response_with_bytes(status, content_type, bytes, cache_control)?;
+    codex_context::copy_response_headers(upstream_headers, relay.headers_mut());
+    Ok(relay)
+}
+
+fn codex_response_headers(headers: &HeaderMap) -> HeaderMap {
+    let mut copied = HeaderMap::new();
+    codex_context::copy_response_headers(headers, &mut copied);
+    copied
 }
 
 async fn relay_gemini_endpoint(
@@ -1473,16 +1529,18 @@ fn validate_gemini_generate_content_request(value: &Value) -> Result<(), AppErro
 fn apply_protocol_headers<'a, R, C>(
     mut request: RequestBuilderSend<'a, R, C>,
     wire_api: WireApi,
+    codex_context_headers: &HeaderMap,
     headers: &HeaderMap,
 ) -> RequestBuilderSend<'a, R, C>
 where
     R: RuntimePoll,
     C: ConnectorSend,
 {
-    if wire_api == WireApi::OpenAiResponses
-        && let Some(lite) = headers.get(RESPONSES_LITE_HEADER)
-    {
-        request = request.header(HeaderName::from_static(RESPONSES_LITE_HEADER), lite.clone());
+    if wire_api == WireApi::OpenAiResponses {
+        request = request.headers(codex_context_headers.clone());
+        if let Some(lite) = headers.get(RESPONSES_LITE_HEADER) {
+            request = request.header(HeaderName::from_static(RESPONSES_LITE_HEADER), lite.clone());
+        }
     }
     if matches!(wire_api, WireApi::AnthropicMessages) {
         request = request.header(
@@ -1496,7 +1554,7 @@ where
     request
 }
 
-const RESPONSES_LITE_HEADER: &str = "x-openai-internal-codex-responses-lite";
+const RESPONSES_LITE_HEADER: &str = codex_context::RESPONSES_LITE_HEADER;
 
 fn validate_responses_protocol(headers: &HeaderMap, value: &Value) -> Result<(), AppError> {
     let mut values = headers.get_all(RESPONSES_LITE_HEADER).iter();

@@ -42,11 +42,27 @@ pub(crate) enum ConnectError {
     Transport,
 }
 
+pub(crate) struct ConnectedSocket {
+    pub socket: WebSocketStream<aioduct::upgrade::UpgradedSend>,
+    pub headers: HeaderMap,
+}
+
+#[allow(dead_code)] // Kept as the compatibility helper used by transport unit tests.
 pub(crate) async fn connect(
     client: &aioduct::TokioClient,
     endpoint: &str,
     headers: HeaderMap,
 ) -> Result<WebSocketStream<aioduct::upgrade::UpgradedSend>, ConnectError> {
+    Ok(connect_with_headers(client, endpoint, headers)
+        .await?
+        .socket)
+}
+
+pub(crate) async fn connect_with_headers(
+    client: &aioduct::TokioClient,
+    endpoint: &str,
+    headers: HeaderMap,
+) -> Result<ConnectedSocket, ConnectError> {
     let request = client
         .get(endpoint)
         .map_err(|_| ConnectError::Transport)?
@@ -69,6 +85,7 @@ pub(crate) async fn connect(
         });
     }
     validate_handshake(response.headers(), &expected_accept)?;
+    let response_headers = response.headers().clone();
     let io = response
         .upgrade()
         .await
@@ -76,7 +93,10 @@ pub(crate) async fn connect(
     let config = WebSocketConfig::default()
         .max_message_size(Some(crate::RELAY_BODY_LIMIT_BYTES))
         .max_frame_size(Some(crate::RELAY_BODY_LIMIT_BYTES));
-    Ok(WebSocketStream::from_raw_socket(io, Role::Client, Some(config)).await)
+    Ok(ConnectedSocket {
+        socket: WebSocketStream::from_raw_socket(io, Role::Client, Some(config)).await,
+        headers: response_headers,
+    })
 }
 
 fn validate_handshake(headers: &HeaderMap, expected_accept: &str) -> Result<(), ConnectError> {

@@ -268,6 +268,14 @@ async fn relay_connection(
         .expect("selected attempt holds a running-request slot");
     queued_ms.fetch_add(binding.queue_wait().as_millis() as u64, Ordering::Relaxed);
     let account = &binding.selection().account;
+    let context_headers = if is_codex_device_oauth_auth(&account.account.auth_mode) {
+        match codex_context::request_headers_from_event(headers, &first) {
+            Ok(headers) => headers,
+            Err(_) => return Stop::Protocol,
+        }
+    } else {
+        HeaderMap::new()
+    };
     let base_endpoint = upstream_url(&account.account.base_url, "/v1/responses");
     *active = Some(start_response(
         &binding,
@@ -297,7 +305,7 @@ async fn relay_connection(
     if !matches!(url.scheme(), "http" | "https") {
         return Stop::Upstream;
     }
-    let mut upstream_headers = HeaderMap::new();
+    let mut upstream_headers = context_headers.clone();
     let secret = auth
         .as_ref()
         .map(|auth| auth.access_token.as_str())
@@ -341,13 +349,17 @@ async fn relay_connection(
     if let Some(current) = active.as_mut() {
         current.log.upstream_url = Some(endpoint.clone());
     }
-    let mut upstream = match timeout(
+    let (mut upstream, mut upstream_response_headers) = match timeout(
         idle,
-        websocket_transport::connect(&state.websocket_http, &endpoint, upstream_headers.clone()),
+        websocket_transport::connect_with_headers(
+            &state.websocket_http,
+            &endpoint,
+            upstream_headers.clone(),
+        ),
     )
     .await
     {
-        Ok(Ok(socket)) => socket,
+        Ok(Ok(connection)) => (connection.socket, connection.headers),
         Err(_) => return Stop::Timeout,
         Ok(Err(ConnectError::Http { status, headers })) => {
             if let Some(current) = active.take() {
@@ -403,8 +415,15 @@ async fn relay_connection(
             message = upstream.next() => {
                 match message {
                     Some(Ok(tungstenite::Message::Text(text))) => {
-                        let value: Value = match serde_json::from_str(&text) { Ok(value) => value, Err(_) => return Stop::Upstream };
-                        let kind = value.get("type").and_then(Value::as_str).unwrap_or("");
+                        let mut value: Value = match serde_json::from_str(&text) { Ok(value) => value, Err(_) => return Stop::Upstream };
+                        let kind = value
+                            .get("type")
+                            .and_then(Value::as_str)
+                            .unwrap_or("")
+                            .to_owned();
+                        if kind == "codex.response.metadata" {
+                            add_websocket_metadata_headers(&mut value, &upstream_response_headers);
+                        }
                         let duplicate = value.pointer("/response/id").and_then(Value::as_str).is_some_and(|id| previous.contains(id));
                         if duplicate { continue; }
                         let overload_retry = active.as_ref().is_some_and(|current| {
@@ -425,7 +444,7 @@ async fn relay_connection(
                                 current.response_id = Some(id.to_owned());
                             }
                         }
-                        if matches!(kind, "response.completed" | "response.failed" | "response.incomplete" | "error") && !duplicate
+                        if matches!(kind.as_str(), "response.completed" | "response.failed" | "response.incomplete" | "error") && !duplicate
                             && let Some(mut current) = active.take() {
                                 let wrapped_status = (kind == "error").then(|| value.get("status").or_else(|| value.get("status_code")))
                                     .flatten().and_then(Value::as_u64).and_then(|status| u16::try_from(status).ok())
@@ -454,7 +473,10 @@ async fn relay_connection(
                                     current.attempt = binding.continuation(permit);
                                     *active = Some(current);
                                     upstream = match while_queued(client, None, idle, connect_upstream(state, &endpoint, &upstream_headers, idle)).await {
-                                        Ok(Ok(socket)) => socket,
+                                        Ok(Ok(connection)) => {
+                                            upstream_response_headers = connection.headers;
+                                            connection.socket
+                                        },
                                         Ok(Err(stop)) | Err(stop) => return stop,
                                     };
                                     let request = active.as_ref().expect("retry is active").request.to_string();
@@ -508,8 +530,8 @@ async fn relay_connection(
                                 if result.is_err() { return Stop::Upstream; }
                                 if let Some(id) = value.pointer("/response/id").and_then(Value::as_str) { previous.insert(id.to_owned()); }
                         }
-                        if !matches!(timeout(idle, client.send(Message::Text(text.to_string().into()))).await, Ok(Ok(()))) { return Stop::Client; }
-                        if matches!(kind, "error" | "response.failed" | "response.incomplete") { return Stop::Forwarded; }
+                        if !matches!(timeout(idle, client.send(Message::Text(value.to_string().into()))).await, Ok(Ok(()))) { return Stop::Client; }
+                        if matches!(kind.as_str(), "error" | "response.failed" | "response.incomplete") { return Stop::Forwarded; }
                     }
                     Some(Ok(tungstenite::Message::Ping(data))) => {
                         if !matches!(timeout(idle, upstream.send(tungstenite::Message::Pong(data))).await, Ok(Ok(()))) { return Stop::Upstream; }
@@ -617,10 +639,10 @@ async fn connect_upstream(
     endpoint: &str,
     headers: &HeaderMap,
     idle: Duration,
-) -> Result<UpstreamSocket, Stop> {
+) -> Result<websocket_transport::ConnectedSocket, Stop> {
     match timeout(
         idle,
-        websocket_transport::connect(&state.websocket_http, endpoint, headers.clone()),
+        websocket_transport::connect_with_headers(&state.websocket_http, endpoint, headers.clone()),
     )
     .await
     {
@@ -628,5 +650,29 @@ async fn connect_upstream(
         Ok(Err(ConnectError::Http { status, .. })) => Err(Stop::Http(status)),
         Err(_) => Err(Stop::Timeout),
         _ => Err(Stop::Upstream),
+    }
+}
+
+fn add_websocket_metadata_headers(value: &mut Value, handshake_headers: &HeaderMap) {
+    let mut allowed = HeaderMap::new();
+    codex_context::copy_response_headers(handshake_headers, &mut allowed);
+    if allowed.is_empty() {
+        return;
+    }
+    let Some(event) = value.as_object_mut() else {
+        return;
+    };
+    let headers = event
+        .entry("headers")
+        .or_insert_with(|| Value::Object(serde_json::Map::new()));
+    let Some(headers) = headers.as_object_mut() else {
+        return;
+    };
+    for (name, header_value) in &allowed {
+        if let Ok(value) = header_value.to_str() {
+            headers
+                .entry(name.as_str().to_string())
+                .or_insert_with(|| Value::String(value.to_string()));
+        }
     }
 }

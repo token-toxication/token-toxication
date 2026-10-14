@@ -58,7 +58,7 @@ Create one **Codex subscription** account per ChatGPT Plus or Pro subscription w
 
 Existing accounts created with the old manual flow are migrated to `codex-manual-refresh` and remain compatible during the deprecation window. New accounts should use device login.
 
-The two modes have separate credential envelopes and refresh behavior. Device OAuth stores the exchanged access and refresh tokens, refreshes with the official JSON request, and sends the Codex account header with `originator: codex_cli_rs`. The legacy mode accepts the old manually entered refresh token and keeps its existing form refresh request and `originator: opencode` behavior while it is deprecated.
+The two modes have separate credential envelopes and refresh behavior. Device OAuth stores the exchanged access and refresh tokens, refreshes with the OpenCode-compatible form request, and sends the Codex account header with `originator: opencode`. The legacy mode accepts the old manually entered refresh token and keeps its existing form refresh request and `originator: opencode` behavior while it is deprecated.
 
 Subscription requests are sent to `{base_url}/codex/responses`, while quota data comes from `{base_url}/wham/usage`. Legacy base URLs ending in `/codex` or `/codex/responses` are normalized automatically.
 

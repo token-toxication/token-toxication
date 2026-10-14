@@ -35,8 +35,9 @@ fn coding_request() -> Value {
 
 #[tokio::test]
 async fn coding_models_preserve_payloads_and_auth_boundaries() {
-    for (auth_mode, upstream_model, lite) in
-        ["bearer", "codex-oauth"].into_iter().flat_map(|auth| {
+    for (auth_mode, upstream_model, lite) in ["bearer", "codex-oauth", "codex-device-oauth"]
+        .into_iter()
+        .flat_map(|auth| {
             [
                 "gpt-6-astra",
                 "gpt-5.6-sol",
@@ -66,7 +67,15 @@ async fn coding_models_preserve_payloads_and_auth_boundaries() {
                 let capture = capture.clone();
                 async move {
                     capture.lock().await.push((headers, body));
-                    ([(header::CONTENT_TYPE, "text/event-stream")], stream)
+                    (
+                        [
+                            ("content-type", "text/event-stream"),
+                            ("x-codex-turn-state", "synthetic-turn-state"),
+                            ("x-request-id", "synthetic-request-id"),
+                            ("x-models-etag", "synthetic-models-etag"),
+                        ],
+                        stream,
+                    )
                 }
             }),
         );
@@ -79,6 +88,15 @@ async fn coding_models_preserve_payloads_and_auth_boundaries() {
         let db = Db::open(&database_path).await.expect("open database");
         let provider_secret = if auth_mode == "bearer" {
             "synthetic-provider-key".to_string()
+        } else if auth_mode == "codex-device-oauth" {
+            json!({
+                "type": "token-toxication-codex-device-oauth-v1",
+                "refresh": "synthetic-refresh",
+                "access": "synthetic-provider-key",
+                "expiresAt": Utc::now().timestamp() + 3_600,
+                "accountId": "synthetic-account"
+            })
+            .to_string()
         } else {
             json!({
                 "type": "token-toxication-codex-oauth-v1",
@@ -135,6 +153,23 @@ async fn coding_models_preserve_payloads_and_auth_boundaries() {
             "openai-organization",
             HeaderValue::from_static("untrusted-organization"),
         );
+        if auth_mode == "codex-device-oauth" {
+            headers.insert("session-id", HeaderValue::from_static("synthetic-session"));
+            headers.insert("thread-id", HeaderValue::from_static("synthetic-thread"));
+            headers.insert(
+                "x-client-request-id",
+                HeaderValue::from_static("synthetic-request"),
+            );
+            headers.insert(
+                "x-codex-beta-features",
+                HeaderValue::from_static("remote_compaction_v2"),
+            );
+            headers.insert(
+                "x-codex-turn-state",
+                HeaderValue::from_static("synthetic-turn-state-in"),
+            );
+            headers.insert("x-openai-subagent", HeaderValue::from_static("review"));
+        }
         let mut input = coding_request();
         if lite {
             headers.insert(RESPONSES_LITE_HEADER, HeaderValue::from_static("true"));
@@ -160,11 +195,13 @@ async fn coding_models_preserve_payloads_and_auth_boundaries() {
         .expect("relay response");
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(
-            to_bytes(response.into_body(), usize::MAX)
-                .await
-                .expect("body"),
-            stream
+            response.headers()["x-codex-turn-state"],
+            "synthetic-turn-state"
         );
+        assert_eq!(response.headers()["x-request-id"], "synthetic-request-id");
+        assert_eq!(response.headers()["x-models-etag"], "synthetic-models-etag");
+        let body = response.into_body();
+        assert_eq!(to_bytes(body, usize::MAX).await.expect("body"), stream);
 
         let captured = captured.lock().await;
         assert_eq!(captured.len(), 1);
@@ -176,7 +213,7 @@ async fn coding_models_preserve_payloads_and_auth_boundaries() {
         expected["model"] = json!(upstream_model);
         let expected_object = expected.as_object_mut().expect("object");
         expected_object.remove("remove_for_route");
-        if auth_mode == "codex-oauth" {
+        if auth_mode != "bearer" {
             expected_object.remove("max_output_tokens");
             assert_eq!(headers["chatgpt-account-id"], "synthetic-account");
             assert_eq!(headers["originator"], "opencode");
@@ -189,6 +226,25 @@ async fn coding_models_preserve_payloads_and_auth_boundaries() {
             headers[header::AUTHORIZATION],
             "Bearer synthetic-provider-key"
         );
+        if auth_mode == "codex-device-oauth" {
+            assert_eq!(headers["session-id"], "synthetic-session");
+            assert_eq!(headers["thread-id"], "synthetic-thread");
+            assert_eq!(headers["x-client-request-id"], "synthetic-request");
+            assert_eq!(headers["x-codex-beta-features"], "remote_compaction_v2");
+            assert_eq!(headers["x-codex-turn-state"], "synthetic-turn-state-in");
+            assert_eq!(headers["x-openai-subagent"], "review");
+        } else {
+            for name in [
+                "session-id",
+                "thread-id",
+                "x-client-request-id",
+                "x-codex-beta-features",
+                "x-codex-turn-state",
+                "x-openai-subagent",
+            ] {
+                assert!(!headers.contains_key(name), "unexpected {name} header");
+            }
+        }
 
         let logs = state.db.list_request_logs(10).await.expect("logs");
         assert_eq!(logs.len(), 1);

@@ -298,7 +298,7 @@ async fn websocket_terminations_record_once_and_close_upstream() {
 
 #[tokio::test]
 async fn websocket_binds_account_and_preserves_tool_and_steering_continuations() {
-    for auth_mode in ["bearer", "codex-oauth"] {
+    for auth_mode in ["bearer", "codex-oauth", "codex-device-oauth"] {
         let captures = Arc::new(Mutex::new(Vec::<Value>::new()));
         let handshakes = Arc::new(Mutex::new(Vec::<HeaderMap>::new()));
         let capture = captures.clone();
@@ -331,6 +331,8 @@ async fn websocket_binds_account_and_preserves_tool_and_steering_continuations()
         let db = Db::open(&database_path).await.unwrap();
         let secret = if auth_mode == "bearer" {
             "synthetic-provider-key".to_owned()
+        } else if auth_mode == "codex-device-oauth" {
+            json!({"type":"token-toxication-codex-device-oauth-v1","refresh":"synthetic-refresh","access":"synthetic-provider-key","expiresAt":Utc::now().timestamp()+3_600,"accountId":"synthetic-account"}).to_string()
         } else {
             json!({"type":"token-toxication-codex-oauth-v1","refresh":"synthetic-refresh","access":"synthetic-provider-key","expires":Utc::now().timestamp_millis()+3_600_000,"accountId":"synthetic-account"}).to_string()
         };
@@ -372,8 +374,18 @@ async fn websocket_binds_account_and_preserves_tool_and_steering_continuations()
         request
             .headers_mut()
             .insert("session-id", HeaderValue::from_static("stable-session"));
+        if auth_mode == "codex-device-oauth" {
+            request.headers_mut().insert(
+                "x-codex-beta-features",
+                HeaderValue::from_static("remote_compaction_v2"),
+            );
+            request.headers_mut().insert(
+                "x-codex-turn-state",
+                HeaderValue::from_static("synthetic-turn-state-in"),
+            );
+        }
         let (mut client, _) = connect_async(request).await.unwrap();
-        let base = json!({"type":"response.create","model":"public-coding","input":[{"type":"additional_tools","role":"developer","tools":[]}],"client_metadata":{"ws_request_header_x_openai_internal_codex_responses_lite":"true","ws_request_header_authorization":"synthetic-private-identity"},"max_output_tokens":100});
+        let base = json!({"type":"response.create","model":"public-coding","input":[{"type":"additional_tools","role":"developer","tools":[]}],"client_metadata":{"session_id":"metadata-session","thread_id":"metadata-thread","x-codex-turn-state":"metadata-turn-state","ws_request_header_x_openai_internal_codex_responses_lite":"true","ws_request_header_authorization":"synthetic-private-identity"},"max_output_tokens":100});
         client
             .send(tungstenite::Message::Text(base.to_string().into()))
             .await
@@ -477,8 +489,38 @@ async fn websocket_binds_account_and_preserves_tool_and_steering_continuations()
             handshakes[0]
                 .get("chatgpt-account-id")
                 .map(|v| v.to_str().unwrap()),
-            (auth_mode == "codex-oauth").then_some("synthetic-account")
+            (auth_mode != "bearer").then_some("synthetic-account")
         );
+        assert_eq!(
+            handshakes[0].get("originator").map(|v| v.to_str().unwrap()),
+            (auth_mode != "bearer").then_some("opencode")
+        );
+        if auth_mode == "codex-device-oauth" {
+            assert_eq!(handshakes[0]["session-id"], "stable-session");
+            assert_eq!(handshakes[0]["thread-id"], "metadata-thread");
+            assert_eq!(handshakes[0]["x-client-request-id"], "metadata-thread");
+            assert_eq!(
+                handshakes[0]["x-codex-beta-features"],
+                "remote_compaction_v2"
+            );
+            assert_eq!(
+                handshakes[0]["x-codex-turn-state"],
+                "synthetic-turn-state-in"
+            );
+        } else {
+            for name in [
+                "session-id",
+                "thread-id",
+                "x-client-request-id",
+                "x-codex-beta-features",
+                "x-codex-turn-state",
+            ] {
+                assert!(
+                    !handshakes[0].contains_key(name),
+                    "unexpected {name} header"
+                );
+            }
+        }
         let logs = state.db.list_request_logs(10).await.unwrap();
         assert_eq!(logs.len(), 3);
         for log in &logs {

@@ -38,7 +38,31 @@ Send `Token-Toxication-Session-ID` when the client does not already expose a sup
 
 The explicit header wins over native values. A request with affinity uses weighted rendezvous hashing within the Primary tier, or within the Backup tier only when no Primary is eligible. A request without affinity uses weighted random selection and may reach a different account on each request.
 
-The relay never retries the current request on a different route. OpenAI `previous_response_id` values are forwarded unchanged and are not used as the affinity key.
+The relay normally does not retry the current request on a different route.
+Codex Device subscription requests have the bounded overload/rate-limit policy
+described below. OpenAI `previous_response_id` values are forwarded unchanged
+and are not used as the affinity key.
+
+## Codex Responses compatibility
+
+Codex device-login accounts use the same server-side identity contract as
+OpenCode v2. The generated Codex configuration enables Responses WebSockets;
+matching Codex clients use `/openai/v1/responses` as a WebSocket endpoint and
+older clients can continue with HTTP/SSE.
+
+For Device OAuth, the relay forwards only the bounded context headers
+`session-id`, `thread-id`, `x-client-request-id`, `x-codex-beta-features`,
+`x-codex-turn-state`, and `x-openai-subagent`. It generates the upstream
+authorization, `chatgpt-account-id`, `originator: opencode`, and routed model;
+client values for those server-owned fields are ignored. Responses preserve the
+Codex turn-state, retry advice, request ID, model, reasoning, model-etag, and
+fixed rate-limit metadata headers while dropping cookies and arbitrary upstream
+headers.
+
+The relay keeps overload retries bounded and does not replay a continuation or a
+request after output has started. HTTP compression parity for very large
+fallback requests remains a separate compatibility item; WebSockets are the
+preferred path for Device OAuth clients.
 
 ## Request examples
 

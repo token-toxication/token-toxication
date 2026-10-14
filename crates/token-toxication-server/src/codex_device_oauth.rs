@@ -533,19 +533,13 @@ pub async fn authorization(
         "{}/oauth/token",
         credential.issuer.as_deref().unwrap_or(CODEX_ISSUER)
     );
-    let token_body = serde_json::to_vec(&serde_json::json!({
-        "grant_type": "refresh_token",
-        "client_id": CODEX_CLIENT_ID,
-        "refresh_token": credential.refresh,
-    }))
-    .map_err(|error| AppError::Internal(format!("serialize Codex refresh request: {error}")))?;
     let response = http
         .post(&token_url)?
-        .header(
-            header::CONTENT_TYPE,
-            HeaderValue::from_static("application/json"),
-        )
-        .body(token_body)
+        .form(&[
+            ("grant_type", "refresh_token"),
+            ("refresh_token", credential.refresh.as_str()),
+            ("client_id", CODEX_CLIENT_ID),
+        ])
         .send()
         .await
         .map_err(|error| AppError::Upstream(error.into()))?;
@@ -660,6 +654,12 @@ fn jwt_claims(token: &str) -> Option<JwtClaims> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::{sync::Arc, time::Duration as StdDuration};
+
+    use axum::{Router, body::Bytes, http::HeaderMap, routing::post};
+    use tokio::{net::TcpListener, sync::Mutex};
+
+    use crate::{db::Db, models::CreateProviderAccountRequest, websocket_transport};
 
     #[test]
     fn extracts_account_and_expiration_from_nested_claims() {
@@ -776,6 +776,99 @@ mod tests {
         assert_eq!(response.error.as_deref(), Some("synthetic failure"));
         assert!(!store.flows.lock().await["flow-1"].polling);
 
+        drop(db);
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(path.with_extension("sqlite3-wal"));
+        let _ = std::fs::remove_file(path.with_extension("sqlite3-shm"));
+    }
+
+    #[tokio::test]
+    async fn refresh_uses_opencode_form_contract_and_rotates_credentials() {
+        let captured = Arc::new(Mutex::new(None::<(HeaderMap, Bytes)>));
+        let capture = captured.clone();
+        let upstream = Router::new().route(
+            "/oauth/token",
+            post(move |headers: HeaderMap, body: Bytes| {
+                let capture = capture.clone();
+                async move {
+                    *capture.lock().await = Some((headers, body));
+                    (
+                        [(header::CONTENT_TYPE, "application/json")],
+                        r#"{"access_token":"new-access","refresh_token":"new-refresh","expires_in":3600}"#,
+                    )
+                }
+            }),
+        );
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind upstream");
+        let address = listener.local_addr().expect("upstream address");
+        let server = tokio::spawn(async move { axum::serve(listener, upstream).await });
+
+        let path =
+            std::env::temp_dir().join(format!("token-toxication-{}.sqlite3", Uuid::new_v4()));
+        let db = Db::open(&path).await.expect("open database");
+        let account = db
+            .create_provider_account(CreateProviderAccountRequest {
+                name: "Device OAuth".into(),
+                provider: "codex-subscription".into(),
+                base_url: "https://chatgpt.com/backend-api".into(),
+                auth_mode: CODEX_DEVICE_OAUTH_AUTH_MODE.into(),
+                wire_api: "openai-responses".into(),
+                api_key: serde_json::json!({
+                    "type": STORED_CREDENTIAL_TYPE,
+                    "refresh": "old-refresh",
+                    "access": "expired-access",
+                    "expiresAt": Utc::now().timestamp() - 1,
+                    "accountId": "account-123",
+                    "issuer": format!("http://{address}")
+                })
+                .to_string(),
+                is_active: true,
+                max_running_requests: 0,
+            })
+            .await
+            .expect("create account");
+        let record = db
+            .get_provider_account_record(&account.id)
+            .await
+            .expect("load account")
+            .expect("account record");
+        let http =
+            websocket_transport::build_client(StdDuration::from_secs(3)).expect("http client");
+        let authorization = authorization(&CodexDeviceOAuthStore::default(), &db, &http, &record)
+            .await
+            .expect("refresh authorization");
+        assert_eq!(authorization.access_token, "new-access");
+        assert_eq!(authorization.account_id.as_deref(), Some("account-123"));
+
+        let (headers, body) = captured
+            .lock()
+            .await
+            .take()
+            .expect("captured refresh request");
+        assert_eq!(
+            headers[header::CONTENT_TYPE],
+            "application/x-www-form-urlencoded"
+        );
+        let form: std::collections::HashMap<_, _> =
+            url::form_urlencoded::parse(&body).into_owned().collect();
+        assert_eq!(form["grant_type"], "refresh_token");
+        assert_eq!(form["refresh_token"], "old-refresh");
+        assert_eq!(form["client_id"], CODEX_CLIENT_ID);
+        let updated = db
+            .get_provider_account_record(&account.id)
+            .await
+            .expect("load updated account")
+            .expect("updated account record");
+        assert_eq!(
+            serde_json::from_str::<StoredCredential>(&updated.api_key)
+                .expect("stored credential")
+                .refresh,
+            "new-refresh"
+        );
+
+        server.abort();
         drop(db);
         let _ = std::fs::remove_file(&path);
         let _ = std::fs::remove_file(path.with_extension("sqlite3-wal"));
