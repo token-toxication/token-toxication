@@ -76,6 +76,10 @@ connection termination.
 completed relay attempt. Non-success attempts also emit a structured journal
 record with the same transport, status, outcome, and retry count. These fields
 are metadata-only; prompts, tokens, and upstream bodies are never logged.
+Running-request saturation is handled by the FIFO account queue. Queue entry
+and slot acquisition logs include bounded account, model, limit, load, and wait
+time fields; a relay-generated `429` is logged as a provider-route rate-limit
+rejection so it is distinguishable from queueing.
 
 ## Request examples
 

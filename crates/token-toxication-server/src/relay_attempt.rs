@@ -331,6 +331,12 @@ impl AuthenticatedRelayAttempt {
                 .has_limited_provider_route(wire_api, model)
                 .await?
         {
+            tracing::warn!(
+                wire_api,
+                model,
+                excluded_accounts = excluded_account_ids.len(),
+                "relay request rejected because all matching provider routes are rate limited"
+            );
             return Err(AppError::TooManyRequests(
                 "all matching provider accounts are rate limited".into(),
             ));
@@ -429,11 +435,23 @@ async fn acquire_until_shutdown(
     if *shutdown.borrow_and_update() {
         return Err(shutting_down_error());
     }
+    let account_id = &selection.account.account.id;
+    let limit = selection.account.account.max_running_requests;
+    let load = state.account_concurrency.load(account_id);
+    let may_wait = limit > 0 && (load.running >= limit || load.queued > 0);
+    if may_wait {
+        tracing::info!(
+            account_id,
+            wire_api = selection.account.account.wire_api.as_str(),
+            model = selection.public_model_id.as_str(),
+            max_running_requests = limit,
+            running_requests = load.running,
+            queued_requests = load.queued,
+            "relay request waiting for running-request slot"
+        );
+    }
     let queued_at = Instant::now();
-    let acquire = state.account_concurrency.acquire(
-        &selection.account.account.id,
-        selection.account.account.max_running_requests,
-    );
+    let acquire = state.account_concurrency.acquire(account_id, limit);
     tokio::pin!(acquire);
     loop {
         tokio::select! {
@@ -443,7 +461,18 @@ async fn acquire_until_shutdown(
                 _ => return Err(shutting_down_error()),
             },
             permit = &mut acquire => {
-                return Ok(QueuedPermit { permit, waited: queued_at.elapsed() });
+                let waited = queued_at.elapsed();
+                if waited > Duration::ZERO {
+                    tracing::info!(
+                        account_id,
+                        wire_api = selection.account.account.wire_api.as_str(),
+                        model = selection.public_model_id.as_str(),
+                        max_running_requests = limit,
+                        queue_wait_ms = waited.as_millis() as u64,
+                        "relay request acquired running-request slot"
+                    );
+                }
+                return Ok(QueuedPermit { permit, waited });
             }
         }
     }
