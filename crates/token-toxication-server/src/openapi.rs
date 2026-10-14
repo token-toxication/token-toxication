@@ -7,15 +7,15 @@ use crate::models::{
     CodexAccountCredits, CodexAccountQuotaLimit, CodexAccountQuotaResponse,
     CodexAccountQuotaWindow, CodexAccountResetCredit, CodexAccountResetCredits,
     CodexAccountSpendControl, CodexAccountSpendControlLimit, CodexDeviceOAuthStartRequest,
-    CodexDeviceOAuthStartResponse, CodexDeviceOAuthStatusResponse, CodexModelCatalogResponse,
-    CreateApiKeyRequest, CreateApiKeyResponse, CreateModelCatalogEntryRequest,
-    CreateProviderAccountRequest, CreateProviderModelRouteRequest, Dashboard, ErrorDetail,
-    ErrorResponse, GeminiAccountModel, GeminiAccountModelsResponse, GeminiAccountQuota,
-    GeminiAccountQuotaBucket, GeminiAccountQuotaGroup, GeminiAccountQuotaResponse,
-    GeminiAccountQuotaSummary, GeminiAccountTier, GeminiModel, GeminiModelListResponse,
-    HealthResponse, LoginRequest, LoginResponse, MetricsResponse, ModelCatalogEntry,
-    ModelCatalogEntryResponse, ModelCatalogListResponse, OpenAiModel, OpenAiModelListResponse,
-    ProviderAccount, ProviderAccountListResponse, ProviderAccountResponse, ProviderModelRoute,
+    CodexDeviceOAuthStartResponse, CodexDeviceOAuthStatusResponse, CreateApiKeyRequest,
+    CreateApiKeyResponse, CreateModelCatalogEntryRequest, CreateProviderAccountRequest,
+    CreateProviderModelRouteRequest, Dashboard, ErrorDetail, ErrorResponse, GeminiAccountModel,
+    GeminiAccountModelsResponse, GeminiAccountQuota, GeminiAccountQuotaBucket,
+    GeminiAccountQuotaGroup, GeminiAccountQuotaResponse, GeminiAccountQuotaSummary,
+    GeminiAccountTier, GeminiModel, GeminiModelListResponse, HealthResponse, LoginRequest,
+    LoginResponse, MetricsResponse, ModelCatalogEntry, ModelCatalogEntryResponse,
+    ModelCatalogListResponse, OpenAiModel, OpenAiModelListResponse, ProviderAccount,
+    ProviderAccountListResponse, ProviderAccountResponse, ProviderModelRoute,
     ProviderModelRouteListResponse, ProviderModelRouteResponse, ProviderPreset,
     ProviderPresetListResponse, RequestLog, RequestLogListResponse, RequestSummary, RequestTrend,
     RequestTrendBucket, RoutableModelCatalogEntry, RoutableModelCatalogListResponse,
@@ -68,7 +68,6 @@ use crate::models::{
         get_anthropic_model,
         list_openai_models,
         get_openai_model,
-        list_codex_models,
         list_gemini_models,
         get_gemini_model,
         relay_anthropic_messages,
@@ -127,7 +126,6 @@ use crate::models::{
         ModelCatalogListResponse,
         OpenAiModel,
         OpenAiModelListResponse,
-        CodexModelCatalogResponse,
         ProviderAccount,
         ProviderAccountListResponse,
         ProviderAccountResponse,
@@ -562,17 +560,6 @@ pub fn list_openai_models() {}
     ),
 )]
 pub fn get_openai_model() {}
-
-#[utoipa::path(
-    get,
-    path = "/codex/models",
-    tag = "Relay",
-    responses(
-        (status = 200, description = "Codex-native model catalog", body = CodexModelCatalogResponse),
-        (status = 401, description = "Missing or invalid API key", body = ErrorResponse),
-    ),
-)]
-pub fn list_codex_models() {}
 
 #[utoipa::path(
     get,
