@@ -29,6 +29,7 @@ pub(crate) const WEBSOCKET_TRANSPORT: &str = "websocket";
 
 #[derive(Clone)]
 pub(crate) struct RelayAttemptLog {
+    pub request_id: String,
     pub path: String,
     pub transport: &'static str,
     pub upstream_url: Option<String>,
@@ -246,6 +247,7 @@ impl RelayAttempt {
             .record_request(log.transport, status_code, error.as_deref());
         if status_code >= 400 {
             tracing::warn!(
+                request_id = %log.request_id,
                 transport = log.transport,
                 status_code,
                 outcome,

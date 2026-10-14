@@ -22,6 +22,7 @@ use tokio::{
     sync::mpsc,
     time::{self, Instant},
 };
+use uuid::Uuid;
 
 use crate::{
     AppState,
@@ -393,6 +394,7 @@ async fn relay_json_endpoint(
         .and_then(Value::as_bool)
         .unwrap_or(false);
     let replay_safe = request_is_replay_safe(wire_api, &original_request_json);
+    let request_id = Uuid::new_v4().to_string();
     // Started at the first slot acquisition and extended by later queue waits,
     // so time spent queued for a running-request slot never eats the budget.
     let mut failover_deadline: Option<Instant> = None;
@@ -453,6 +455,7 @@ async fn relay_json_endpoint(
             build_request_summary(&request_json, body.len() as u64, stripped_params);
         let base_upstream_url = upstream_url(&account.account.base_url, wire_api.upstream_path());
         let mut log = RelayAttemptLog {
+            request_id: request_id.clone(),
             path: wire_api.public_path().to_string(),
             upstream_url: Some(base_upstream_url.clone()),
             request_summary: Some(request_summary),
@@ -877,6 +880,7 @@ async fn relay_gemini_endpoint(
         uri.query(),
     );
     let mut log = RelayAttemptLog {
+        request_id: Uuid::new_v4().to_string(),
         path: public_path,
         upstream_url: Some(fallback_upstream_url),
         request_summary: None,

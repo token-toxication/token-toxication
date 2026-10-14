@@ -8,6 +8,7 @@ use std::collections::HashSet;
 use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::time::{Instant, timeout};
 use tokio_tungstenite::{WebSocketStream, tungstenite};
+use uuid::Uuid;
 
 type UpstreamSocket = WebSocketStream<aioduct::upgrade::UpgradedSend>;
 
@@ -55,7 +56,6 @@ enum Stop {
     Protocol,
     Http(StatusCode),
     Authorization(StatusCode),
-    Forwarded,
 }
 
 impl Stop {
@@ -68,7 +68,6 @@ impl Stop {
             Self::Protocol => "invalid WebSocket continuation or event",
             Self::Http(_) => "upstream WebSocket handshake rejected",
             Self::Authorization(_) => "upstream authorization failed",
-            Self::Forwarded => "upstream response failed",
         }
     }
 
@@ -95,6 +94,12 @@ impl Stop {
 }
 
 async fn serve(mut client: WebSocket, state: AppState, headers: HeaderMap) {
+    let connection_id = Uuid::new_v4().to_string();
+    tracing::debug!(
+        transport = WEBSOCKET_TRANSPORT,
+        connection_id = %connection_id,
+        "responses WebSocket relay connection accepted"
+    );
     let mut active = None;
     let mut shutdown = state.shutdown.subscribe();
     // Time spent queued for running-request slots extends the connection's
@@ -104,7 +109,14 @@ async fn serve(mut client: WebSocket, state: AppState, headers: HeaderMap) {
     let stop = if *shutdown.borrow() {
         Stop::Shutdown
     } else {
-        let relay = relay_connection(&mut client, &state, &headers, &mut active, &queued_ms);
+        let relay = relay_connection(
+            &mut client,
+            &state,
+            &headers,
+            &mut active,
+            &queued_ms,
+            &connection_id,
+        );
         tokio::pin!(relay);
         loop {
             let deadline = started
@@ -124,6 +136,13 @@ async fn serve(mut client: WebSocket, state: AppState, headers: HeaderMap) {
             }
         }
     };
+    tracing::info!(
+        transport = WEBSOCKET_TRANSPORT,
+        connection_id = %connection_id,
+        termination = stop.message(),
+        active_request = active.is_some(),
+        "responses WebSocket relay connection terminated"
+    );
     if let Some(active) = active {
         let usage = active.tokens();
         let result = match stop {
@@ -156,7 +175,7 @@ async fn serve(mut client: WebSocket, state: AppState, headers: HeaderMap) {
                     .record_response(&active.log, status, &HeaderMap::new(), b"{}", usage)
                     .await
             }
-            Stop::Timeout | Stop::Upstream | Stop::Forwarded => {
+            Stop::Timeout | Stop::Upstream => {
                 active
                     .attempt
                     .record_failure_with_usage(
@@ -171,7 +190,7 @@ async fn serve(mut client: WebSocket, state: AppState, headers: HeaderMap) {
             tracing::warn!("failed to record WebSocket relay termination");
         }
     }
-    if !matches!(stop, Stop::Client | Stop::Forwarded) {
+    if !matches!(stop, Stop::Client) {
         let error = json!({"type":"error", "status":stop.status().as_u16(), "error":{"type":"relay_error", "code":stop.code(), "message":stop.message()}});
         let _ = timeout(
             Duration::from_secs(1),
@@ -229,6 +248,7 @@ async fn relay_connection(
     headers: &HeaderMap,
     active: &mut Option<ActiveResponse>,
     queued_ms: &AtomicU64,
+    connection_id: &str,
 ) -> Stop {
     let idle = state.relay_stream_idle_timeout;
     let first = match timeout(idle, client.next()).await {
@@ -349,7 +369,7 @@ async fn relay_connection(
     if let Some(current) = active.as_mut() {
         current.log.upstream_url = Some(endpoint.clone());
     }
-    let (mut upstream, mut upstream_response_headers) = match timeout(
+    let (upstream_socket, mut upstream_response_headers) = match timeout(
         idle,
         websocket_transport::connect_with_headers(
             &state.websocket_http,
@@ -372,10 +392,14 @@ async fn relay_connection(
         }
         _ => return Stop::Upstream,
     };
+    let mut upstream = Some(upstream_socket);
+    let Some(upstream_socket) = upstream.as_mut().map(|socket| &mut *socket) else {
+        unreachable!("initial upstream connection must be present");
+    };
     if !matches!(
         timeout(
             idle,
-            upstream.send(tungstenite::Message::Text(first.to_string().into()))
+            upstream_socket.send(tungstenite::Message::Text(first.to_string().into()))
         )
         .await,
         Ok(Ok(()))
@@ -394,14 +418,25 @@ async fn relay_connection(
                         let mut value: Value = match serde_json::from_str(&text) { Ok(value) => value, Err(_) => return Stop::Protocol };
                         if prepare_event(&mut value, headers, &model, &previous, false).is_err() { return Stop::Protocol; }
                         let queued_at = Instant::now();
-                        let permit = match while_queued(client, Some(&mut upstream), idle, binding.acquire_permit()).await {
+                        let permit = match while_queued(client, upstream.as_mut().map(|socket| &mut *socket), idle, binding.acquire_permit()).await {
                             Ok(Ok(permit)) => permit,
                             Ok(Err(_)) => return Stop::Shutdown,
                             Err(stop) => return stop,
                         };
                         queued_ms.fetch_add(queued_at.elapsed().as_millis() as u64, Ordering::Relaxed);
+                        if upstream.is_none() {
+                            let connection = match while_queued(client, None, idle, connect_upstream(state, &endpoint, &upstream_headers, idle)).await {
+                                Ok(Ok(connection)) => connection,
+                                Ok(Err(stop)) | Err(stop) => return stop,
+                            };
+                            upstream_response_headers = connection.headers;
+                            upstream = Some(connection.socket);
+                        }
                         *active = Some(start_response(&binding, permit, &mut value, &endpoint));
-                        if !matches!(timeout(idle, upstream.send(tungstenite::Message::Text(value.to_string().into()))).await, Ok(Ok(()))) { return Stop::Upstream; }
+                        let Some(upstream_socket) = upstream.as_mut().map(|socket| &mut *socket) else {
+                            return Stop::Upstream;
+                        };
+                        if !matches!(timeout(idle, upstream_socket.send(tungstenite::Message::Text(value.to_string().into()))).await, Ok(Ok(()))) { return Stop::Upstream; }
                     }
                     Some(Ok(Message::Ping(data))) => {
                         if !matches!(timeout(idle, client.send(Message::Pong(data))).await, Ok(Ok(()))) { return Stop::Client; }
@@ -412,7 +447,12 @@ async fn relay_connection(
                 }
                 idle_deadline = Instant::now() + idle;
             }
-            message = upstream.next() => {
+            message = async {
+                match upstream.as_mut().map(|socket| &mut *socket) {
+                    Some(upstream) => upstream.next().await,
+                    None => std::future::pending().await,
+                }
+            } => {
                 match message {
                     Some(Ok(tungstenite::Message::Text(text))) => {
                         let mut value: Value = match serde_json::from_str(&text) { Ok(value) => value, Err(_) => return Stop::Upstream };
@@ -446,6 +486,14 @@ async fn relay_connection(
                         }
                         if matches!(kind.as_str(), "response.completed" | "response.failed" | "response.incomplete" | "error") && !duplicate
                             && let Some(mut current) = active.take() {
+                                tracing::info!(
+                                    transport = WEBSOCKET_TRANSPORT,
+                                    connection_id,
+                                    request_id = %current.log.request_id,
+                                    event_type = %kind,
+                                    connection_action = if matches!(kind.as_str(), "response.failed" | "response.incomplete" | "error") { "keep_open" } else { "complete" },
+                                    "responses WebSocket upstream terminal event"
+                                );
                                 let wrapped_status = (kind == "error").then(|| value.get("status").or_else(|| value.get("status_code")))
                                     .flatten().and_then(Value::as_u64).and_then(|status| u16::try_from(status).ok())
                                     .and_then(|status| StatusCode::from_u16(status).ok())
@@ -475,12 +523,15 @@ async fn relay_connection(
                                     upstream = match while_queued(client, None, idle, connect_upstream(state, &endpoint, &upstream_headers, idle)).await {
                                         Ok(Ok(connection)) => {
                                             upstream_response_headers = connection.headers;
-                                            connection.socket
+                                            Some(connection.socket)
                                         },
                                         Ok(Err(stop)) | Err(stop) => return stop,
                                     };
                                     let request = active.as_ref().expect("retry is active").request.to_string();
-                                    if !matches!(timeout(idle, upstream.send(tungstenite::Message::Text(request.into()))).await, Ok(Ok(()))) {
+                                    let Some(upstream_socket) = upstream.as_mut().map(|socket| &mut *socket) else {
+                                        return Stop::Upstream;
+                                    };
+                                    if !matches!(timeout(idle, upstream_socket.send(tungstenite::Message::Text(request.into()))).await, Ok(Ok(()))) {
                                         return Stop::Upstream;
                                     }
                                     idle_deadline = Instant::now() + idle;
@@ -531,13 +582,20 @@ async fn relay_connection(
                                 if let Some(id) = value.pointer("/response/id").and_then(Value::as_str) { previous.insert(id.to_owned()); }
                         }
                         if !matches!(timeout(idle, client.send(Message::Text(value.to_string().into()))).await, Ok(Ok(()))) { return Stop::Client; }
-                        if matches!(kind.as_str(), "error" | "response.failed" | "response.incomplete") { return Stop::Forwarded; }
                     }
                     Some(Ok(tungstenite::Message::Ping(data))) => {
-                        if !matches!(timeout(idle, upstream.send(tungstenite::Message::Pong(data))).await, Ok(Ok(()))) { return Stop::Upstream; }
+                        let Some(upstream_socket) = upstream.as_mut().map(|socket| &mut *socket) else {
+                            return Stop::Upstream;
+                        };
+                        if !matches!(timeout(idle, upstream_socket.send(tungstenite::Message::Pong(data))).await, Ok(Ok(()))) { return Stop::Upstream; }
                     }
                     Some(Ok(tungstenite::Message::Pong(_))) => {}
-                    _ => return Stop::Upstream,
+                    _ => {
+                        upstream = None;
+                        if active.is_some() {
+                            return Stop::Upstream;
+                        }
+                    }
                 }
                 idle_deadline = Instant::now() + idle;
             }
@@ -557,7 +615,7 @@ async fn while_queued<T>(
     tokio::pin!(wait);
     loop {
         let upstream_next = async {
-            match upstream.as_deref_mut() {
+            match upstream.as_mut().map(|socket| &mut *socket) {
                 Some(upstream) => upstream.next().await,
                 None => std::future::pending().await,
             }
@@ -577,7 +635,7 @@ async fn while_queued<T>(
             },
             message = upstream_next => match message {
                 Some(Ok(tungstenite::Message::Ping(data))) => {
-                    let Some(upstream) = upstream.as_deref_mut() else { unreachable!() };
+                    let Some(upstream) = upstream.as_mut().map(|socket| &mut *socket) else { unreachable!() };
                     if !matches!(timeout(idle, upstream.send(tungstenite::Message::Pong(data))).await, Ok(Ok(()))) {
                         return Err(Stop::Upstream);
                     }
@@ -606,6 +664,7 @@ fn start_response(
     ActiveResponse {
         attempt: binding.continuation(permit),
         log: RelayAttemptLog {
+            request_id: Uuid::new_v4().to_string(),
             path: "/openai/v1/responses".into(),
             transport: WEBSOCKET_TRANSPORT,
             upstream_url: Some(endpoint.into()),

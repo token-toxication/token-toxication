@@ -64,6 +64,13 @@ request after output has started. HTTP compression parity for very large
 fallback requests remains a separate compatibility item; WebSockets are the
 preferred path for Device OAuth clients.
 
+Responses WebSocket terminal failures such as `rate_limit_exceeded` end only
+the current response. The downstream client connection remains available for
+the next request; if the upstream socket closed with that failure, the relay
+reconnects before sending the next request. A transport failure while a
+response is still active remains scoped to that response and is reported as a
+connection termination.
+
 `/metrics.requestOutcomes` records the transport (`http`, `http_sse`, or
 `websocket`), upstream-facing status code, and bounded outcome class for every
 completed relay attempt. Non-success attempts also emit a structured journal

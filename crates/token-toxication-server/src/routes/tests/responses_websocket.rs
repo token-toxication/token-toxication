@@ -105,6 +105,9 @@ async fn websocket_failures_preserve_status_health_and_privacy() {
             while let Some(Ok(message)) = client.next().await {
                 if let tungstenite::Message::Text(text) = message {
                     events.push(serde_json::from_str(&text).unwrap());
+                    if events.len() == 1 {
+                        break;
+                    }
                 } else if matches!(message, tungstenite::Message::Close(_)) {
                     break;
                 }
@@ -161,6 +164,7 @@ async fn websocket_failures_preserve_status_health_and_privacy() {
                 .unwrap()
                 .contains("synthetic-private")
         );
+        let _ = client.close(None).await;
         relay_task.abort();
         upstream_task.abort();
         drop(client);
@@ -247,6 +251,20 @@ async fn websocket_terminations_record_once_and_close_upstream() {
                 client.close(None).await.unwrap();
             }
             "shutdown" => state.shutdown.cancel(),
+            "failed" | "incomplete" => {
+                let terminal = tokio::time::timeout(Duration::from_secs(3), client.next())
+                    .await
+                    .unwrap()
+                    .unwrap()
+                    .unwrap();
+                assert!(
+                    terminal
+                        .to_text()
+                        .unwrap()
+                        .contains(&format!("response.{mode}"))
+                );
+                client.close(None).await.unwrap();
+            }
             "overlap" => {
                 client
                     .send(tungstenite::Message::Text(event.into()))
@@ -295,6 +313,174 @@ async fn websocket_terminations_record_once_and_close_upstream() {
         drop(state);
         remove_test_database(&database_path);
     }
+}
+
+#[tokio::test]
+async fn websocket_rate_limit_does_not_close_reusable_client_connection() {
+    let connections = Arc::new(Mutex::new(0usize));
+    let connection_counter = connections.clone();
+    let upstream = Router::new().route(
+        "/v1/responses",
+        get(move |ws: WebSocketUpgrade| {
+            let connection_counter = connection_counter.clone();
+            async move {
+                let connection_number = {
+                    let mut connections = connection_counter.lock().await;
+                    let number = *connections;
+                    *connections += 1;
+                    number
+                };
+                ws.on_upgrade(move |mut socket| async move {
+                    let first_connection = connection_number == 0;
+                    while let Some(Ok(Message::Text(_))) = socket.next().await {
+                        if first_connection {
+                            socket
+                                .send(Message::Text(
+                                    json!({
+                                        "type": "response.failed",
+                                        "response": {
+                                            "id": "resp_limited",
+                                            "error": {
+                                                "code": "rate_limit_exceeded",
+                                                "message": "synthetic rate limit"
+                                            }
+                                        }
+                                    })
+                                    .to_string()
+                                    .into(),
+                                ))
+                                .await
+                                .unwrap();
+                            break;
+                        }
+                        socket
+                            .send(Message::Text(
+                                json!({
+                                    "type": "response.created",
+                                    "response": {"id": "resp_ok"}
+                                })
+                                .to_string()
+                                .into(),
+                            ))
+                            .await
+                            .unwrap();
+                        socket
+                            .send(Message::Text(
+                                json!({
+                                    "type": "response.completed",
+                                    "response": {"id": "resp_ok"}
+                                })
+                                .to_string()
+                                .into(),
+                            ))
+                            .await
+                            .unwrap();
+                    }
+                })
+            }
+        }),
+    );
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let upstream_address = listener.local_addr().unwrap();
+    let upstream_task = tokio::spawn(async move { axum::serve(listener, upstream).await });
+
+    let database_path = test_database_path();
+    let db = Db::open(&database_path).await.unwrap();
+    let seed = seed_relay_route(
+        &db,
+        RelayRouteSeed {
+            base_url: format!("http://{upstream_address}"),
+            provider: "openai-compatible",
+            auth_mode: "bearer",
+            provider_secret: "synthetic-provider-key".into(),
+            wire_api: "openai-responses",
+            public_model: "public-coding",
+            upstream_model: "private-coding",
+        },
+    )
+    .await;
+    let state = test_state(db, database_path.clone());
+    let relay = crate::app(state.clone(), PathBuf::from("nonexistent-static-test-dir"));
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let relay_task = tokio::spawn(async move { axum::serve(listener, relay).await });
+
+    let mut request = format!("ws://{address}/openai/v1/responses")
+        .into_client_request()
+        .unwrap();
+    request.headers_mut().insert(
+        header::AUTHORIZATION,
+        HeaderValue::from_str(&format!("Bearer {}", seed.relay_secret)).unwrap(),
+    );
+    let (mut client, _) = connect_async(request).await.unwrap();
+    client
+        .send(tungstenite::Message::Text(
+            json!({"type":"response.create","model":"public-coding","input":"limited"})
+                .to_string()
+                .into(),
+        ))
+        .await
+        .unwrap();
+    let first = tokio::time::timeout(Duration::from_secs(3), client.next())
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    assert!(first.to_text().unwrap().contains("rate_limit_exceeded"));
+
+    client
+        .send(tungstenite::Message::Text(
+            json!({"type":"response.create","model":"public-coding","input":"retry"})
+                .to_string()
+                .into(),
+        ))
+        .await
+        .expect("rate limit must not close the reusable client connection");
+    let second = tokio::time::timeout(Duration::from_secs(3), async {
+        let mut events = Vec::new();
+        while let Some(Ok(message)) = client.next().await {
+            if let tungstenite::Message::Text(text) = message {
+                events.push(text.to_string());
+                if events
+                    .iter()
+                    .any(|event| event.contains("response.completed"))
+                {
+                    break;
+                }
+            }
+        }
+        events
+    })
+    .await
+    .unwrap();
+    assert!(
+        second
+            .iter()
+            .any(|event| event.contains("response.completed"))
+    );
+    let logs = state.db.list_request_logs(10).await.unwrap();
+    assert_eq!(logs.len(), 2);
+    assert!(logs.iter().any(|log| log.status_code == 429));
+    assert!(logs.iter().any(|log| log.status_code == 200));
+    let (_, _, outcomes) = state.relay_metrics.snapshot();
+    assert!(outcomes.iter().any(|metric| {
+        metric.transport == "websocket"
+            && metric.status_code == 429
+            && metric.outcome == "rate_limited"
+            && metric.count == 1
+    }));
+    assert!(outcomes.iter().any(|metric| {
+        metric.transport == "websocket"
+            && metric.status_code == 200
+            && metric.outcome == "success"
+            && metric.count == 1
+    }));
+
+    relay_task.abort();
+    upstream_task.abort();
+    drop(client);
+    drop(state);
+    remove_test_database(&database_path);
 }
 
 #[tokio::test]
