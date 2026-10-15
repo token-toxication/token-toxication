@@ -181,8 +181,18 @@ pub fn classify_upstream_application_failure(
     now: DateTime<Utc>,
 ) -> Option<RouteFailure> {
     let (status, cooldown, limit_kind) = match code {
-        Some("server_error") => (StatusCode::BAD_GATEWAY, Duration::seconds(30), None),
-        Some("rate_limit_exceeded") => (
+        Some(
+            "api_error"
+            | "internal_error"
+            | "modelstreamerrorexception"
+            | "overloaded_error"
+            | "server_error"
+            | "server_is_overloaded"
+            | "service_unavailable"
+            | "serviceunavailableexception"
+            | "slow_down",
+        ) => (StatusCode::BAD_GATEWAY, Duration::seconds(30), None),
+        Some("rate_limit_exceeded" | "too_many_requests") => (
             StatusCode::TOO_MANY_REQUESTS,
             Duration::seconds(60),
             Some(LimitKind::RateLimited),
@@ -490,6 +500,15 @@ mod tests {
         assert_eq!(failure.status_code, Some(429));
         assert_eq!(failure.route_status, "cooling_down");
         assert_eq!(failure.cooldown_until, Some(now + Duration::seconds(60)));
+
+        let too_many = classify_upstream_application_failure(
+            Some("too_many_requests"),
+            "upstream stream failed (too_many_requests)".to_string(),
+            now,
+        )
+        .expect("classify too many requests");
+        assert_eq!(too_many.status_code, Some(429));
+        assert_eq!(too_many.limit_kind, Some(LimitKind::RateLimited));
     }
 
     #[test]

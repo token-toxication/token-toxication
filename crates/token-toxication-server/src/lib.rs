@@ -15,6 +15,7 @@ pub mod provider_catalog;
 pub mod quota_monitor;
 pub(crate) mod relay_attempt;
 pub mod relay_metrics;
+pub(crate) mod relay_retry;
 pub mod routes;
 pub mod routing;
 pub mod server;

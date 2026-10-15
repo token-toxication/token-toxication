@@ -369,7 +369,10 @@ async fn codex_http_overload_retries_same_account_before_output() {
         .await
         .unwrap();
         let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-        let retries = matches!(mode, "http" | "sse" | "no_advice" | "generic");
+        let retries = matches!(
+            mode,
+            "http" | "sse" | "no_advice" | "generic" | "after_event"
+        );
         assert_eq!(
             captures.lock().await.len(),
             if mode == "generic" {
@@ -391,7 +394,15 @@ async fn codex_http_overload_retries_same_account_before_output() {
             assert_eq!(requests[0], requests[1]);
         }
         let logs = state.db.list_request_logs(10).await.unwrap();
-        assert_eq!(logs.len(), 1, "{mode}");
+        assert_eq!(
+            logs.len(),
+            if retries {
+                captures.lock().await.len()
+            } else {
+                1
+            },
+            "{mode}"
+        );
         assert_eq!(
             logs[0].status_code,
             if retries { 200 } else { 502 },
@@ -399,16 +410,17 @@ async fn codex_http_overload_retries_same_account_before_output() {
         );
         assert_eq!(
             logs[0].overload_retry_count,
-            if retries && mode != "generic" { 5 } else { 0 },
+            if mode == "generic" {
+                1
+            } else if retries {
+                5
+            } else {
+                0
+            },
             "{mode}"
         );
-        assert_eq!(
-            logs[0].overload_retry_started,
-            retries && mode != "generic",
-            "{mode}"
-        );
+        assert_eq!(logs[0].overload_retry_started, retries, "{mode}");
         let expected_skip_reason = match mode {
-            "after_event" => Some("response_already_started"),
             "continuation" => Some("request_not_replay_safe"),
             _ => None,
         };
@@ -417,14 +429,9 @@ async fn codex_http_overload_retries_same_account_before_output() {
             expected_skip_reason,
             "{mode}"
         );
-        assert_eq!(
-            logs[0].client_retry_advice_injected,
-            mode == "after_event",
-            "{mode}"
-        );
-        assert_eq!(
-            String::from_utf8_lossy(&body).contains("\"Retry-After\":\"0\""),
-            mode == "after_event",
+        assert!(!logs[0].client_retry_advice_injected, "{mode}");
+        assert!(
+            !String::from_utf8_lossy(&body).contains("\"Retry-After\":\"0\""),
             "{mode}"
         );
         let route = state
@@ -433,7 +440,11 @@ async fn codex_http_overload_retries_same_account_before_output() {
             .await
             .unwrap()
             .unwrap();
-        assert!(route.cooldown_until.is_none(), "{mode}");
+        assert_eq!(
+            route.cooldown_until.is_some(),
+            matches!(mode, "continuation" | "disabled" | "bearer"),
+            "{mode}"
+        );
         server.abort();
         remove_test_database(&database_path);
     }

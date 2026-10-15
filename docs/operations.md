@@ -16,6 +16,11 @@ Provider account health and route health are tracked separately.
 | Responses `rate_limit_exceeded` event | Record 429 and cool the route for 60 seconds |
 | Unknown Responses failure code | Record 502 without changing route health |
 
+Codex subscription retries that have not produced text, reasoning, or tool output use the
+OpenCode-compatible bounded policy: up to ten attempts, exponential gaps starting at two
+seconds and capped at ten seconds per gap, jitter, and a maximum accepted `Retry-After` of
+15 minutes. Requests with `previous_response_id` or already-started output are not replayed.
+
 OpenAI Responses streams can fail after the upstream has already returned HTTP 200. The relay recognizes terminal `error` and `response.failed` events and records the attempt as failed.
 
 The original response stream is forwarded unchanged. Failure classification affects route health and request logs, not the bytes returned to the client.
@@ -69,7 +74,7 @@ Every server option is available as a command-line flag and, where listed, an en
 | `TT_BIND_ADDR` | `0.0.0.0:3000` | Main HTTP or HTTPS listener |
 | `TT_DATABASE_PATH` | `data/token-toxication.sqlite3` | SQLite database path |
 | `TT_STATIC_DIR` | `apps/admin/dist` | Optional external admin build; embedded assets are the fallback |
-| `TT_RELAY_STREAM_IDLE_TIMEOUT_SECS` | `60` | Maximum gap between upstream streaming response chunks |
+| `TT_RELAY_STREAM_IDLE_TIMEOUT_SECS` | `1800` | Maximum gap between upstream streaming response chunks |
 | `TT_RELAY_STREAM_MAX_DURATION_SECS` | `900` | Maximum lifetime of one relay stream |
 | `TT_ADMIN_USERNAME` | `admin` | Admin login username |
 | `TT_ADMIN_PASSWORD` | `change-this-password` | Admin login password; change before deployment |

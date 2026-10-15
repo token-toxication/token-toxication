@@ -39,6 +39,9 @@ pub(crate) struct RelayAttemptLog {
     pub overload_retry_exhausted: bool,
     pub overload_retry_skip_reason: Option<String>,
     pub client_retry_advice_injected: bool,
+    pub attempt_index: u8,
+    pub output_started: bool,
+    pub retry_after_ms: Option<u64>,
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -177,7 +180,7 @@ impl RelayAttempt {
         R: RuntimePoll,
         C: ConnectorSend,
     {
-        match request.send().await {
+        match self.send_unrecorded(request).await {
             Ok(response) => Ok(response),
             Err(error) => {
                 self.record_failure(
@@ -185,9 +188,20 @@ impl RelayAttempt {
                     classify_transport_failure(error.to_string(), Utc::now()),
                 )
                 .await?;
-                Err(AppError::Upstream(error.into()))
+                Err(AppError::Upstream(error))
             }
         }
+    }
+
+    pub(crate) async fn send_unrecorded<'request, R, C>(
+        &self,
+        request: RequestBuilderSend<'request, R, C>,
+    ) -> Result<Response, aioduct::Error>
+    where
+        R: RuntimePoll,
+        C: ConnectorSend,
+    {
+        request.send().await.map_err(Into::into)
     }
 
     pub(crate) async fn record_response(
@@ -283,6 +297,9 @@ impl RelayAttempt {
                 cost_usd: 0.0,
                 created_at: Utc::now(),
                 error,
+                attempt_index: log.attempt_index,
+                output_started: log.output_started,
+                retry_after_ms: log.retry_after_ms,
             })
             .await?;
         Ok(())
@@ -384,6 +401,35 @@ impl AuthenticatedRelayAttempt {
             queue_wait: permit.waited,
             permit: Some(permit.permit),
         })
+    }
+
+    pub(crate) async fn select_account(
+        &self,
+        wire_api: &str,
+        model: &str,
+        affinity: Option<&SessionAffinity>,
+        account_id: &str,
+    ) -> Result<RelayAttempt, AppError> {
+        let candidates = self
+            .state
+            .db
+            .list_provider_route_candidates(wire_api, model)
+            .await?;
+        if !candidates
+            .iter()
+            .any(|candidate| candidate.account.account.id == account_id)
+        {
+            return Err(AppError::ServiceUnavailable(
+                "retry account is no longer available".into(),
+            ));
+        }
+        let excluded = candidates
+            .into_iter()
+            .filter(|candidate| candidate.account.account.id != account_id)
+            .map(|candidate| candidate.account.account.id)
+            .collect();
+        self.select_excluding(wire_api, model, affinity, &excluded)
+            .await
     }
 
     fn try_acquire(&self, selection: &ProviderRouteSelection) -> Option<AccountPermit> {

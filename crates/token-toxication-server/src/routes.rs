@@ -62,12 +62,13 @@ use crate::{
         HTTP_SSE_TRANSPORT, HTTP_TRANSPORT, RelayAttempt, RelayAttemptLog, TokenUsage,
         authenticate_relay_api_key,
     },
+    relay_retry,
     routing::{RouteFailure, classify_transport_failure, classify_upstream_application_failure},
     session_affinity::{SessionAffinity, client_kind, extract as extract_session_affinity},
 };
 
 const DEFAULT_ANTHROPIC_VERSION: &str = "2023-06-01";
-const MAX_OVERLOAD_RETRIES: u8 = 5;
+const MAX_OVERLOAD_RETRIES: u8 = relay_retry::MAX_RETRIES;
 const FAILOVER_START_BUDGET: Duration = Duration::from_secs(30);
 const STREAM_FAILOVER_BUFFER_BYTES: usize = 64 * 1024;
 const STREAM_FAILOVER_WAIT: Duration = Duration::from_secs(1);
@@ -395,23 +396,35 @@ async fn relay_json_endpoint(
         .unwrap_or(false);
     let replay_safe = request_is_replay_safe(wire_api, &original_request_json);
     let request_id = Uuid::new_v4().to_string();
+    let retry_deadline = Instant::now() + state.relay_stream_max_duration;
     // Started at the first slot acquisition and extended by later queue waits,
     // so time spent queued for a running-request slot never eats the budget.
     let mut failover_deadline: Option<Instant> = None;
     let mut excluded_account_ids = HashSet::new();
     let mut last_rate_limit_response = None;
     let mut overload_retry_count = 0u8;
+    let mut retry_account_id: Option<String> = None;
 
-    for attempt_index in 0..=MAX_OVERLOAD_RETRIES {
-        let attempt = match authenticated_attempt
-            .select_excluding(
-                wire_api.account_value(),
-                &model,
-                affinity.as_ref(),
-                &excluded_account_ids,
-            )
-            .await
-        {
+    'attempts: for attempt_index in 0..=MAX_OVERLOAD_RETRIES {
+        let attempt = match if let Some(account_id) = retry_account_id.as_deref() {
+            authenticated_attempt
+                .select_account(
+                    wire_api.account_value(),
+                    &model,
+                    affinity.as_ref(),
+                    account_id,
+                )
+                .await
+        } else {
+            authenticated_attempt
+                .select_excluding(
+                    wire_api.account_value(),
+                    &model,
+                    affinity.as_ref(),
+                    &excluded_account_ids,
+                )
+                .await
+        } {
             Ok(attempt) => attempt,
             Err(error @ AppError::ServiceUnavailable(_)) => return Err(error),
             Err(error) => {
@@ -469,6 +482,9 @@ async fn relay_json_endpoint(
             overload_retry_exhausted: false,
             overload_retry_skip_reason: None,
             client_retry_advice_injected: false,
+            attempt_index,
+            output_started: false,
+            retry_after_ms: None,
         };
         let codex_auth = if is_codex_subscription_auth(&account.account.auth_mode) {
             if wire_api != WireApi::OpenAiResponses {
@@ -541,9 +557,56 @@ async fn relay_json_endpoint(
             }
         };
 
-        let response = attempt.send(request, &log).await?;
+        let response = match attempt.send_unrecorded(request).await {
+            Ok(response) => response,
+            Err(error)
+                if codex_auth.is_some()
+                    && replay_safe
+                    && attempt_index < MAX_OVERLOAD_RETRIES
+                    && Instant::now() <= retry_deadline
+                    && Instant::now()
+                        .checked_add(relay_retry::maximum_delay(attempt_index + 1, None))
+                        .is_some_and(|deadline| deadline <= retry_deadline) =>
+            {
+                let error_text = "upstream transport failed before response";
+                attempt
+                    .record_application_failure(
+                        &log,
+                        StatusCode::BAD_GATEWAY,
+                        TokenUsage::default(),
+                        error_text.into(),
+                    )
+                    .await?;
+                overload_retry_count += 1;
+                retry_account_id = Some(account.account.id.clone());
+                drop(attempt);
+                if !wait_for_codex_transient_retry(
+                    &state,
+                    attempt_index + 1,
+                    Some("transport"),
+                    None,
+                    retry_deadline,
+                )
+                .await?
+                {
+                    return Err(AppError::Upstream(error));
+                }
+                continue;
+            }
+            Err(error) => {
+                attempt
+                    .record_failure(
+                        &log,
+                        classify_transport_failure(error.to_string(), Utc::now()),
+                    )
+                    .await?;
+                return Err(AppError::Upstream(error));
+            }
+        };
         let status = response.status();
         let response_headers = response.headers().clone();
+        log.retry_after_ms = relay_retry::retry_after(&response_headers, Utc::now())
+            .map(|delay| delay.as_millis() as u64);
         let content_type = response
             .headers()
             .get(header::CONTENT_TYPE)
@@ -553,33 +616,49 @@ async fn relay_json_endpoint(
         if !status.is_success() {
             let bytes = response.bytes().await?;
             let usage = parse_usage(&bytes);
-            let overload = status.is_server_error()
-                && codex_auth.is_some()
-                && serde_json::from_slice::<Value>(&bytes)
-                    .ok()
-                    .is_some_and(|body| {
-                        let error = body.get("error").unwrap_or(&body);
-                        error.get("code").and_then(Value::as_str) == Some("server_is_overloaded")
-                    });
-            if overload {
-                let mut value: Value = serde_json::from_slice(&bytes).unwrap_or_default();
-                value["type"] = json!("error");
-                if let Some(retry_after) = response_headers
-                    .get("retry-after")
-                    .and_then(|value| value.to_str().ok())
-                {
-                    value["error"]["headers"]["Retry-After"] = json!(retry_after);
-                }
+            let failure_code = upstream_failure_code(&bytes);
+            let transient = codex_auth.is_some()
+                && status.is_server_error()
+                && relay_retry::retryable_provider_code(failure_code.as_deref());
+            if transient {
+                let retry_after = relay_retry::retry_after(&response_headers, Utc::now());
                 if attempt_index < MAX_OVERLOAD_RETRIES
                     && replay_safe
-                    && retryable_overload(&value)
-                    && Instant::now() <= failover_deadline
+                    && Instant::now() <= retry_deadline
+                    && Instant::now()
+                        .checked_add(relay_retry::maximum_delay(attempt_index + 1, retry_after))
+                        .is_some_and(|deadline| deadline <= retry_deadline)
                 {
-                    drop(attempt);
+                    let error = format!(
+                        "upstream request failed ({})",
+                        failure_code.as_deref().unwrap_or("transient")
+                    );
+                    attempt
+                        .record_application_failure(&log, status, usage, error)
+                        .await?;
                     overload_retry_count += 1;
-                    wait_for_codex_overload_retry(&state, attempt_index + 1).await?;
+                    retry_account_id = Some(account.account.id.clone());
+                    drop(attempt);
+                    if !wait_for_codex_transient_retry(
+                        &state,
+                        attempt_index + 1,
+                        failure_code.as_deref(),
+                        retry_after,
+                        retry_deadline,
+                    )
+                    .await?
+                    {
+                        return response_with_upstream_headers(
+                            status,
+                            content_type,
+                            &response_headers,
+                            bytes,
+                            "no-store",
+                        );
+                    }
                     continue;
                 }
+                log.overload_retry_started = overload_retry_count > 0;
                 log.overload_retry_exhausted = attempt_index >= MAX_OVERLOAD_RETRIES;
                 log.overload_retry_skip_reason = Some(
                     if log.overload_retry_exhausted {
@@ -598,7 +677,10 @@ async fn relay_json_endpoint(
                         &log,
                         status,
                         usage,
-                        "upstream stream failed (server_is_overloaded)".into(),
+                        format!(
+                            "upstream request failed ({})",
+                            failure_code.as_deref().unwrap_or("transient")
+                        ),
                     )
                     .await?;
                 return response_with_upstream_headers(
@@ -618,6 +700,7 @@ async fn relay_json_endpoint(
                 && Instant::now() <= failover_deadline
             {
                 excluded_account_ids.insert(account.account.id);
+                retry_account_id = None;
                 last_rate_limit_response = Some((
                     status,
                     content_type,
@@ -643,7 +726,10 @@ async fn relay_json_endpoint(
             let mut observation = StreamingResponseObservation::default();
             let preflight_deadline = Instant::now() + STREAM_FAILOVER_WAIT;
             let mut preflight_timed_out = false;
-            while buffered_bytes < STREAM_FAILOVER_BUFFER_BYTES && !observation.has_message() {
+            while buffered_bytes < STREAM_FAILOVER_BUFFER_BYTES
+                && !observation.output_started
+                && observation.application_failure.is_none()
+            {
                 let next = match time::timeout_at(preflight_deadline, upstream_stream.next()).await
                 {
                     Ok(next) => next,
@@ -659,6 +745,40 @@ async fn relay_json_endpoint(
                         buffered.push(chunk);
                     }
                     Some(Err(error)) => {
+                        if codex_auth.is_some()
+                            && replay_safe
+                            && !observation.output_started
+                            && attempt_index < MAX_OVERLOAD_RETRIES
+                            && Instant::now() <= retry_deadline
+                            && Instant::now()
+                                .checked_add(relay_retry::maximum_delay(attempt_index + 1, None))
+                                .is_some_and(|deadline| deadline <= retry_deadline)
+                        {
+                            attempt
+                                .record_application_failure(
+                                    &log,
+                                    StatusCode::BAD_GATEWAY,
+                                    observation.tokens(),
+                                    "upstream stream transport failed before output".into(),
+                                )
+                                .await?;
+                            drop(upstream_stream);
+                            drop(attempt);
+                            overload_retry_count += 1;
+                            retry_account_id = Some(account.account.id.clone());
+                            if !wait_for_codex_transient_retry(
+                                &state,
+                                attempt_index + 1,
+                                Some("transport"),
+                                None,
+                                retry_deadline,
+                            )
+                            .await?
+                            {
+                                return Err(AppError::Upstream(error));
+                            }
+                            continue 'attempts;
+                        }
                         attempt
                             .record_failure(
                                 &log,
@@ -675,29 +795,55 @@ async fn relay_json_endpoint(
                 .cloned()
             {
                 if codex_auth.is_some()
-                    && (failure.retryable_overload || failure.retryable_without_error_code())
-                    && observation.message_count == 1
-                    && observation.buffer.is_empty()
+                    && failure.retryable
+                    && !observation.output_started
                     && attempt_index < MAX_OVERLOAD_RETRIES
                     && replay_safe
-                    && Instant::now() <= failover_deadline
-                {
-                    drop(upstream_stream);
-                    drop(attempt);
-                    if failure.retryable_overload {
-                        overload_retry_count += 1;
-                        wait_for_codex_overload_retry(&state, attempt_index + 1).await?;
-                    } else {
-                        wait_for_codex_transient_retry(
-                            &state,
+                    && Instant::now() <= retry_deadline
+                    && Instant::now()
+                        .checked_add(relay_retry::maximum_delay(
                             attempt_index + 1,
-                            failure.code.as_deref(),
+                            failure.retry_after,
+                        ))
+                        .is_some_and(|deadline| deadline <= retry_deadline)
+                    && (!is_limit_failure_code(failure.code.as_deref())
+                        || Instant::now() <= failover_deadline)
+                {
+                    log.retry_after_ms = failure.retry_after.map(|delay| delay.as_millis() as u64);
+                    let status = classify_upstream_application_failure(
+                        failure.code.as_deref(),
+                        failure.log_error(),
+                        Utc::now(),
+                    )
+                    .and_then(|route_failure| route_failure.status_code)
+                    .and_then(|status| StatusCode::from_u16(status).ok())
+                    .unwrap_or(StatusCode::BAD_GATEWAY);
+                    attempt
+                        .record_application_failure(
+                            &log,
+                            status,
+                            observation.tokens(),
+                            failure.log_error(),
                         )
                         .await?;
+                    drop(upstream_stream);
+                    drop(attempt);
+                    overload_retry_count += 1;
+                    retry_account_id = Some(account.account.id.clone());
+                    if !wait_for_codex_transient_retry(
+                        &state,
+                        attempt_index + 1,
+                        failure.code.as_deref(),
+                        failure.retry_after,
+                        retry_deadline,
+                    )
+                    .await?
+                    {
+                        break;
                     }
                     continue;
                 }
-                if codex_auth.is_some() && failure.retryable_overload {
+                if codex_auth.is_some() && failure.retryable {
                     log.overload_retry_exhausted = attempt_index >= MAX_OVERLOAD_RETRIES;
                     log.overload_retry_skip_reason = Some(
                         if log.overload_retry_exhausted {
@@ -803,6 +949,29 @@ fn request_is_replay_safe(wire_api: WireApi, request: &Value) -> bool {
             .is_none_or(Value::is_null)
 }
 
+fn upstream_failure_code(bytes: &[u8]) -> Option<String> {
+    let value = serde_json::from_slice::<Value>(bytes).ok()?;
+    let error = value.get("error").unwrap_or(&value);
+    error
+        .get("code")
+        .or_else(|| error.get("type"))
+        .and_then(Value::as_str)
+        .and_then(relay_retry::normalize_provider_code)
+}
+
+fn is_limit_failure_code(code: Option<&str>) -> bool {
+    matches!(
+        code,
+        Some(
+            "rate_limit_exceeded"
+                | "too_many_requests"
+                | "usage_limit_reached"
+                | "quota_exhausted"
+                | "insufficient_quota"
+        )
+    )
+}
+
 fn response_with_bytes(
     status: StatusCode,
     content_type: HeaderValue,
@@ -890,6 +1059,9 @@ async fn relay_gemini_endpoint(
         overload_retry_exhausted: false,
         overload_retry_skip_reason: None,
         client_retry_advice_injected: false,
+        attempt_index: 0,
+        output_started: false,
+        retry_after_ms: None,
     };
 
     let authorization =
@@ -2021,13 +2193,11 @@ where
             }
         };
 
+        log.output_started = observation.output_started;
         if let Some(failure) = observation.application_failure(wire_api) {
-            if codex_subscription
-                && failure.retryable_overload
-                && log.overload_retry_skip_reason.is_none()
-            {
+            if codex_subscription && failure.retryable && log.overload_retry_skip_reason.is_none() {
                 log.overload_retry_skip_reason = Some(
-                    if observation.message_count > 1 {
+                    if observation.output_started {
                         "response_already_started"
                     } else if preflight_timed_out {
                         "preflight_timeout"
@@ -2211,6 +2381,30 @@ fn is_output_delta(value: &Value) -> bool {
         .is_some_and(|parts| !parts.is_empty())
 }
 
+fn is_output_started(value: &Value) -> bool {
+    if is_output_delta(value) {
+        return true;
+    }
+    match value
+        .get("type")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+    {
+        "response.reasoning_summary_part.added"
+        | "response.reasoning_summary_text.done"
+        | "response.reasoning_text.done"
+        | "response.reasoning.done"
+        | "response.output_item.added"
+        | "content_block_start"
+        | "tool_call" => true,
+        "response.output_item.done" => value
+            .pointer("/item/type")
+            .and_then(Value::as_str)
+            .is_some_and(|kind| matches!(kind, "function_call" | "custom_tool_call" | "reasoning")),
+        _ => false,
+    }
+}
+
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 struct UsageUpdate {
     input_tokens: Option<u64>,
@@ -2274,7 +2468,7 @@ struct StreamingResponseObservation {
     decoder: SseDecoder,
     buffer: BytesMut,
     usage: UsageUpdate,
-    has_message: bool,
+    output_started: bool,
     first_output_at: Option<Instant>,
     message_count: usize,
     application_failure: Option<StreamingApplicationFailure>,
@@ -2289,7 +2483,7 @@ impl Default for StreamingResponseObservation {
             decoder: SseDecoder::with_max_payload_size(0),
             buffer: BytesMut::new(),
             usage: UsageUpdate::default(),
-            has_message: false,
+            output_started: false,
             first_output_at: None,
             message_count: 0,
             application_failure: None,
@@ -2305,18 +2499,17 @@ impl StreamingResponseObservation {
             let Ok(SseEvent::Message(message)) = event else {
                 continue;
             };
-            self.has_message = true;
-            let message_index = self.message_count;
             self.message_count += 1;
             let Ok(value) = serde_json::from_str::<Value>(&message.data) else {
                 continue;
             };
+            self.output_started |= is_output_started(&value);
             if self.first_output_at.is_none() && is_output_delta(&value) {
                 self.first_output_at = Some(observed_at);
             }
             self.usage.merge(usage_update(&value));
             if let Some(error) = openai_responses_stream_failure(&value) {
-                if message_index == 0 {
+                if !self.output_started {
                     self.replayable_application_failure = Some(error.clone());
                 }
                 self.application_failure = Some(error);
@@ -2326,10 +2519,6 @@ impl StreamingResponseObservation {
 
     fn tokens(&self) -> TokenUsage {
         self.usage.tokens_with_generation(self.first_output_at)
-    }
-
-    fn has_message(&self) -> bool {
-        self.has_message
     }
 
     fn application_failure(&self, wire_api: WireApi) -> Option<&StreamingApplicationFailure> {
@@ -2356,14 +2545,11 @@ impl StreamingResponseObservation {
 struct StreamingApplicationFailure {
     event_type: &'static str,
     code: Option<String>,
-    retryable_overload: bool,
+    retryable: bool,
+    retry_after: Option<Duration>,
 }
 
 impl StreamingApplicationFailure {
-    fn retryable_without_error_code(&self) -> bool {
-        !self.retryable_overload && self.code.is_none()
-    }
-
     fn log_error(&self) -> String {
         self.code.as_ref().map_or_else(
             || "upstream stream failed".to_string(),
@@ -2382,23 +2568,50 @@ fn openai_responses_stream_failure(value: &Value) -> Option<StreamingApplication
         _ => return None,
     };
 
+    let code = normalized_stream_error_code(error);
+    let disabled = error
+        .get("message")
+        .and_then(Value::as_str)
+        .is_some_and(|message| message.to_ascii_lowercase().contains("disabled"));
     Some(StreamingApplicationFailure {
         event_type,
-        code: normalized_stream_error_code(error),
-        retryable_overload: retryable_overload(value),
+        retryable: relay_retry::retryable_provider_code(code.as_deref()) && !disabled,
+        code,
+        retry_after: retry_after_from_event(value),
     })
 }
 
-fn normalized_stream_error_code(error: &Value) -> Option<String> {
-    const MAX_ERROR_CODE_BYTES: usize = 64;
+fn retry_after_from_event(value: &Value) -> Option<Duration> {
+    let error = match value.get("type").and_then(Value::as_str) {
+        Some("error") => value.get("error").unwrap_or(value),
+        Some("response.failed") => value.pointer("/response/error").unwrap_or(value),
+        _ => value,
+    };
+    let mut headers = HeaderMap::new();
+    if let Some(value) = error
+        .pointer("/headers/Retry-After")
+        .or_else(|| error.get("retry_after"))
+        .and_then(Value::as_str)
+        && let Ok(value) = HeaderValue::from_str(value)
+    {
+        headers.insert("retry-after", value);
+    }
+    if let Some(value) = error
+        .pointer("/headers/Retry-After-Ms")
+        .or_else(|| error.get("retry_after_ms"))
+        .and_then(Value::as_u64)
+        && let Ok(value) = HeaderValue::from_str(&value.to_string())
+    {
+        headers.insert("retry-after-ms", value);
+    }
+    relay_retry::retry_after(&headers, Utc::now())
+}
 
-    let code = error.get("code")?.as_str()?.trim();
-    (!code.is_empty()
-        && code.len() <= MAX_ERROR_CODE_BYTES
-        && code
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-')))
-    .then(|| code.to_string())
+fn normalized_stream_error_code(error: &Value) -> Option<String> {
+    error
+        .get("code")
+        .and_then(Value::as_str)
+        .and_then(relay_retry::normalize_provider_code)
 }
 
 fn parse_usage(bytes: &[u8]) -> TokenUsage {
@@ -2545,42 +2758,21 @@ fn validate_provider_model_route_input(
     Ok(())
 }
 
-fn retryable_overload(value: &Value) -> bool {
-    if usage_update(value).tokens().output_tokens > 0 {
-        return false;
-    }
-    let error = match value.get("type").and_then(Value::as_str) {
-        Some("error") => value.get("error").unwrap_or(value),
-        Some("response.failed") => value.pointer("/response/error").unwrap_or(value),
-        _ => return false,
-    };
-    if error.get("code").and_then(Value::as_str) != Some("server_is_overloaded") {
-        return false;
-    }
-    if error
-        .get("message")
-        .and_then(Value::as_str)
-        .is_some_and(|message| message.to_ascii_lowercase().contains("disabled"))
-    {
-        return false;
-    }
-    true
-}
-
-async fn wait_for_codex_overload_retry(state: &AppState, retry: u8) -> Result<(), AppError> {
-    wait_for_codex_transient_retry(state, retry, Some("server_is_overloaded")).await
-}
-
 async fn wait_for_codex_transient_retry(
     state: &AppState,
     retry: u8,
     error_code: Option<&str>,
-) -> Result<(), AppError> {
-    use rand::Rng;
-    let delay = rand::rng().random_range(2..=5);
+    retry_after: Option<Duration>,
+    deadline: Instant,
+) -> Result<bool, AppError> {
+    let delay = relay_retry::delay(retry, retry_after, &mut rand::rng());
+    let remaining = deadline.saturating_duration_since(Instant::now());
+    if remaining < delay {
+        return Ok(false);
+    }
     tracing::info!(
         retry,
-        delay_seconds = delay,
+        delay_seconds = delay.as_secs(),
         error_code = error_code.unwrap_or("<none>"),
         "retrying Codex subscription transient stream failure"
     );
@@ -2589,7 +2781,7 @@ async fn wait_for_codex_transient_retry(
         return Err(crate::relay_attempt::shutting_down_error());
     }
     tokio::select! {
-        _ = tokio::time::sleep(Duration::from_secs(delay)) => Ok(()),
+        _ = tokio::time::sleep(delay) => Ok(true),
         _ = shutdown.changed() => Err(crate::relay_attempt::shutting_down_error()),
     }
 }
@@ -4607,7 +4799,7 @@ mod tests {
     }
 
     #[test]
-    fn streaming_failure_after_a_business_event_is_not_replayable() {
+    fn streaming_failure_after_response_created_is_replayable_without_output() {
         let mut observation = StreamingResponseObservation::default();
         observation.observe(
             b"event: response.created\ndata: {\"type\":\"response.created\",\"response\":{\"id\":\"resp-1\"}}\n\nevent: response.failed\ndata: {\"type\":\"response.failed\",\"response\":{\"id\":\"resp-1\",\"error\":{\"code\":\"usage_limit_reached\"}}}\n\n",
@@ -4621,8 +4813,38 @@ mod tests {
         );
         assert_eq!(
             observation.replayable_application_failure(WireApi::OpenAiResponses),
+            observation.application_failure(WireApi::OpenAiResponses)
+        );
+        assert!(!observation.output_started);
+    }
+
+    #[test]
+    fn streaming_failure_after_reasoning_output_is_not_replayable() {
+        let mut observation = StreamingResponseObservation::default();
+        observation.observe(
+            b"event: response.created\ndata: {\"type\":\"response.created\",\"response\":{\"id\":\"resp-1\"}}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"delta\":\"thinking\"}\n\nevent: response.failed\ndata: {\"type\":\"response.failed\",\"response\":{\"id\":\"resp-1\",\"error\":{\"code\":\"server_error\"}}}\n\n",
+            Instant::now(),
+        );
+
+        assert!(observation.output_started);
+        assert_eq!(
+            observation.replayable_application_failure(WireApi::OpenAiResponses),
             None
         );
+    }
+
+    #[test]
+    fn streaming_failure_preserves_bounded_retry_after() {
+        let failure = openai_responses_stream_failure(&json!({
+            "type": "error",
+            "error": {
+                "code": "server_is_overloaded",
+                "headers": {"Retry-After": "7"}
+            }
+        }))
+        .expect("application failure");
+
+        assert_eq!(failure.retry_after, Some(Duration::from_secs(7)));
     }
 
     #[test]

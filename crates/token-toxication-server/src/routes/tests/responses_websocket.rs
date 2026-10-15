@@ -121,7 +121,7 @@ async fn websocket_failures_preserve_status_health_and_privacy() {
         } else {
             status
         };
-        let logs = state.db.list_request_logs(10).await.unwrap();
+        let logs = state.db.list_request_logs(20).await.unwrap();
         assert_eq!(logs.len(), 1, "{mode}/{status}");
         assert_eq!(logs[0].status_code, expected, "{mode}/{status}");
         assert_eq!(
@@ -945,7 +945,7 @@ async fn codex_overload_reconnects_with_bounded_random_delay() {
             ))
             .await
             .unwrap();
-        let event = tokio::time::timeout(Duration::from_secs(35), async {
+        let event = tokio::time::timeout(Duration::from_secs(180), async {
             loop {
                 if let Some(Ok(tungstenite::Message::Text(text))) = client.next().await {
                     break serde_json::from_str::<Value>(&text).unwrap();
@@ -963,19 +963,25 @@ async fn codex_overload_reconnects_with_bounded_random_delay() {
             }
         );
         let requests = captures.lock().await;
-        assert_eq!(requests.len(), 6);
-        for pair in requests.windows(2) {
+        assert_eq!(requests.len(), if recover { 6 } else { 11 });
+        for (retry, pair) in requests.windows(2).enumerate() {
             assert_eq!(pair[0].1, pair[1].1);
             let delay = pair[1].0.duration_since(pair[0].0);
+            let base = match retry {
+                0 => 2,
+                1 => 4,
+                2 => 8,
+                _ => 10,
+            };
             assert!(
-                delay >= Duration::from_secs(2) && delay < Duration::from_secs(6),
+                delay >= Duration::from_secs(base) && delay < Duration::from_secs(base * 2 + 1),
                 "{delay:?}"
             );
         }
-        let logs = state.db.list_request_logs(10).await.unwrap();
-        assert_eq!(logs.len(), 1);
+        let logs = state.db.list_request_logs(20).await.unwrap();
+        assert_eq!(logs.len(), if recover { 6 } else { 11 });
         assert_eq!(logs[0].status_code, if recover { 200 } else { 502 });
-        assert_eq!(logs[0].overload_retry_count, 5);
+        assert_eq!(logs[0].overload_retry_count, if recover { 5 } else { 10 });
         assert!(logs[0].overload_retry_started);
         assert_eq!(logs[0].overload_retry_exhausted, !recover);
         let route = state
@@ -984,7 +990,7 @@ async fn codex_overload_reconnects_with_bounded_random_delay() {
             .await
             .unwrap()
             .unwrap();
-        assert!(route.cooldown_until.is_none());
+        assert_eq!(route.cooldown_until.is_some(), !recover);
         drop(requests);
         relay_task.abort();
         upstream_task.abort();

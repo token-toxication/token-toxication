@@ -89,7 +89,11 @@ pub struct Config {
     #[arg(long, env = "TT_STATIC_DIR", default_value = "apps/admin/dist")]
     pub static_dir: PathBuf,
 
-    #[arg(long, env = "TT_RELAY_STREAM_IDLE_TIMEOUT_SECS", default_value_t = 60)]
+    #[arg(
+        long,
+        env = "TT_RELAY_STREAM_IDLE_TIMEOUT_SECS",
+        default_value_t = 1_800
+    )]
     pub relay_stream_idle_timeout_secs: u64,
 
     #[arg(long, env = "TT_RELAY_STREAM_MAX_DURATION_SECS", default_value_t = 900)]
@@ -230,7 +234,7 @@ mod tests {
             acme_directory_url: LETS_ENCRYPT_PRODUCTION_DIRECTORY.to_string(),
             database_path: PathBuf::from("data/token-toxication.sqlite3"),
             static_dir: PathBuf::from("apps/admin/dist"),
-            relay_stream_idle_timeout_secs: 60,
+            relay_stream_idle_timeout_secs: 1_800,
             relay_stream_max_duration_secs: 900,
             admin_username: "admin".to_string(),
             admin_password: "change-this-password".to_string(),

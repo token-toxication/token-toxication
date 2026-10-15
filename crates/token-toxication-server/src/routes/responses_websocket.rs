@@ -3,7 +3,6 @@ use crate::relay_attempt::{QueuedPermit, WEBSOCKET_TRANSPORT};
 use crate::websocket_transport::{self, ConnectError};
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use futures_util::{SinkExt, StreamExt};
-use rand::Rng;
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::time::{Instant, timeout};
@@ -43,7 +42,7 @@ struct ActiveResponse {
     response_id: Option<String>,
     request: Value,
     overload_retries: u8,
-    has_event: bool,
+    output_started: bool,
     first_output_at: Option<Instant>,
 }
 
@@ -466,14 +465,20 @@ async fn relay_connection(
                         }
                         let duplicate = value.pointer("/response/id").and_then(Value::as_str).is_some_and(|id| previous.contains(id));
                         if duplicate { continue; }
+                        let stream_failure = openai_responses_stream_failure(&value);
+                        let retryable_failure = stream_failure
+                            .as_ref()
+                            .is_some_and(|failure| failure.retryable);
                         let overload_retry = active.as_ref().is_some_and(|current| {
-                            !current.has_event
-                                && is_codex_subscription_auth(&binding.selection().account.account.auth_mode)
+                            !current.output_started
+                                && is_codex_subscription_auth(
+                                    &binding.selection().account.account.auth_mode,
+                                )
                                 && request_is_replay_safe(WireApi::OpenAiResponses, &current.request)
-                                && retryable_overload(&value)
+                                && retryable_failure
                         });
                         if let Some(current) = active.as_mut() {
-                            current.has_event = true;
+                            current.output_started |= is_output_started(&value);
                             if current.first_output_at.is_none() && is_output_delta(&value) {
                                 current.first_output_at = Some(Instant::now());
                             }
@@ -486,12 +491,13 @@ async fn relay_connection(
                         }
                         if matches!(kind.as_str(), "response.completed" | "response.failed" | "response.incomplete" | "error") && !duplicate
                             && let Some(mut current) = active.take() {
+                                current.log.output_started = current.output_started;
                                 tracing::info!(
                                     transport = WEBSOCKET_TRANSPORT,
                                     connection_id,
                                     request_id = %current.log.request_id,
                                     event_type = %kind,
-                                    connection_action = if matches!(kind.as_str(), "response.failed" | "response.incomplete" | "error") { "keep_open" } else { "complete" },
+                                    connection_action = if matches!(kind.as_str(), "response.failed" | "error") { "close_upstream_keep_client" } else if kind == "response.incomplete" { "keep_open" } else { "complete" },
                                     "responses WebSocket upstream terminal event"
                                 );
                                 let wrapped_status = (kind == "error").then(|| value.get("status").or_else(|| value.get("status_code")))
@@ -500,17 +506,51 @@ async fn relay_connection(
                                     .filter(|status| status.is_client_error() || status.is_server_error());
                                 if overload_retry && current.overload_retries < MAX_OVERLOAD_RETRIES {
                                     let mut current = current;
+                                    if let Some(failure) = stream_failure.as_ref() {
+                                        current.log.retry_after_ms = failure
+                                            .retry_after
+                                            .map(|delay| delay.as_millis() as u64);
+                                        let status = classify_upstream_application_failure(
+                                            failure.code.as_deref(),
+                                            failure.log_error(),
+                                            Utc::now(),
+                                        )
+                                        .and_then(|route_failure| route_failure.status_code)
+                                        .and_then(|status| StatusCode::from_u16(status).ok())
+                                        .unwrap_or(StatusCode::BAD_GATEWAY);
+                                        if current
+                                            .attempt
+                                            .record_application_failure(
+                                                &current.log,
+                                                status,
+                                                current.tokens(),
+                                                failure.log_error(),
+                                            )
+                                            .await
+                                            .is_err()
+                                        {
+                                            return Stop::Upstream;
+                                        }
+                                    }
                                     current.overload_retries += 1;
                                     current.log.overload_retry_count = current.overload_retries;
                                     current.log.overload_retry_started = true;
-                                    let delay = rand::rng().random_range(2..=5);
-                                    tracing::info!(retry = current.overload_retries, delay_seconds = delay, "retrying Codex subscription overload");
+                                    current.log.attempt_index = current.overload_retries;
+                                    let delay = crate::relay_retry::delay(
+                                        current.overload_retries,
+                                        stream_failure
+                                            .as_ref()
+                                            .and_then(|failure| failure.retry_after),
+                                        &mut rand::rng(),
+                                    );
+                                    tracing::info!(retry = current.overload_retries, delay_seconds = delay.as_secs(), "retrying Codex subscription transient failure");
                                     current.usage = UsageUpdate::default();
                                     current.first_output_at = None;
                                     current.response_id = None;
-                                    current.has_event = false;
+                                    current.output_started = false;
                                     let _ = current.attempt.take_queued_permit();
-                                    if let Err(stop) = while_queued(client, None, idle, tokio::time::sleep(Duration::from_secs(delay))).await {
+                                    let _ = upstream.take();
+                                    if let Err(stop) = while_queued(client, None, idle, tokio::time::sleep(delay)).await {
                                         return stop;
                                     }
                                     let permit = match while_queued(client, None, idle, binding.acquire_permit()).await {
@@ -537,34 +577,31 @@ async fn relay_connection(
                                     idle_deadline = Instant::now() + idle;
                                     continue;
                                 }
-                                let terminal_overload = is_codex_subscription_auth(
+                                let terminal_transient = is_codex_subscription_auth(
                                     &binding.selection().account.account.auth_mode,
-                                ) && openai_responses_stream_failure(&value).is_some_and(
-                                    |failure| {
-                                        failure.code.as_deref() == Some("server_is_overloaded")
-                                    },
-                                );
-                                if terminal_overload {
+                                ) && stream_failure
+                                    .as_ref()
+                                    .is_some_and(|failure| failure.retryable);
+                                if terminal_transient {
                                     current.log.overload_retry_exhausted =
                                         current.overload_retries >= MAX_OVERLOAD_RETRIES;
                                     current.log.overload_retry_skip_reason = Some(
                                         if current.log.overload_retry_exhausted {
                                             "retry_budget_exhausted"
+                                        } else if current.output_started {
+                                            "response_already_started"
                                         } else if !request_is_replay_safe(
                                             WireApi::OpenAiResponses,
                                             &current.request,
                                         ) {
                                             "request_not_replay_safe"
                                         } else {
-                                            "overload_not_replayable"
+                                            "transient_not_replayable"
                                         }
                                         .to_string(),
                                     );
                                 }
-                                let result = if is_codex_subscription_auth(&binding.selection().account.account.auth_mode)
-                                    && openai_responses_stream_failure(&value).is_some_and(|failure| failure.code.as_deref() == Some("server_is_overloaded")) {
-                                    current.attempt.record_application_failure(&current.log, wrapped_status.unwrap_or(StatusCode::BAD_GATEWAY), current.tokens(), "upstream stream failed (server_is_overloaded)".into()).await
-                                } else if let Some(status) = wrapped_status {
+                                let result = if let Some(status) = wrapped_status {
                                     current.attempt.record_response(&current.log, status, &HeaderMap::new(), b"{}", current.tokens()).await
                                 } else if let Some(failure) = openai_responses_stream_failure(&value) {
                                     let error = failure.log_error();
@@ -580,7 +617,10 @@ async fn relay_connection(
                                 };
                                 if result.is_err() { return Stop::Upstream; }
                                 if let Some(id) = value.pointer("/response/id").and_then(Value::as_str) { previous.insert(id.to_owned()); }
-                        }
+                                if matches!(kind.as_str(), "response.failed" | "error") {
+                                    upstream = None;
+                                }
+                            }
                         if !matches!(timeout(idle, client.send(Message::Text(value.to_string().into()))).await, Ok(Ok(()))) { return Stop::Client; }
                     }
                     Some(Ok(tungstenite::Message::Ping(data))) => {
@@ -678,12 +718,15 @@ fn start_response(
             overload_retry_exhausted: false,
             overload_retry_skip_reason: None,
             client_retry_advice_injected: false,
+            attempt_index: 0,
+            output_started: false,
+            retry_after_ms: None,
         },
         usage: UsageUpdate::default(),
         response_id: None,
         request: value.clone(),
         overload_retries: 0,
-        has_event: false,
+        output_started: false,
         first_output_at: None,
     }
 }

@@ -220,6 +220,19 @@ impl Db {
         )?;
         ensure_column(
             &conn,
+            "request_logs",
+            "attempt_index",
+            "INTEGER NOT NULL DEFAULT 0",
+        )?;
+        ensure_column(
+            &conn,
+            "request_logs",
+            "output_started",
+            "INTEGER NOT NULL DEFAULT 0",
+        )?;
+        ensure_column(&conn, "request_logs", "retry_after_ms", "INTEGER")?;
+        ensure_column(
+            &conn,
             "provider_model_routes",
             "status",
             "TEXT NOT NULL DEFAULT 'healthy'",
@@ -1329,9 +1342,9 @@ impl Db {
              (id, api_key_id, provider_account_id, method, path, model, upstream_model,
               upstream_url, request_summary, status_code, latency_ms, input_tokens,
               cached_input_tokens, output_tokens, otps, cost_usd, created_at, error, queue_wait_ms,
-              overload_retry_count, overload_retry_started, overload_retry_exhausted, overload_retry_skip_reason,
-              client_retry_advice_injected)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24)",
+               overload_retry_count, overload_retry_started, overload_retry_exhausted, overload_retry_skip_reason,
+               client_retry_advice_injected, attempt_index, output_started, retry_after_ms)
+              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27)",
             params![
                 log.id,
                 log.api_key_id,
@@ -1361,6 +1374,9 @@ impl Db {
                 log.overload_retry_exhausted,
                 log.overload_retry_skip_reason,
                 log.client_retry_advice_injected,
+                log.attempt_index,
+                log.output_started,
+                log.retry_after_ms,
             ],
         )?;
         Ok(())
@@ -1371,9 +1387,9 @@ impl Db {
         let mut stmt = conn.prepare(
             "SELECT id, api_key_id, provider_account_id, method, path, model, upstream_model,
                     upstream_url, request_summary, status_code, latency_ms, input_tokens,
-                    cached_input_tokens, output_tokens, otps, cost_usd, created_at, error, queue_wait_ms,
-                    overload_retry_count, overload_retry_started, overload_retry_exhausted, overload_retry_skip_reason,
-                    client_retry_advice_injected
+                     cached_input_tokens, output_tokens, otps, cost_usd, created_at, error, queue_wait_ms,
+                     overload_retry_count, overload_retry_started, overload_retry_exhausted, overload_retry_skip_reason,
+                     client_retry_advice_injected, attempt_index, output_started, retry_after_ms
              FROM request_logs
              ORDER BY created_at DESC
              LIMIT ?1",
@@ -1647,6 +1663,9 @@ fn request_log_from_row(row: &rusqlite::Row<'_>) -> Result<RequestLog, rusqlite:
         overload_retry_exhausted: row.get::<_, i64>(21)? != 0,
         overload_retry_skip_reason: row.get(22)?,
         client_retry_advice_injected: row.get::<_, i64>(23)? != 0,
+        attempt_index: row.get::<_, i64>(24)? as u8,
+        output_started: row.get::<_, i64>(25)? != 0,
+        retry_after_ms: row.get::<_, Option<i64>>(26)?.map(|value| value as u64),
     })
 }
 
@@ -1920,6 +1939,9 @@ mod tests {
                     .expect("parse request timestamp")
                     .with_timezone(&Utc),
                 error: None,
+                attempt_index: 0,
+                output_started: false,
+                retry_after_ms: None,
             })
             .await
             .expect("insert request log");
@@ -2043,6 +2065,9 @@ mod tests {
                     .expect("parse request timestamp")
                     .with_timezone(&Utc),
                 error: None,
+                attempt_index: 0,
+                output_started: false,
+                retry_after_ms: None,
             })
             .await
             .expect("insert request log");

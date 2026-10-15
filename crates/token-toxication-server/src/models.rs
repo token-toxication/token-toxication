@@ -162,6 +162,12 @@ pub struct RequestLog {
     pub cost_usd: f64,
     pub created_at: DateTime<Utc>,
     pub error: Option<String>,
+    #[serde(default)]
+    pub attempt_index: u8,
+    #[serde(default)]
+    pub output_started: bool,
+    #[serde(default)]
+    pub retry_after_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
