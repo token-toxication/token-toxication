@@ -9,6 +9,7 @@
 | Anthropic Messages | `POST` | `/anthropic/v1/messages` | `http://localhost:3000/anthropic` |
 | OpenAI Chat | `POST` | `/openai/v1/chat/completions` | `http://localhost:3000/openai/v1` |
 | OpenAI Responses | `POST` | `/openai/v1/responses` | `http://localhost:3000/openai/v1` |
+| Codex model catalog | `GET` | `/openai/v1/codex/models` | `http://localhost:3000/openai/v1` |
 | Gemini GenerateContent | `POST` | `/gemini/v1beta/models/{model}:generateContent` | `http://localhost:3000/gemini` |
 | Gemini streaming | `POST` | `/gemini/v1beta/models/{model}:streamGenerateContent` | `http://localhost:3000/gemini` |
 
@@ -49,6 +50,31 @@ Codex device-login accounts use the same server-side identity contract as
 OpenCode v2. The generated Codex configuration enables Responses WebSockets;
 matching Codex clients use `/openai/v1/responses` as a WebSocket endpoint and
 older clients can continue with HTTP/SSE.
+
+### Codex model catalog
+
+`GET /openai/v1/codex/models` serves the subscription account's own Codex
+catalog, so the client reports that account's real context window instead of its
+bundled value. The relay selects one enabled, non-blocked Codex subscription
+account, fetches `{base_url}/codex/models` with that account's credentials, and
+returns the upstream entries with two changes:
+
+- models outside the supported range, hidden models, and models unsupported by
+  the API are dropped;
+- each public model gains a `-fast` variant that keeps every upstream field and
+  sets `default_service_tier = "priority"`.
+
+`-fast` is a relay-declared alias, not an upstream model: no upstream serves a
+suffixed id. Route selection therefore resolves a `-fast` request to its base
+model before choosing an account, and the upstream request carries the base id.
+The requested id still appears in request logs, so Fast traffic stays
+distinguishable. An operator-declared route for a `-fast` id wins over the alias.
+
+Instruction text is required. An entry without `model_messages.instructions_template`
+or `base_instructions` fails the whole request with `503` rather than serving a
+catalog the client would reject. The endpoint answers `503` when no Codex
+subscription account is configured. Upstream bodies are never logged, and the
+response size and request duration are bounded.
 
 For Device OAuth, the relay forwards only the bounded context headers
 `session-id`, `thread-id`, `x-client-request-id`, `x-codex-beta-features`,

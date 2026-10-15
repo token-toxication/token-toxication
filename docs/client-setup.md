@@ -39,9 +39,9 @@ Custom clients should send `Token-Toxication-Session-ID` exactly as written (wit
 
 This setup targets the Codex reference inspected at commit `6cc7d9cc5c702c0ca133f7ea48432166e0b880be`.
 Codex owns its model catalog, instructions, reasoning options, Responses Lite,
-Code Mode, and multi-agent behavior. The relay setup supplies only a provider
-endpoint and an environment-based relay key; it does not select a default model
-or replace Codex's catalog.
+Code Mode, and multi-agent behavior. The relay setup supplies a provider
+endpoint, an environment-based relay key, and, for an active Codex subscription
+account, that account's own catalog; it does not select a default model.
 
 1. Configure enabled public model IDs and OpenAI Responses routes for the
    Codex models you intend to use. Each candidate route, including fallback
@@ -51,25 +51,41 @@ or replace Codex's catalog.
    the secret out of `config.toml` and shared screenshots.
 3. Merge the generated provider TOML into `~/.codex/config.toml`. Keep your
    own `model` and reasoning preferences. Select models through Codex.
-4. If migrating from an earlier Token Toxication setup, remove its
-   `model_catalog_json` or `model_catalog_url` override. An explicit catalog
-   replaces Codex's bundled catalog and must carry the exact instruction source
-   for every model, so this setup intentionally lets Codex use its own catalog.
-   Review any `model = ...` entry that came from the old snippet; keep or remove
-   it according to your own preference. Do not remove unrelated settings without
-   reviewing them.
+4. If migrating from an earlier Token Toxication setup, remove any hand-edited
+   `model_catalog_json` file. The generated `model_catalog_url` is the supported
+   replacement and is emitted automatically; see below. Review any `model = ...`
+   entry that came from the old snippet; keep or remove it according to your own
+   preference. Do not remove unrelated settings without reviewing them.
+
+### Account model catalog
+
+The generated provider block includes
+`model_catalog_url = "<relay>/openai/v1/codex/models"` when the relay has an
+active Codex subscription account. That catalog is the account's own upstream
+catalog, so it carries the exact instruction source for every model and the
+account's real context window: `gpt-6.1-sol` is 500000 tokens upstream against
+272000 for the other GPT-6 models. Each model also gains a `-fast` variant on
+the Fast service tier.
+
+The URL is omitted when no Codex subscription account is configured. An explicit
+catalog replaces Codex's bundled one, so a relay that could not serve it would
+leave the client with no models at all. Merge the generated snippet again after
+adding an account.
 
 Codex's built-in model picker may list a model without a matching relay route.
 Create the route before selecting that model; an unroutable request fails
 rather than silently switching models. The relay does not claim that every
 upstream supports the features declared by Codex's model catalog.
 
-The bundled Codex catalog advertises the Fast service tier for eligible models;
-Codex sends that tier as `service_tier = "priority"`, which the relay forwards
-unchanged. The current Codex Desktop app does not show the Fast picker for an
-API-key model provider such as `TOKEN_TOXICATION_API_KEY`; this is a client UI
-restriction, not a missing relay catalog entry. A client-side change or a
-ChatGPT/PAT authentication mode is required for that Desktop control to appear.
+Codex's catalog advertises the Fast service tier for eligible models; Codex
+sends that tier as `service_tier = "priority"`, which the relay forwards
+unchanged. The Codex TUI derives the tier from the model's
+`default_service_tier`, which is what the generated `-fast` variants set;
+`codex exec` does not, and needs an explicit `service_tier` setting. The current
+Codex Desktop app does not show the Fast picker for an API-key model provider
+such as `TOKEN_TOXICATION_API_KEY`; this is a client UI restriction, not a
+missing relay catalog entry. A client-side change or a ChatGPT/PAT
+authentication mode is required for that Desktop control to appear.
 
 ### Protocol compatibility
 
@@ -89,10 +105,11 @@ there is no cross-connection response resume or automatic replay. See relay
 transport tests for connection lifecycle and error handling.
 
 The opt-in client test uses a real Codex binary and an isolated relay/mock;
-run `just codex-compat /absolute/path/to/matching/codex`. The matching
-installed `codex-cli 0.162.0` was used to verify the built-in model catalog and
-Fast service-tier metadata. The test does not use production
-credentials or prove a live upstream's Lite eligibility.
+run `just codex-compat /absolute/path/to/matching/codex`. The installed
+`codex-cli 0.162.1` was used to verify the built-in catalog's Lite round trip,
+the relay-served account catalog with its `-fast` variants, and a Fast turn
+resolved to its base model. The test does not use production credentials or
+prove a live upstream's Lite eligibility.
 
 ## DeepSeek Harness
 

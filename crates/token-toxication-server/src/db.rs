@@ -1865,6 +1865,11 @@ fn normalize_route_role(value: &str) -> String {
 }
 
 fn normalize_strip_params(values: Vec<String>) -> Vec<String> {
+    normalize_string_list(values)
+}
+
+/// Trim, drop empty entries, and drop duplicates while keeping first-seen order.
+fn normalize_string_list(values: Vec<String>) -> Vec<String> {
     let mut params = Vec::new();
     for value in values {
         let value = value.trim();

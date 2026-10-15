@@ -738,3 +738,15 @@ pub fn default_route_role() -> String {
 pub fn default_route_weight() -> u32 {
     100
 }
+
+pub fn default_profile_visibility() -> String {
+    "list".to_string()
+}
+
+pub fn default_profile_priority() -> i32 {
+    100
+}
+
+pub fn default_input_modalities() -> Vec<String> {
+    vec!["text".to_string()]
+}

@@ -997,3 +997,85 @@ async fn codex_overload_reconnects_with_bounded_random_delay() {
         remove_test_database(&database_path);
     }
 }
+
+/// The Codex catalog advertises `-fast` variants, and a client may select one
+/// over the WebSocket transport. Route selection resolves the alias to its base
+/// model, so the upstream never sees a suffix it does not serve.
+#[tokio::test]
+async fn websocket_resolves_fast_model_aliases_to_their_base_route() {
+    let captures = Arc::new(Mutex::new(Vec::<Value>::new()));
+    let capture = captures.clone();
+    let upstream = Router::new().route(
+        "/codex/responses",
+        get(move |ws: WebSocketUpgrade| {
+            let capture = capture.clone();
+            async move {
+                ws.on_upgrade(move |mut socket| async move {
+                    while let Some(Ok(Message::Text(text))) = socket.next().await {
+                        capture.lock().await.push(serde_json::from_str(&text).unwrap());
+                        let value = json!({"type":"response.completed","response":{"id":"resp_1","usage":{"input_tokens":3,"output_tokens":1}}});
+                        socket.send(Message::Text(value.to_string().into())).await.unwrap();
+                    }
+                })
+            }
+        }),
+    );
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let upstream_address = listener.local_addr().unwrap();
+    let upstream_task = tokio::spawn(async move { axum::serve(listener, upstream).await });
+
+    let database_path = test_database_path();
+    let db = Db::open(&database_path).await.unwrap();
+    let seed = seed_relay_route(
+        &db,
+        RelayRouteSeed {
+            base_url: format!("http://{upstream_address}"),
+            provider: "openai-compatible",
+            auth_mode: "codex-oauth",
+            provider_secret: json!({"type":"token-toxication-codex-oauth-v1","refresh":"synthetic-refresh","access":"synthetic-provider-key","expires":Utc::now().timestamp_millis()+3_600_000,"accountId":"synthetic-account"}).to_string(),
+            wire_api: "openai-responses",
+            public_model: "gpt-6.1-sol",
+            upstream_model: "gpt-6.1-sol",
+        },
+    )
+    .await;
+    let state = test_state(db, database_path.clone());
+    let relay = crate::app(state.clone(), PathBuf::from("nonexistent-static-test-dir"));
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let relay_task = tokio::spawn(async move { axum::serve(listener, relay).await });
+
+    let url = format!("ws://{address}/openai/v1/responses");
+    let mut request = url.as_str().into_client_request().unwrap();
+    request.headers_mut().insert(
+        header::AUTHORIZATION,
+        HeaderValue::from_str(&format!("Bearer {}", seed.relay_secret)).unwrap(),
+    );
+    let (mut client, _) = connect_async(request).await.unwrap();
+    client
+        .send(tungstenite::Message::Text(
+            json!({"type":"response.create","model":"gpt-6.1-sol-fast","input":"synthetic"})
+                .to_string()
+                .into(),
+        ))
+        .await
+        .unwrap();
+
+    let first = tokio::time::timeout(Duration::from_secs(3), client.next())
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    assert!(first.to_text().unwrap().contains("resp_1"));
+
+    let captured = captures.lock().await;
+    assert_eq!(captured.len(), 1);
+    assert_eq!(captured[0]["model"], "gpt-6.1-sol");
+
+    drop(captured);
+    client.close(None).await.unwrap();
+    upstream_task.abort();
+    relay_task.abort();
+    let _ = relay_task.await;
+    remove_test_database(&database_path);
+}

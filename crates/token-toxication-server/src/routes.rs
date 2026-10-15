@@ -31,10 +31,11 @@ use crate::{
         gemini_account_models, gemini_account_quota,
     },
     auth::{generate_secret, login, logout, me, require_admin},
+    codex_catalog::{remote as codex_catalog_remote, upstream as codex_catalog_upstream},
     codex_context, codex_device_oauth,
     codex_subscription::{
-        CodexSubscriptionAuthorization, codex_account_quota, codex_subscription_authorization,
-        is_codex_device_oauth_auth, is_codex_subscription_auth,
+        CodexSubscriptionAuthorization, codex_account_quota, codex_models_endpoint,
+        codex_subscription_authorization, is_codex_device_oauth_auth, is_codex_subscription_auth,
     },
     error::AppError,
     gemini_code_assist::{
@@ -215,6 +216,97 @@ pub(crate) async fn resolve_codex_authorization(
     } else {
         codex_subscription_authorization(&state.db, &state.http, account).await
     }
+}
+
+/// Deterministically choose the subscription account whose catalog TT proxies.
+///
+/// Every candidate is an active, non-blocked Codex subscription account, so the
+/// choice only needs to be stable across calls; the oldest account wins.
+async fn codex_catalog_account(
+    state: &AppState,
+) -> Result<crate::models::ProviderAccountRecord, AppError> {
+    let id = state
+        .db
+        .list_provider_accounts()
+        .await?
+        .into_iter()
+        .filter(|account| {
+            account.is_active
+                && account.status != "blocked"
+                && is_codex_subscription_auth(&account.auth_mode)
+        })
+        .min_by(|left, right| left.created_at.cmp(&right.created_at))
+        .map(|account| account.id)
+        .ok_or_else(|| {
+            AppError::ServiceUnavailable("no Codex subscription account is available".into())
+        })?;
+
+    state
+        .db
+        .get_provider_account_record(&id)
+        .await?
+        .ok_or_else(|| {
+            AppError::ServiceUnavailable("no Codex subscription account is available".into())
+        })
+}
+
+/// Longest accepted `client_version` value.
+const MAX_CLIENT_VERSION_LEN: usize = 32;
+
+/// Validate an optional client version without inventing a default.
+fn normalize_client_version(value: Option<&str>) -> Result<Option<String>, AppError> {
+    let Some(value) = value.map(str::trim).filter(|value| !value.is_empty()) else {
+        return Ok(None);
+    };
+    if value.len() > MAX_CLIENT_VERSION_LEN
+        || !value.chars().all(|character| {
+            character.is_ascii_alphanumeric() || matches!(character, '.' | '-' | '_')
+        })
+    {
+        return Err(AppError::BadRequest("invalid client_version".into()));
+    }
+    Ok(Some(value.to_string()))
+}
+
+/// `GET /openai/v1/codex/models`
+///
+/// Serves a Codex-native catalog so the client stops falling back to its stale
+/// bundled metadata. The payload is the account's own upstream catalog, filtered
+/// to the models TT supports and expanded with `-fast` variants.
+pub async fn list_codex_models(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    uri: Uri,
+    Query(query): Query<CodexCatalogQuery>,
+) -> Result<Json<Value>, AppError> {
+    authenticate_relay_api_key(&state, &headers, uri.query()).await?;
+    let client_version = normalize_client_version(query.client_version.as_deref())?;
+    let account = codex_catalog_account(&state).await?;
+    let authorization = resolve_codex_authorization(&state, &account).await?;
+    let endpoint = codex_models_endpoint(&account.account.base_url)?;
+
+    let fetched = codex_catalog_remote::fetch(
+        &state.http,
+        &endpoint,
+        &authorization,
+        client_version.as_deref(),
+    )
+    .await?;
+    let upstream_models = codex_catalog_upstream::models_from_body(&fetched.body)
+        .map_err(|error| AppError::ServiceUnavailable(error.to_string()))?;
+    let selected = codex_catalog_upstream::select_models(upstream_models)
+        .map_err(|error| AppError::ServiceUnavailable(error.to_string()))?;
+    let models = codex_catalog_upstream::expand_fast_variants(selected)
+        .into_iter()
+        .map(|model| model.value)
+        .collect::<Vec<Value>>();
+
+    Ok(Json(json!({ "models": models })))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CodexCatalogQuery {
+    pub client_version: Option<String>,
 }
 
 pub async fn list_openai_models(
@@ -3173,6 +3265,324 @@ mod tests {
             .await
             .expect("send authenticated request");
         assert_eq!(authenticated.status(), StatusCode::OK);
+
+        server.abort();
+        let _ = server.await;
+        remove_test_database(&database_path);
+    }
+
+    fn codex_catalog_body() -> Value {
+        let instructions = "x".repeat(64);
+        json!({
+            "models": [
+                {
+                    "slug": "gpt-6.1-sol",
+                    "display_name": "GPT-6.1-Sol",
+                    "visibility": "list",
+                    "supported_in_api": true,
+                    "priority": 2,
+                    "context_window": 500_000,
+                    "max_context_window": 872_000,
+                    "model_messages": {"instructions_template": instructions},
+                },
+                {
+                    "slug": "gpt-6-astra",
+                    "display_name": "GPT-6-Astra",
+                    "visibility": "list",
+                    "supported_in_api": true,
+                    "priority": 2,
+                    "context_window": 272_000,
+                    "max_context_window": 872_000,
+                    "model_messages": {"instructions_template": instructions},
+                },
+                {
+                    // Outside TT's supported range: must be filtered out.
+                    "slug": "gpt-5.6-sol",
+                    "display_name": "GPT-5.6-Sol",
+                    "visibility": "list",
+                    "supported_in_api": true,
+                    "priority": 3,
+                    "context_window": 272_000,
+                    "model_messages": {"instructions_template": instructions},
+                },
+                {
+                    // Hidden upstream model with no instructions: skipped, not fatal.
+                    "slug": "gpt-reserve",
+                    "display_name": "GPT-Reserve",
+                    "visibility": "hide",
+                    "supported_in_api": true,
+                    "priority": 9,
+                    "context_window": 272_000,
+                },
+            ]
+        })
+    }
+
+    #[tokio::test]
+    async fn codex_catalog_endpoint_proxies_upstream_and_expands_fast_variants() {
+        let captured: Arc<Mutex<Vec<(String, HeaderMap)>>> = Arc::new(Mutex::new(Vec::new()));
+        let capture = Arc::clone(&captured);
+        let upstream = Router::new().route(
+            "/codex/models",
+            get(move |uri: Uri, headers: HeaderMap| {
+                let capture = Arc::clone(&capture);
+                async move {
+                    capture.lock().await.push((uri.to_string(), headers));
+                    Json(codex_catalog_body())
+                }
+            }),
+        );
+        let upstream_listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind upstream");
+        let upstream_address = upstream_listener.local_addr().expect("upstream address");
+        let upstream_server =
+            tokio::spawn(async move { axum::serve(upstream_listener, upstream).await });
+        let upstream_url = format!("http://{upstream_address}");
+
+        let database_path = test_database_path();
+        let db = Db::open(&database_path).await.expect("open test database");
+        let seed = seed_relay_route(
+            &db,
+            RelayRouteSeed {
+                base_url: upstream_url,
+                provider: "openai-compatible",
+                auth_mode: "codex-oauth",
+                provider_secret: json!({
+                    "type": "token-toxication-codex-oauth-v1",
+                    "refresh": "synthetic-refresh",
+                    "access": "synthetic-provider-key",
+                    "expires": Utc::now().timestamp_millis() + 3_600_000,
+                    "accountId": "synthetic-account"
+                })
+                .to_string(),
+                wire_api: "openai-responses",
+                public_model: "gpt-6.1-sol",
+                upstream_model: "gpt-6.1-sol",
+            },
+        )
+        .await;
+        let state = test_state(db, database_path.clone());
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
+        let address = listener.local_addr().expect("address");
+        let server = tokio::spawn(async move {
+            axum::serve(
+                listener,
+                crate::app(state, PathBuf::from("missing-admin-assets")),
+            )
+            .await
+            .expect("serve");
+        });
+
+        let http = test_http_client();
+        let endpoint = format!("http://{address}/openai/v1/codex/models?client_version=0.162.1");
+        let response = http
+            .get(&endpoint)
+            .expect("build catalog request")
+            .bearer_auth(&seed.relay_secret)
+            .send()
+            .await
+            .expect("send catalog request");
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body: Value = serde_json::from_slice(&response.bytes().await.expect("read catalog"))
+            .expect("decode catalog");
+        let slugs = body["models"]
+            .as_array()
+            .expect("models array")
+            .iter()
+            .map(|model| model["slug"].as_str().unwrap_or_default().to_string())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            slugs,
+            vec![
+                "gpt-6.1-sol",
+                "gpt-6.1-sol-fast",
+                "gpt-6-astra",
+                "gpt-6-astra-fast"
+            ],
+            "unsupported and hidden upstream models must be dropped"
+        );
+
+        // Upstream context is passed through untouched; only identity and the
+        // Fast tier are added to the derived variants.
+        assert_eq!(body["models"][0]["context_window"], json!(500_000));
+        assert_eq!(body["models"][0]["default_service_tier"], Value::Null);
+        assert_eq!(body["models"][1]["context_window"], json!(500_000));
+        assert_eq!(body["models"][1]["default_service_tier"], json!("priority"));
+        assert_eq!(body["models"][1]["display_name"], json!("GPT-6.1-Sol Fast"));
+        assert_eq!(body["models"][2]["context_window"], json!(272_000));
+
+        // The upstream call carried the relay's own account identity, not client input.
+        let (uri, headers) = captured
+            .lock()
+            .await
+            .first()
+            .cloned()
+            .expect("captured upstream request");
+        assert_eq!(uri, "/codex/models?client_version=0.162.1");
+        assert_eq!(headers["authorization"], "Bearer synthetic-provider-key");
+        assert_eq!(headers["chatgpt-account-id"], "synthetic-account");
+        assert_eq!(headers["originator"], "opencode");
+
+        upstream_server.abort();
+        server.abort();
+        let _ = server.await;
+        remove_test_database(&database_path);
+    }
+
+    #[tokio::test]
+    async fn codex_fast_variant_requests_route_through_their_base_model() {
+        let captured: Arc<Mutex<Vec<Value>>> = Arc::new(Mutex::new(Vec::new()));
+        let capture = Arc::clone(&captured);
+        let upstream = Router::new().route(
+            "/codex/responses",
+            axum::routing::post(move |Json(body): Json<Value>| {
+                let capture = Arc::clone(&capture);
+                async move {
+                    capture.lock().await.push(body);
+                    (
+                        StatusCode::OK,
+                        Json(json!({"id": "resp_probe", "output": []})),
+                    )
+                }
+            }),
+        );
+        let upstream_listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind upstream");
+        let upstream_address = upstream_listener.local_addr().expect("upstream address");
+        let upstream_server =
+            tokio::spawn(async move { axum::serve(upstream_listener, upstream).await });
+
+        let database_path = test_database_path();
+        let db = Db::open(&database_path).await.expect("open test database");
+        let seed = seed_relay_route(
+            &db,
+            RelayRouteSeed {
+                base_url: format!("http://{upstream_address}"),
+                provider: "openai-compatible",
+                auth_mode: "codex-oauth",
+                provider_secret: json!({
+                    "type": "token-toxication-codex-oauth-v1",
+                    "refresh": "synthetic-refresh",
+                    "access": "synthetic-provider-key",
+                    "expires": Utc::now().timestamp_millis() + 3_600_000,
+                    "accountId": "synthetic-account"
+                })
+                .to_string(),
+                wire_api: "openai-responses",
+                public_model: "gpt-6.1-sol",
+                upstream_model: "gpt-6.1-sol",
+            },
+        )
+        .await;
+        let state = test_state(db, database_path.clone());
+        let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
+        let address = listener.local_addr().expect("address");
+        let server = tokio::spawn(async move {
+            axum::serve(
+                listener,
+                crate::app(state, PathBuf::from("missing-admin-assets")),
+            )
+            .await
+            .expect("serve");
+        });
+
+        let http = test_http_client();
+        for model in ["gpt-6.1-sol", "gpt-6.1-sol-fast"] {
+            let response = http
+                .post(&format!("http://{address}/openai/v1/responses"))
+                .expect("build request")
+                .bearer_auth(&seed.relay_secret)
+                .header(
+                    header::CONTENT_TYPE,
+                    HeaderValue::from_static("application/json"),
+                )
+                .body(
+                    serde_json::to_vec(&json!({
+                        "model": model,
+                        "input": "hi",
+                        "stream": false,
+                        "service_tier": "priority"
+                    }))
+                    .expect("encode body"),
+                )
+                .send()
+                .await
+                .expect("send request");
+            assert_eq!(
+                response.status(),
+                StatusCode::OK,
+                "the catalog advertises {model}, so it must be routable"
+            );
+        }
+
+        // The alias reaches the upstream as its base model, exactly as OpenCode
+        // resolves `-fast` before sending.
+        let bodies = captured.lock().await;
+        assert_eq!(bodies.len(), 2);
+        assert_eq!(bodies[0]["model"], json!("gpt-6.1-sol"));
+        assert_eq!(bodies[1]["model"], json!("gpt-6.1-sol"));
+        // The client's Fast selection is forwarded, not rewritten by routing.
+        assert_eq!(bodies[1]["service_tier"], json!("priority"));
+
+        upstream_server.abort();
+        server.abort();
+        let _ = server.await;
+        remove_test_database(&database_path);
+    }
+
+    #[tokio::test]
+    async fn codex_catalog_endpoint_requires_a_subscription_account() {
+        let database_path = test_database_path();
+        let db = Db::open(&database_path).await.expect("open test database");
+        db.create_api_key(
+            CreateApiKeyRequest {
+                name: "relay test key".to_string(),
+                description: String::new(),
+                permissions: Vec::new(),
+                rate_limit_per_minute: 0,
+                concurrency_limit: 0,
+                daily_cost_limit: 0.0,
+                expires_at: None,
+            },
+            "tokentoxication-relay-test-key",
+        )
+        .await
+        .expect("create relay key");
+        let state = test_state(db, database_path.clone());
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
+        let address = listener.local_addr().expect("address");
+        let server = tokio::spawn(async move {
+            axum::serve(
+                listener,
+                crate::app(state, PathBuf::from("missing-admin-assets")),
+            )
+            .await
+            .expect("serve");
+        });
+
+        let http = test_http_client();
+        let endpoint = format!("http://{address}/openai/v1/codex/models");
+        let response = http
+            .get(&endpoint)
+            .expect("build catalog request")
+            .bearer_auth("tokentoxication-relay-test-key")
+            .send()
+            .await
+            .expect("send catalog request");
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+
+        let unauthenticated = http
+            .get(&endpoint)
+            .expect("build unauthenticated request")
+            .send()
+            .await
+            .expect("send unauthenticated request");
+        assert_eq!(unauthenticated.status(), StatusCode::UNAUTHORIZED);
 
         server.abort();
         let _ = server.await;

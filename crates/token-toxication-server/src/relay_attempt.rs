@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::HashSet;
 use std::time::{Duration, Instant};
 
@@ -59,6 +60,11 @@ pub(crate) struct RelayAttempt {
     state: AppState,
     api_key_id: String,
     selection: ProviderRouteSelection,
+    /// The model id the client asked for, which is not always the id of the
+    /// route that served it: a Codex `-fast` variant is an alias for its base
+    /// model. Request logs keep the client-facing id so Fast traffic stays
+    /// distinguishable from ordinary traffic.
+    requested_model: String,
     /// When the running-request slot was acquired; latency excludes queueing.
     started: Instant,
     queue_wait: Duration,
@@ -108,6 +114,7 @@ impl RelayAttempt {
             state: self.state.clone(),
             api_key_id: self.api_key_id.clone(),
             selection: self.selection.clone(),
+            requested_model: self.requested_model.clone(),
             started: Instant::now(),
             queue_wait: permit.waited,
             permit: Some(permit.permit),
@@ -278,7 +285,7 @@ impl RelayAttempt {
                 provider_account_id: Some(self.selection.account.account.id.clone()),
                 method: "POST".to_string(),
                 path: log.path.clone(),
-                model: Some(self.selection.public_model_id.clone()),
+                model: Some(self.requested_model.clone()),
                 upstream_model: Some(self.selection.upstream_model_id.clone()),
                 upstream_url: log.upstream_url.as_deref().map(sanitize_upstream_url),
                 request_summary: log.request_summary.clone(),
@@ -329,6 +336,13 @@ impl AuthenticatedRelayAttempt {
         affinity: Option<&SessionAffinity>,
         excluded_account_ids: &HashSet<String>,
     ) -> Result<RelayAttempt, AppError> {
+        // A Codex `-fast` variant is a client-facing alias for its base model:
+        // TT derives the variants into the catalog, and OpenCode resolves the
+        // same aliases before sending. No upstream accepts the suffix, so route
+        // selection uses the base id while logs keep the requested id.
+        let requested_model = model.to_string();
+        let model = self.routing_model(wire_api, model).await?;
+        let model = model.as_ref();
         let mut candidates = self
             .state
             .db
@@ -397,9 +411,35 @@ impl AuthenticatedRelayAttempt {
             state: self.state.clone(),
             api_key_id: self.api_key_id.clone(),
             selection,
+            requested_model,
             started: Instant::now(),
             queue_wait: permit.waited,
             permit: Some(permit.permit),
+        })
+    }
+
+    /// Resolve a client-facing model id to the id used for route selection.
+    ///
+    /// Only `-fast` aliases are resolved, and an exact catalog entry always
+    /// wins, so a route an operator declares for a `-fast` id keeps serving it.
+    async fn routing_model<'a>(
+        &self,
+        wire_api: &str,
+        model: &'a str,
+    ) -> Result<Cow<'a, str>, AppError> {
+        let base = crate::codex_catalog::policy::canonical_model_id(model);
+        if base == model {
+            return Ok(Cow::Borrowed(model));
+        }
+        let exact = self
+            .state
+            .db
+            .list_provider_route_candidates(wire_api, model)
+            .await?;
+        Ok(if exact.is_empty() {
+            Cow::Borrowed(base)
+        } else {
+            Cow::Borrowed(model)
         })
     }
 

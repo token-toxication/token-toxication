@@ -224,6 +224,17 @@ pub fn codex_quota_endpoint(base_url: &str) -> Result<String, AppError> {
     codex_account_read_endpoint(base_url, "usage")
 }
 
+/// Codex-native model catalog endpoint for a subscription account.
+///
+/// Mirrors the endpoint the Codex client derives for `model_catalog_url`:
+/// `{chatgpt_base}/codex/models`.
+pub fn codex_models_endpoint(base_url: &str) -> Result<String, AppError> {
+    Ok(append_codex_path(
+        codex_account_api_base_url(parse_codex_base_url(base_url)?),
+        "codex/models",
+    ))
+}
+
 pub fn canonicalize_legacy_codex_base_url(base_url: &str) -> Option<String> {
     let url = parse_codex_base_url(base_url).ok()?;
     let path = url.path().trim_end_matches('/');

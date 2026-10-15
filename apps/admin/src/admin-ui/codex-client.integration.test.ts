@@ -115,7 +115,7 @@ function responseStream(index: number) {
 
 describe.skipIf(!codexBinary)("Codex built-in catalog with relay provider", () => {
   it(
-    "uses Codex's default GPT-6 without a static catalog and forwards its native Lite request",
+    "uses a bundled GPT-6 model without a static catalog and forwards its native Lite request",
     { timeout: 60000 },
     async () => {
       if (!codexBinary || !relayBinary) throw new Error("Set TT_CODEX_BIN and TT_RELAY_BIN");
@@ -226,7 +226,14 @@ describe.skipIf(!codexBinary)("Codex built-in catalog with relay provider", () =
           piModels: [],
           dshModels: [],
         });
-        await writeFile(path.join(configDirectory, "config.toml"), snippets.codexConfig);
+        // This fixture exercises the HTTP Responses/Lite contract below. The
+        // setup snippet enables WebSockets for production, but Codex 0.162.1
+        // otherwise selects the relay WebSocket path and bypasses this HTTP
+        // mock upstream entirely.
+        await writeFile(
+          path.join(configDirectory, "config.toml"),
+          snippets.codexConfig.replace("supports_websockets = true", "supports_websockets = false"),
+        );
         const env = {
           PATH: process.env.PATH,
           HOME: root,
@@ -247,6 +254,8 @@ describe.skipIf(!codexBinary)("Codex built-in catalog with relay provider", () =
             workspace,
             "-c",
             "features.plugins=false",
+            "-m",
+            "gpt-6-astra",
             "Reply with the synthetic response.",
           ],
           { cwd: workspace, env, stdio: ["ignore", "pipe", "pipe"] },
@@ -294,4 +303,258 @@ describe.skipIf(!codexBinary)("Codex built-in catalog with relay provider", () =
       }
     },
   );
+});
+
+// The relay serves a Codex-native catalog by proxying the subscription account's
+// own upstream catalog. This proves the generated `model_catalog_url` config is
+// accepted by a real Codex build and that the model list matches what TT serves.
+describe.skipIf(!codexBinary)("Codex relay model catalog", () => {
+  it("serves the account catalog through model_catalog_url", { timeout: 60000 }, async () => {
+    if (!codexBinary || !relayBinary) throw new Error("Set TT_CODEX_BIN and TT_RELAY_BIN");
+    const version = execFileSync(codexBinary, ["--version"], {
+      encoding: "utf8",
+      timeout: 10000,
+    }).trim();
+    console.info(`Testing ${version} against the relay model catalog`);
+    const root = await mkdtemp(path.join(tmpdir(), "token-toxication-catalog-"));
+    const configDirectory = path.join(root, "codex");
+    const workspace = path.join(root, "workspace");
+    await mkdir(configDirectory);
+    await mkdir(workspace);
+
+    const catalogRequests: {
+      url: string;
+      headers: Record<string, string | string[] | undefined>;
+    }[] = [];
+    const turnRequests: Record<string, unknown>[] = [];
+    const instructions = "You are Codex, a coding agent.".repeat(4);
+    // Codex's `ModelInfo` has several required fields with no serde default, so a
+    // partial entry makes the client reject the whole catalog. This mirrors the
+    // shape the real upstream catalog serves.
+    const codexModel = (
+      slug: string,
+      displayName: string,
+      contextWindow: number,
+      priority = 2,
+    ) => ({
+      slug,
+      display_name: displayName,
+      description: null,
+      supported_reasoning_levels: [{ effort: "low", description: "Fast" }],
+      shell_type: "unified_exec",
+      visibility: "list",
+      supported_in_api: true,
+      priority,
+      availability_nux: null,
+      upgrade: null,
+      support_verbosity: false,
+      default_verbosity: null,
+      apply_patch_tool_type: null,
+      truncation_policy: { mode: "tokens", limit: 10000 },
+      experimental_supported_tools: [],
+      context_window: contextWindow,
+      max_context_window: 872_000,
+      // Upstream declares Fast as a native service tier; the relay must pass
+      // this through so Codex can offer the tier at all.
+      service_tiers: [{ id: "priority", name: "Fast", description: "2x speed, increased usage" }],
+      additional_speed_tiers: ["fast"],
+      model_messages: { instructions_template: instructions },
+    });
+    const upstream = createServer(async (request, response) => {
+      if (request.method === "GET" && request.url?.startsWith("/codex/models")) {
+        catalogRequests.push({ url: request.url ?? "", headers: request.headers });
+        response.writeHead(200, { "content-type": "application/json" }).end(
+          JSON.stringify({
+            models: [
+              codexModel("gpt-6.1-sol", "GPT-6.1-Sol", 500_000),
+              codexModel("gpt-6-astra", "GPT-6-Astra", 272_000),
+              // Outside TT's supported range: the relay must drop it.
+              codexModel("gpt-5.6-sol", "GPT-5.6-Sol", 272_000, 3),
+            ],
+          }),
+        );
+        return;
+      }
+      if (request.method === "POST" && request.url === "/codex/responses") {
+        const chunks: Buffer[] = [];
+        for await (const chunk of request) chunks.push(Buffer.from(chunk));
+        turnRequests.push(JSON.parse(Buffer.concat(chunks).toString()));
+        // The first response asks for a tool call and the second finishes the
+        // turn, mirroring a real Code Mode round trip.
+        response
+          .writeHead(200, { "content-type": "text/event-stream" })
+          .end(responseStream(turnRequests.length));
+        return;
+      }
+      response.writeHead(404).end();
+    });
+
+    let relay: ChildProcess | undefined;
+    try {
+      const upstreamUrl = await listen(upstream);
+      const reservation = createServer();
+      const relayUrl = await listen(reservation);
+      await close(reservation);
+      relay = spawn(
+        relayBinary,
+        [
+          "--bind-addr",
+          new URL(relayUrl).host,
+          "--database-path",
+          path.join(root, "relay.sqlite3"),
+          "--admin-password",
+          "synthetic-admin-password",
+          "--https-mode",
+          "off",
+        ],
+        { cwd: workspace, env: { PATH: process.env.PATH }, stdio: "ignore" },
+      );
+      const relayProcess = relay;
+      await expect
+        .poll(
+          async () => {
+            if (relayProcess.exitCode !== null) throw new Error("relay exited before readiness");
+            return fetch(`${relayUrl}/health`, { signal: AbortSignal.timeout(2000) })
+              .then((res) => res.ok)
+              .catch(() => false);
+          },
+          { timeout: 10000 },
+        )
+        .toBe(true);
+
+      async function admin(endpoint: string, body: Record<string, unknown>, token?: string) {
+        const response = await fetch(`${relayUrl}/admin/api/${endpoint}`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            ...(token ? { authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify(body),
+          signal: AbortSignal.timeout(5000),
+        });
+        if (!response.ok) throw new Error(`admin ${endpoint}: HTTP ${response.status}`);
+        return response.json();
+      }
+
+      const login = await admin("auth/login", {
+        username: "admin",
+        password: "synthetic-admin-password",
+      });
+      const key = await admin("api-keys", { name: "mock client" }, login.token);
+      const account = await admin(
+        "provider-accounts",
+        {
+          name: "mock subscription",
+          baseUrl: upstreamUrl,
+          provider: "codex-subscription",
+          authMode: "codex-oauth",
+          wireApi: "openai-responses",
+          apiKey: JSON.stringify({
+            type: "token-toxication-codex-oauth-v1",
+            refresh: "synthetic-refresh",
+            access: "synthetic-access",
+            expires: Date.now() + 3_600_000,
+            accountId: "synthetic-account",
+          }),
+        },
+        login.token,
+      );
+      await admin("model-catalog", { id: "gpt-6.1-sol", family: "openai" }, login.token);
+      await admin(
+        "provider-model-routes",
+        {
+          publicModelId: "gpt-6.1-sol",
+          providerAccountId: account.data.id,
+          upstreamModelId: "gpt-6.1-sol",
+          wireApi: "openai-responses",
+        },
+        login.token,
+      );
+
+      const snippets = buildClientSetupSnippets({
+        apiKey: key.secret,
+        serviceOrigin: relayUrl,
+        opencodeModels: [],
+        piModels: [],
+        dshModels: [],
+        codexCatalogEnabled: true,
+      });
+      expect(snippets.codexConfig).toContain(
+        `model_catalog_url = ${JSON.stringify(`${relayUrl}/openai/v1/codex/models`)}`,
+      );
+      await writeFile(
+        path.join(configDirectory, "config.toml"),
+        // The mock upstream speaks HTTP only; the setup snippet enables
+        // WebSockets for production.
+        snippets.codexConfig.replace("supports_websockets = true", "supports_websockets = false"),
+      );
+
+      const env = {
+        PATH: process.env.PATH,
+        HOME: root,
+        CODEX_HOME: configDirectory,
+        TOKEN_TOXICATION_API_KEY: key.secret,
+      };
+      const listed = await modelList(codexBinary, env, workspace);
+      const ids = listed.map((entry) => entry.model);
+      expect(ids).toContain("gpt-6.1-sol");
+      expect(ids).toContain("gpt-6.1-sol-fast");
+      expect(ids).toContain("gpt-6-astra");
+      expect(ids).toContain("gpt-6-astra-fast");
+      expect(ids).not.toContain("gpt-5.6-sol");
+
+      expect(catalogRequests).toHaveLength(1);
+      expect(catalogRequests[0].url).toContain("client_version=");
+      expect(catalogRequests[0].headers.authorization).toBe("Bearer synthetic-access");
+      expect(catalogRequests[0].headers["chatgpt-account-id"]).toBe("synthetic-account");
+
+      // The catalog advertises `gpt-6.1-sol-fast`, so selecting it must reach the
+      // upstream as the base model. Without the alias, this turn fails 403.
+      const fastTurn = spawn(
+        codexBinary,
+        [
+          "exec",
+          "--skip-git-repo-check",
+          "--json",
+          "--cd",
+          workspace,
+          "-c",
+          "features.plugins=false",
+          // The TUI derives this from the model's `default_service_tier`;
+          // `codex exec` does not, so state it to prove the relay forwards it.
+          "-c",
+          "service_tier=priority",
+          "-m",
+          "gpt-6.1-sol-fast",
+          "Reply with the synthetic response.",
+        ],
+        { cwd: workspace, env, stdio: ["ignore", "pipe", "pipe"] },
+      );
+      let fastOutput = "";
+      fastTurn.stdout?.on("data", (data) => {
+        fastOutput += data;
+      });
+      fastTurn.stderr?.on("data", (data) => {
+        fastOutput += data;
+      });
+      const fastTimer = setTimeout(() => fastTurn.kill("SIGTERM"), 45000);
+      try {
+        const [code] = await once(fastTurn, "close");
+        expect(code, fastOutput).toBe(0);
+      } finally {
+        clearTimeout(fastTimer);
+      }
+      // A Code Mode turn is two upstream requests. Every one of them must carry
+      // the base model, so the `-fast` alias is resolved before the upstream call.
+      expect(turnRequests).toHaveLength(2);
+      for (const request of turnRequests) {
+        expect(request.model).toBe("gpt-6.1-sol");
+        expect(request.service_tier).toBe("priority");
+      }
+    } finally {
+      if (relay) await stop(relay);
+      if (upstream.listening) await close(upstream);
+      await rm(root, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+    }
+  });
 });
