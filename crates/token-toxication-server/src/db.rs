@@ -233,6 +233,13 @@ impl Db {
         ensure_column(&conn, "request_logs", "retry_after_ms", "INTEGER")?;
         ensure_column(
             &conn,
+            "request_logs",
+            "logical_request_id",
+            "TEXT NOT NULL DEFAULT ''",
+        )?;
+        ensure_column(&conn, "request_logs", "ttft_ms", "INTEGER")?;
+        ensure_column(
+            &conn,
             "provider_model_routes",
             "status",
             "TEXT NOT NULL DEFAULT 'healthy'",
@@ -1343,8 +1350,9 @@ impl Db {
               upstream_url, request_summary, status_code, latency_ms, input_tokens,
               cached_input_tokens, output_tokens, otps, cost_usd, created_at, error, queue_wait_ms,
                overload_retry_count, overload_retry_started, overload_retry_exhausted, overload_retry_skip_reason,
-               client_retry_advice_injected, attempt_index, output_started, retry_after_ms)
-              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27)",
+                client_retry_advice_injected, attempt_index, output_started, retry_after_ms,
+                logical_request_id, ttft_ms)
+               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29)",
             params![
                 log.id,
                 log.api_key_id,
@@ -1377,6 +1385,8 @@ impl Db {
                 log.attempt_index,
                 log.output_started,
                 log.retry_after_ms,
+                log.logical_request_id,
+                log.ttft_ms,
             ],
         )?;
         Ok(())
@@ -1389,7 +1399,8 @@ impl Db {
                     upstream_url, request_summary, status_code, latency_ms, input_tokens,
                      cached_input_tokens, output_tokens, otps, cost_usd, created_at, error, queue_wait_ms,
                      overload_retry_count, overload_retry_started, overload_retry_exhausted, overload_retry_skip_reason,
-                     client_retry_advice_injected, attempt_index, output_started, retry_after_ms
+                     client_retry_advice_injected, attempt_index, output_started, retry_after_ms,
+                     logical_request_id, ttft_ms
              FROM request_logs
              ORDER BY created_at DESC
              LIMIT ?1",
@@ -1421,6 +1432,7 @@ impl Db {
             accounts: self.list_provider_accounts().await?,
             recent_requests: self.list_request_logs(10).await?,
             request_trend,
+            selection_failures: Vec::new(),
         })
     }
 }
@@ -1666,6 +1678,8 @@ fn request_log_from_row(row: &rusqlite::Row<'_>) -> Result<RequestLog, rusqlite:
         attempt_index: row.get::<_, i64>(24)? as u8,
         output_started: row.get::<_, i64>(25)? != 0,
         retry_after_ms: row.get::<_, Option<i64>>(26)?.map(|value| value as u64),
+        logical_request_id: row.get(27)?,
+        ttft_ms: row.get::<_, Option<i64>>(28)?.map(|value| value as u64),
     })
 }
 
@@ -1919,6 +1933,7 @@ mod tests {
         ] {
             db.insert_request_log(RequestLog {
                 id: id.to_string(),
+                logical_request_id: id.to_string(),
                 api_key_id: "test-key".to_string(),
                 provider_account_id: None,
                 method: "POST".to_string(),
@@ -1929,6 +1944,7 @@ mod tests {
                 request_summary: None,
                 status_code: 200,
                 latency_ms: 10,
+                ttft_ms: None,
                 queue_wait_ms: 0,
                 overload_retry_count: 0,
                 overload_retry_started: false,
@@ -2045,6 +2061,7 @@ mod tests {
         {
             db.insert_request_log(RequestLog {
                 id: format!("request-{index}"),
+                logical_request_id: format!("request-{index}"),
                 api_key_id: "test-key".to_string(),
                 provider_account_id: None,
                 method: "POST".to_string(),
@@ -2055,6 +2072,7 @@ mod tests {
                 request_summary: None,
                 status_code: 200,
                 latency_ms: 10,
+                ttft_ms: None,
                 queue_wait_ms: 0,
                 overload_retry_count: 0,
                 overload_retry_started: false,

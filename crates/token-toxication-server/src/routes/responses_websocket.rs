@@ -481,6 +481,7 @@ async fn relay_connection(
                             current.output_started |= is_output_started(&value);
                             if current.first_output_at.is_none() && is_output_delta(&value) {
                                 current.first_output_at = Some(Instant::now());
+                                current.log.ttft_ms = Some(current.attempt.elapsed_ms());
                             }
                             current.usage.merge(usage_update(&value));
                             if let Some(id) = value.pointer("/response/id").and_then(Value::as_str) {
@@ -721,6 +722,7 @@ fn start_response(
             attempt_index: 0,
             output_started: false,
             retry_after_ms: None,
+            ttft_ms: None,
         },
         usage: UsageUpdate::default(),
         response_id: None,

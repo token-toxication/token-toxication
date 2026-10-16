@@ -142,6 +142,34 @@ export function Overview({
         </Card>
       </section>
 
+      {(dashboard.selectionFailures ?? []).length > 0 ? (
+        <Card className="border-amber-500/30 bg-amber-500/5">
+          <CardHeader>
+            <CardTitle>
+              <Trans>Routing warnings</Trans>
+            </CardTitle>
+            <CardDescription>
+              <Trans>Requests rejected before an upstream account could be selected.</Trans>
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-2 text-sm">
+            {(dashboard.selectionFailures ?? []).map((failure) => (
+              <div
+                key={`${failure.wireApi}-${failure.model}-${failure.reason}`}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-amber-500/20 bg-background/50 px-3 py-2"
+              >
+                <span className="min-w-0 truncate font-mono text-xs">
+                  {failure.model} · {failure.reason}
+                </span>
+                <span className="text-xs tabular-nums text-muted-foreground">
+                  {failure.count} × {failure.statusCode}
+                </span>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      ) : null}
+
       <RequestLogsView logs={dashboard.recentRequests} compact />
     </div>
   );

@@ -81,6 +81,18 @@ export function RequestLogDetailView({ logs }: { logs: readonly RequestLog[] }) 
                   <Trans>{log.latencyMs}ms</Trans>
                 </dd>
               </div>
+              <div>
+                <dt className="text-xs text-muted-foreground">
+                  <Trans>TTFT</Trans>
+                </dt>
+                <dd className="mt-1">{formatDuration(log.ttftMs)}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted-foreground">
+                  <Trans>Attempt</Trans>
+                </dt>
+                <dd className="mt-1">{formatAttempt(log)}</dd>
+              </div>
               {log.queueWaitMs ? (
                 <div>
                   <dt className="text-xs text-muted-foreground">
@@ -238,13 +250,21 @@ export function RequestLogsView({
                       {formatLogModel(log)}
                     </Link>
                   </TableCell>
-                  <TableCell>{statusCodeBadge(log.statusCode)}</TableCell>
+                  <TableCell>
+                    <div className="flex flex-col items-start gap-1">
+                      {statusCodeBadge(log.statusCode)}
+                      <RetryMarker log={log} logs={logs} />
+                    </div>
+                  </TableCell>
                   <TableCell className="text-right tabular-nums">
                     <span className="block">
                       <Trans>{log.latencyMs}ms</Trans>
                     </span>
                     <span className="block text-xs text-muted-foreground">
-                      {formatOtps(log.otps)}
+                      <Trans>TTFT {formatDuration(log.ttftMs)}</Trans>
+                    </span>
+                    <span className="block text-xs text-muted-foreground">
+                      <Trans>OTPS {formatOtps(log.otps)}</Trans>
                     </span>
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
@@ -320,13 +340,21 @@ export function RequestLogsView({
                       <RequestLogDetails log={log} />
                     </div>
                   </TableCell>
-                  <TableCell>{statusCodeBadge(log.statusCode)}</TableCell>
+                  <TableCell>
+                    <div className="flex flex-col items-start gap-1">
+                      {statusCodeBadge(log.statusCode)}
+                      <RetryMarker log={log} logs={logs} />
+                    </div>
+                  </TableCell>
                   <TableCell className="text-right tabular-nums">
                     <span className="block">
                       <Trans>{log.latencyMs}ms</Trans>
                     </span>
                     <span className="block text-xs text-muted-foreground">
-                      {formatOtps(log.otps)}
+                      <Trans>TTFT {formatDuration(log.ttftMs)}</Trans>
+                    </span>
+                    <span className="block text-xs text-muted-foreground">
+                      <Trans>OTPS {formatOtps(log.otps)}</Trans>
                     </span>
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
@@ -388,7 +416,10 @@ export function RequestLogsView({
                       </div>
                     ) : null}
                   </div>
-                  {statusCodeBadge(log.statusCode)}
+                  <div className="flex flex-col items-end gap-1">
+                    {statusCodeBadge(log.statusCode)}
+                    <RetryMarker log={log} logs={logs} />
+                  </div>
                 </div>
                 <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground">
                   <span>{formatDate(log.createdAt)}</span>
@@ -405,6 +436,7 @@ export function RequestLogsView({
                         {formatCacheHitRate(log.cachedInputTokens, log.inputTokens)} cache
                       </Trans>
                     </span>
+                    <span className="block">TTFT {formatDuration(log.ttftMs)}</span>
                     <span className="block">OTPS {formatOtps(log.otps)}</span>
                   </span>
                 </div>
@@ -434,6 +466,26 @@ function RequestLogDetails({ log }: { log: RequestLog }) {
 function RequestLogFacts({ log }: { log: RequestLog }) {
   return (
     <dl className="mt-2 grid gap-1 border-l pl-3 text-xs text-muted-foreground">
+      <div className="flex gap-2">
+        <dt className="shrink-0">
+          <Trans>Attempt</Trans>
+        </dt>
+        <dd>{formatAttempt(log)}</dd>
+      </div>
+      <div className="flex gap-2">
+        <dt className="shrink-0">
+          <Trans>TTFT</Trans>
+        </dt>
+        <dd>{formatDuration(log.ttftMs)}</dd>
+      </div>
+      {log.retryAfterMs ? (
+        <div className="flex gap-2">
+          <dt className="shrink-0">
+            <Trans>Retry-After</Trans>
+          </dt>
+          <dd>{formatDuration(log.retryAfterMs)}</dd>
+        </div>
+      ) : null}
       <div className="flex gap-2">
         <dt className="shrink-0">
           <Trans>Time</Trans>
@@ -486,5 +538,30 @@ function RequestLogFacts({ log }: { log: RequestLog }) {
         </div>
       ) : null}
     </dl>
+  );
+}
+
+function formatDuration(milliseconds: number | null | undefined) {
+  if (milliseconds === null || milliseconds === undefined) return "—";
+  if (milliseconds < 1000) return `${milliseconds}ms`;
+  return `${(milliseconds / 1000).toFixed(milliseconds >= 10_000 ? 0 : 1)}s`;
+}
+
+function formatAttempt(log: RequestLog) {
+  const attemptIndex = log.attemptIndex ?? 0;
+  return attemptIndex ? `retry ${attemptIndex}` : "initial";
+}
+
+function RetryMarker({ log, logs }: { log: RequestLog; logs: readonly RequestLog[] }) {
+  const logicalId = log.logicalRequestId || log.id;
+  const attemptIndex = log.attemptIndex ?? 0;
+  const attempts = logs.filter(
+    (candidate) => (candidate.logicalRequestId || candidate.id) === logicalId,
+  ).length;
+  if (attempts <= 1 && attemptIndex === 0) return null;
+  return (
+    <span className="text-[11px] font-medium text-muted-foreground">
+      {attemptIndex > 0 ? `retry ${attemptIndex}/${attempts}` : `initial · ${attempts} attempts`}
+    </span>
   );
 }

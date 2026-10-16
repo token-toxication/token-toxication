@@ -128,6 +128,8 @@ pub struct UpdateProviderAccountRequest {
 #[serde(rename_all = "camelCase")]
 pub struct RequestLog {
     pub id: String,
+    #[serde(default)]
+    pub logical_request_id: String,
     pub api_key_id: String,
     pub provider_account_id: Option<String>,
     pub method: String,
@@ -139,6 +141,8 @@ pub struct RequestLog {
     pub status_code: u16,
     /// Time from acquiring a running-request slot to completion.
     pub latency_ms: u64,
+    #[serde(default)]
+    pub ttft_ms: Option<u64>,
     /// Time spent queued for a running-request slot before relaying.
     #[serde(default)]
     pub queue_wait_ms: u64,
@@ -209,6 +213,8 @@ pub struct Dashboard {
     pub accounts: Vec<ProviderAccount>,
     pub recent_requests: Vec<RequestLog>,
     pub request_trend: RequestTrend,
+    #[serde(default)]
+    pub selection_failures: Vec<SelectionFailureMetric>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -689,6 +695,7 @@ pub struct MetricsResponse {
     pub session_affinity: Vec<SessionAffinityMetric>,
     pub route_selections: Vec<RouteSelectionMetric>,
     pub request_outcomes: Vec<RequestOutcomeMetric>,
+    pub selection_failures: Vec<SelectionFailureMetric>,
     pub timestamp: DateTime<Utc>,
 }
 
@@ -716,6 +723,16 @@ pub struct RequestOutcomeMetric {
     pub transport: String,
     pub status_code: u16,
     pub outcome: String,
+    pub count: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SelectionFailureMetric {
+    pub wire_api: String,
+    pub model: String,
+    pub status_code: u16,
+    pub reason: String,
     pub count: u64,
 }
 

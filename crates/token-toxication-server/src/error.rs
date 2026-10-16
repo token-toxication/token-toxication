@@ -270,6 +270,8 @@ pub enum AppError {
     #[error("{0}")]
     TooManyRequests(String),
     #[error("{0}")]
+    TooManyRequestsWithRetryAfter(String, u64),
+    #[error("{0}")]
     ServiceUnavailable(String),
     #[error("{0}")]
     NotFound(String),
@@ -288,6 +290,7 @@ impl AppError {
             Self::Unauthorized(_) => StatusCode::UNAUTHORIZED,
             Self::Forbidden(_) => StatusCode::FORBIDDEN,
             Self::TooManyRequests(_) => StatusCode::TOO_MANY_REQUESTS,
+            Self::TooManyRequestsWithRetryAfter(_, _) => StatusCode::TOO_MANY_REQUESTS,
             Self::ServiceUnavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
             Self::NotFound(_) => StatusCode::NOT_FOUND,
             Self::Database(_) | Self::Upstream(_) | Self::Internal(_) => {
@@ -300,12 +303,22 @@ impl AppError {
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         let status = self.status();
+        let retry_after = match &self {
+            Self::TooManyRequestsWithRetryAfter(_, seconds) => Some(seconds.to_string()),
+            _ => None,
+        };
         let body = Json(json!({
             "error": {
                 "type": status.as_u16(),
                 "message": self.to_string(),
             }
         }));
-        (status, body).into_response()
+        let mut response = (status, body).into_response();
+        if let Some(seconds) = retry_after
+            && let Ok(value) = seconds.parse()
+        {
+            response.headers_mut().insert("retry-after", value);
+        }
+        response
     }
 }

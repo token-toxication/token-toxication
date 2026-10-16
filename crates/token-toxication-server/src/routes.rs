@@ -149,7 +149,8 @@ pub async fn health(State(state): State<AppState>) -> Json<HealthResponse> {
 
 pub async fn metrics(State(state): State<AppState>) -> Result<Json<MetricsResponse>, AppError> {
     let dashboard = state.db.dashboard().await?;
-    let (session_affinity, route_selections, request_outcomes) = state.relay_metrics.snapshot();
+    let (session_affinity, route_selections, request_outcomes, selection_failures) =
+        state.relay_metrics.snapshot();
     Ok(Json(MetricsResponse {
         active_api_keys: dashboard.active_api_keys,
         total_api_keys: dashboard.total_api_keys,
@@ -159,6 +160,7 @@ pub async fn metrics(State(state): State<AppState>) -> Result<Json<MetricsRespon
         session_affinity,
         route_selections,
         request_outcomes,
+        selection_failures,
         timestamp: Utc::now(),
     }))
 }
@@ -577,6 +579,7 @@ async fn relay_json_endpoint(
             attempt_index,
             output_started: false,
             retry_after_ms: None,
+            ttft_ms: None,
         };
         let codex_auth = if is_codex_subscription_auth(&account.account.auth_mode) {
             if wire_api != WireApi::OpenAiResponses {
@@ -970,7 +973,10 @@ async fn relay_json_endpoint(
                         Bytes::from_static(
                             br#"{"error":{"type":429,"message":"all matching provider accounts are rate limited"}}"#,
                         ),
-                        HeaderMap::new(),
+                        HeaderMap::from_iter([(
+                            header::RETRY_AFTER,
+                            HeaderValue::from_static("60"),
+                        )]),
                     ));
                     continue;
                 }
@@ -1154,6 +1160,7 @@ async fn relay_gemini_endpoint(
         attempt_index: 0,
         output_started: false,
         retry_after_ms: None,
+        ttft_ms: None,
     };
 
     let authorization =
@@ -1325,7 +1332,10 @@ async fn relay_gemini_endpoint(
 }
 
 pub async fn admin_dashboard(State(state): State<AppState>) -> Result<Json<Dashboard>, AppError> {
-    Ok(Json(state.db.dashboard().await?))
+    let mut dashboard = state.db.dashboard().await?;
+    let (_, _, _, selection_failures) = state.relay_metrics.snapshot();
+    dashboard.selection_failures = selection_failures;
+    Ok(Json(dashboard))
 }
 
 pub async fn list_api_keys(
@@ -2235,6 +2245,9 @@ where
     // The owned task can finalize the attempt after upstream EOF while the
     // bounded channel preserves downstream backpressure.
     let (sender, receiver) = mpsc::channel(BUFFERED_CHUNKS);
+    if first_output_at.is_some() {
+        log.ttft_ms = Some(attempt.elapsed_ms());
+    }
     tokio::spawn(async move {
         let mut body_stream = Box::pin(body_stream);
         let mut observation = StreamingResponseObservation {
@@ -2263,7 +2276,11 @@ where
                 };
                 match next {
                     Some(Ok(chunk)) => {
+                        let had_output = observation.first_output_at.is_some();
                         observation.observe(&chunk, Instant::now());
+                        if !had_output && observation.first_output_at.is_some() {
+                            log.ttft_ms = Some(attempt.elapsed_ms());
+                        }
                         let (chunk, injected) =
                             retry_advice_rewriter.process(&chunk, codex_subscription);
                         if injected {

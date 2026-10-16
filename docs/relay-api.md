@@ -99,9 +99,12 @@ connection termination.
 
 `/metrics.requestOutcomes` records the transport (`http`, `http_sse`, or
 `websocket`), upstream-facing status code, and bounded outcome class for every
-completed relay attempt. Non-success attempts also emit a structured journal
-record with the same transport, status, outcome, and retry count. These fields
-are metadata-only; prompts, tokens, and upstream bodies are never logged.
+completed relay attempt. `metrics.selectionFailures` records route-selection
+rejections that happened before an upstream account could be selected. When all
+matching routes are rate limited, the relay returns `429` with `Retry-After: 60`.
+Non-success attempts also emit a structured journal record with the same
+transport, status, outcome, and retry count. These fields are metadata-only;
+prompts, tokens, and upstream bodies are never logged.
 Running-request saturation is handled by the FIFO account queue. Queue entry
 and slot acquisition logs include bounded account, model, limit, load, and wait
 time fields; a relay-generated `429` is logged as a provider-route rate-limit

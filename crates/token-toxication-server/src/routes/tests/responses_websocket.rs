@@ -462,7 +462,7 @@ async fn websocket_rate_limit_does_not_close_reusable_client_connection() {
     assert_eq!(logs.len(), 2);
     assert!(logs.iter().any(|log| log.status_code == 429));
     assert!(logs.iter().any(|log| log.status_code == 200));
-    let (_, _, outcomes) = state.relay_metrics.snapshot();
+    let (_, _, outcomes, _) = state.relay_metrics.snapshot();
     assert!(outcomes.iter().any(|metric| {
         metric.transport == "websocket"
             && metric.status_code == 429
@@ -716,7 +716,7 @@ async fn websocket_binds_account_and_preserves_tool_and_steering_continuations()
                 (13, 2, 3)
             );
         }
-        let (_, _, request_outcomes) = state.relay_metrics.snapshot();
+        let (_, _, request_outcomes, _) = state.relay_metrics.snapshot();
         assert_eq!(
             request_outcomes,
             vec![RequestOutcomeMetric {

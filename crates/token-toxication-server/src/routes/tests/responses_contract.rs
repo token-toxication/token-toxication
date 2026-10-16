@@ -256,7 +256,7 @@ async fn coding_models_preserve_payloads_and_auth_boundaries() {
             ),
             (13, 2, 3)
         );
-        let (_, _, request_outcomes) = state.relay_metrics.snapshot();
+        let (_, _, request_outcomes, _) = state.relay_metrics.snapshot();
         assert_eq!(
             request_outcomes,
             vec![RequestOutcomeMetric {

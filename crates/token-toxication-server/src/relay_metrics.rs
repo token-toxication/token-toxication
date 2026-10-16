@@ -4,7 +4,9 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::models::{RequestOutcomeMetric, RouteSelectionMetric, SessionAffinityMetric};
+use crate::models::{
+    RequestOutcomeMetric, RouteSelectionMetric, SelectionFailureMetric, SessionAffinityMetric,
+};
 
 const WARNING_INTERVAL: Duration = Duration::from_secs(300);
 
@@ -18,6 +20,7 @@ struct RelayMetricsInner {
     affinity: BTreeMap<(String, String, String), u64>,
     selections: BTreeMap<(String, String, String), u64>,
     requests: BTreeMap<(String, u16, String), u64>,
+    selection_failures: BTreeMap<(String, String, u16, String), u64>,
     last_missing_warning: BTreeMap<(String, String), Instant>,
 }
 
@@ -64,12 +67,21 @@ impl RelayMetrics {
             .or_default() += 1;
     }
 
+    pub fn record_selection_failure(&self, wire_api: &str, model: &str, reason: &str) {
+        let mut inner = self.inner.lock().expect("relay metrics lock poisoned");
+        *inner
+            .selection_failures
+            .entry((wire_api.into(), model.into(), 429, reason.into()))
+            .or_default() += 1;
+    }
+
     pub fn snapshot(
         &self,
     ) -> (
         Vec<SessionAffinityMetric>,
         Vec<RouteSelectionMetric>,
         Vec<RequestOutcomeMetric>,
+        Vec<SelectionFailureMetric>,
     ) {
         let inner = self.inner.lock().expect("relay metrics lock poisoned");
         let affinity = inner
@@ -106,7 +118,20 @@ impl RelayMetrics {
                 },
             )
             .collect();
-        (affinity, selections, requests)
+        let selection_failures = inner
+            .selection_failures
+            .iter()
+            .map(
+                |((wire_api, model, status_code, reason), count)| SelectionFailureMetric {
+                    wire_api: wire_api.clone(),
+                    model: model.clone(),
+                    status_code: *status_code,
+                    reason: reason.clone(),
+                    count: *count,
+                },
+            )
+            .collect();
+        (affinity, selections, requests, selection_failures)
     }
 }
 
@@ -163,7 +188,7 @@ mod tests {
         metrics.record_request("http_sse", 200, None);
         metrics.record_request("websocket", 502, Some("upstream stream failed"));
         metrics.record_request("websocket", 502, Some("upstream stream failed"));
-        let (_, _, requests) = metrics.snapshot();
+        let (_, _, requests, _) = metrics.snapshot();
         assert_eq!(
             requests,
             vec![
@@ -202,5 +227,19 @@ mod tests {
             "overload"
         );
         assert_eq!(request_outcome(401, None), "authorization");
+    }
+
+    #[test]
+    fn records_route_selection_failures_separately() {
+        let metrics = RelayMetrics::default();
+        metrics.record_selection_failure(
+            "openai-responses",
+            "gpt-6-astra",
+            "all_routes_rate_limited",
+        );
+        let (_, _, _, failures) = metrics.snapshot();
+        assert_eq!(failures[0].status_code, 429);
+        assert_eq!(failures[0].count, 1);
+        assert_eq!(failures[0].reason, "all_routes_rate_limited");
     }
 }

@@ -43,6 +43,7 @@ pub(crate) struct RelayAttemptLog {
     pub attempt_index: u8,
     pub output_started: bool,
     pub retry_after_ms: Option<u64>,
+    pub ttft_ms: Option<u64>,
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -101,6 +102,10 @@ impl RelayAttempt {
 
     pub(crate) fn selection(&self) -> &ProviderRouteSelection {
         &self.selection
+    }
+
+    pub(crate) fn elapsed_ms(&self) -> u64 {
+        self.started.elapsed().as_millis() as u64
     }
 
     /// Waits in FIFO order for a running-request slot on the bound account.
@@ -291,6 +296,7 @@ impl RelayAttempt {
                 request_summary: log.request_summary.clone(),
                 status_code,
                 latency_ms: self.started.elapsed().as_millis() as u64,
+                ttft_ms: log.ttft_ms,
                 queue_wait_ms: self.queue_wait.as_millis() as u64,
                 overload_retry_count: log.overload_retry_count,
                 overload_retry_started: log.overload_retry_started,
@@ -307,6 +313,7 @@ impl RelayAttempt {
                 attempt_index: log.attempt_index,
                 output_started: log.output_started,
                 retry_after_ms: log.retry_after_ms,
+                logical_request_id: log.request_id.clone(),
             })
             .await?;
         Ok(())
@@ -362,14 +369,20 @@ impl AuthenticatedRelayAttempt {
                 .has_limited_provider_route(wire_api, model)
                 .await?
         {
+            self.state.relay_metrics.record_selection_failure(
+                wire_api,
+                model,
+                "all_routes_rate_limited",
+            );
             tracing::warn!(
                 wire_api,
                 model,
                 excluded_accounts = excluded_account_ids.len(),
                 "relay request rejected because all matching provider routes are rate limited"
             );
-            return Err(AppError::TooManyRequests(
+            return Err(AppError::TooManyRequestsWithRetryAfter(
                 "all matching provider accounts are rate limited".into(),
+                60,
             ));
         }
         let (selection, permit) = {

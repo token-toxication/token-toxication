@@ -37,6 +37,7 @@ Request logs store the operational metadata required to diagnose routing and pro
 - Public and upstream model IDs
 - Stripped parameter names
 - Status, latency, average output token throughput (OTPS), error category, and provider account
+- Logical request id, physical attempt index, retry-after advice, output boundary, and TTFT
 
 Request logs do not store:
 
@@ -54,6 +55,11 @@ Streaming logs are finalized after the upstream stream ends so terminal usage ev
 
 `OTPS` is reported as output tokens divided by the time from the first output delta to stream
 completion, excluding TTFT. Requests without an observable output delta display no OTPS value.
+
+`TTFT` is the elapsed time from the start of one physical upstream attempt to its first
+observable text, reasoning, or tool output. It is stored per attempt and is not folded into
+the retry count or total latency. A retried logical request therefore has one TTFT for each
+attempt, while the attempt index makes the retry boundary explicit.
 
 ```text
 cache hit rate = cached input tokens / input tokens
