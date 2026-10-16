@@ -35,7 +35,7 @@ msgid "{0} / {1} input tokens"
 msgstr "{0} / {1} input tokens"
 
 #. placeholder {0}: values.length
-#: src/admin-ui/dashboard.tsx:213
+#: src/admin-ui/dashboard.tsx:241
 msgid "{0} × {intervalMinutes} min"
 msgstr "{0} × {intervalMinutes} min"
 
@@ -45,8 +45,8 @@ msgid "{0} bytes · {stream} · keys {keys}{stripped}"
 msgstr "{0} bytes · {stream} · keys {keys}{stripped}"
 
 #. placeholder {0}: formatCacheHitRate(log.cachedInputTokens, log.inputTokens)
-#: src/admin-ui/logs.tsx:258
-#: src/admin-ui/logs.tsx:404
+#: src/admin-ui/logs.tsx:278
+#: src/admin-ui/logs.tsx:435
 msgid "{0} cache"
 msgstr "{0} cache"
 
@@ -78,15 +78,15 @@ msgstr "{0} hours"
 
 #. placeholder {0}: formatCompactNumber(log.inputTokens)
 #. placeholder {1}: formatCompactNumber(log.outputTokens)
-#: src/admin-ui/logs.tsx:252
-#: src/admin-ui/logs.tsx:334
+#: src/admin-ui/logs.tsx:272
+#: src/admin-ui/logs.tsx:362
 msgid "{0} in · {1} out"
 msgstr "{0} in · {1} out"
 
 #. placeholder {0}: formatNumber(log.inputTokens)
 #. placeholder {1}: formatNumber(log.cachedInputTokens)
 #. placeholder {2}: formatNumber(log.outputTokens)
-#: src/admin-ui/logs.tsx:466
+#: src/admin-ui/logs.tsx:518
 msgid "{0} input · {1} cached · {2} output"
 msgstr "{0} input · {1} cached · {2} output"
 
@@ -112,23 +112,23 @@ msgstr "{0} total"
 
 #. placeholder {0}: formatNumber(log.inputTokens + log.outputTokens)
 #. placeholder {1}: formatCacheHitRate(log.cachedInputTokens, log.inputTokens)
-#: src/admin-ui/logs.tsx:99
+#: src/admin-ui/logs.tsx:111
 msgid "{0} total · {1} cache hit"
 msgstr "{0} total · {1} cache hit"
 
 #. placeholder {0}: formatChartInterval(bucket.startedAt, trend.bucketDurationSeconds)
 #. placeholder {1}: formatRequestCount(value)
-#: src/admin-ui/dashboard.tsx:271
+#: src/admin-ui/dashboard.tsx:299
 msgid "{0}: {1}"
 msgstr "{0}: {1}"
 
 #. placeholder {0}: log.latencyMs
 #. placeholder {0}: log.queueWaitMs
 #: src/admin-ui/logs.tsx:81
-#: src/admin-ui/logs.tsx:90
-#: src/admin-ui/logs.tsx:244
-#: src/admin-ui/logs.tsx:326
-#: src/admin-ui/logs.tsx:396
+#: src/admin-ui/logs.tsx:102
+#: src/admin-ui/logs.tsx:261
+#: src/admin-ui/logs.tsx:351
+#: src/admin-ui/logs.tsx:427
 msgid "{0}ms"
 msgstr "{0}ms"
 
@@ -375,6 +375,11 @@ msgstr "API Keys"
 msgid "Appearance"
 msgstr "Appearance"
 
+#: src/admin-ui/logs.tsx:92
+#: src/admin-ui/logs.tsx:471
+msgid "Attempt"
+msgstr "Attempt"
+
 #: src/admin-ui/accounts.tsx:641
 #: src/admin-ui/accounts.tsx:961
 msgid "Auth"
@@ -525,7 +530,7 @@ msgstr "Claude only"
 msgid "Client credentials, limits, and service permissions."
 msgstr "Client credentials, limits, and service permissions."
 
-#: src/admin-ui/logs.tsx:113
+#: src/admin-ui/logs.tsx:125
 msgid "Client key"
 msgstr "Client key"
 
@@ -598,7 +603,7 @@ msgstr "Codex sign-in failed"
 msgid "Codex uses its own model catalog and chooses the model. Check that the selected model has a compatible relay route; every fallback route must support the protocol Codex sends."
 msgstr "Codex uses its own model catalog and chooses the model. Check that the selected model has a compatible relay route; every fallback route must support the protocol Codex sends."
 
-#: src/admin-ui/dashboard.tsx:319
+#: src/admin-ui/dashboard.tsx:347
 msgid "Completed avg / {intervalMinutes} min"
 msgstr "Completed avg / {intervalMinutes} min"
 
@@ -767,7 +772,7 @@ msgstr "Display name"
 msgid "Display Name"
 msgstr "Display Name"
 
-#: src/admin-ui/dashboard.tsx:207
+#: src/admin-ui/dashboard.tsx:235
 msgid "Each point counts completed requests in one interval. Hover or focus for details."
 msgstr "Each point counts completed requests in one interval. Hover or focus for details."
 
@@ -799,7 +804,7 @@ msgstr "Enter this code on the official Codex verification page."
 msgid "Environment"
 msgstr "Environment"
 
-#: src/admin-ui/logs.tsx:481
+#: src/admin-ui/logs.tsx:533
 msgid "Error"
 msgstr "Error"
 
@@ -891,7 +896,7 @@ msgstr "How this Catalog Model reaches its upstream model."
 msgid "Identify the upstream account and connection endpoint."
 msgstr "Identify the upstream account and connection endpoint."
 
-#: src/admin-ui/dashboard.tsx:309
+#: src/admin-ui/dashboard.tsx:337
 msgid "Intervals align to local {intervalMinutes}-minute boundaries. The rightmost interval is still in progress, so its count is excluded from the average."
 msgstr "Intervals align to local {intervalMinutes}-minute boundaries. The rightmost interval is still in progress, so its count is excluded from the average."
 
@@ -956,7 +961,7 @@ msgstr "Limits"
 msgid "Local"
 msgstr "Local"
 
-#: src/admin-ui/dashboard.tsx:304
+#: src/admin-ui/dashboard.tsx:332
 msgid "Local time"
 msgstr "Local time"
 
@@ -1002,7 +1007,7 @@ msgstr "Messages routed"
 
 #: src/admin-ui/accounts.tsx:737
 #: src/admin-ui/client-setup.tsx:410
-#: src/admin-ui/logs.tsx:191
+#: src/admin-ui/logs.tsx:203
 #: src/admin-ui/models.tsx:138
 msgid "Model"
 msgstr "Model"
@@ -1142,9 +1147,9 @@ msgstr "No provider routes"
 msgid "No quota windows returned"
 msgstr "No quota windows returned"
 
-#: src/admin-ui/logs.tsx:269
-#: src/admin-ui/logs.tsx:349
-#: src/admin-ui/logs.tsx:361
+#: src/admin-ui/logs.tsx:289
+#: src/admin-ui/logs.tsx:377
+#: src/admin-ui/logs.tsx:389
 msgid "No relay traffic"
 msgstr "No relay traffic"
 
@@ -1152,7 +1157,7 @@ msgstr "No relay traffic"
 msgid "No request summary"
 msgstr "No request summary"
 
-#: src/admin-ui/dashboard.tsx:288
+#: src/admin-ui/dashboard.tsx:316
 msgid "No requests in this window"
 msgstr "No requests in this window"
 
@@ -1182,7 +1187,7 @@ msgstr "Not found"
 msgid "not set"
 msgstr "not set"
 
-#: src/admin-ui/dashboard.tsx:299
+#: src/admin-ui/dashboard.tsx:327
 msgid "Now"
 msgstr "Now"
 
@@ -1210,10 +1215,16 @@ msgstr "OpenAI-compatible only"
 msgid "opencode project config"
 msgstr "opencode project config"
 
-#: src/admin-ui/logs.tsx:107
-#: src/admin-ui/logs.tsx:474
+#: src/admin-ui/logs.tsx:119
+#: src/admin-ui/logs.tsx:526
 msgid "OTPS"
 msgstr "OTPS"
+
+#. placeholder {0}: formatOtps(log.otps)
+#: src/admin-ui/logs.tsx:267
+#: src/admin-ui/logs.tsx:357
+msgid "OTPS {0}"
+msgstr "OTPS {0}"
 
 #: src/admin-routes.tsx:8
 msgid "Overview"
@@ -1235,7 +1246,7 @@ msgstr "Password"
 msgid "Paste the value from tokens.refresh_token or openai.refresh"
 msgstr "Paste the value from tokens.refresh_token or openai.refresh"
 
-#: src/admin-ui/logs.tsx:445
+#: src/admin-ui/logs.tsx:497
 msgid "Path"
 msgstr "Path"
 
@@ -1249,12 +1260,12 @@ msgstr "paused"
 msgid "Paused"
 msgstr "Paused"
 
-#: src/admin-ui/dashboard.tsx:317
+#: src/admin-ui/dashboard.tsx:345
 msgid "Peak / {intervalMinutes} min"
 msgstr "Peak / {intervalMinutes} min"
 
-#: src/admin-ui/logs.tsx:197
-#: src/admin-ui/logs.tsx:295
+#: src/admin-ui/logs.tsx:209
+#: src/admin-ui/logs.tsx:315
 msgid "Performance"
 msgstr "Performance"
 
@@ -1325,7 +1336,7 @@ msgstr "Provider account"
 
 #: src/admin-routes.tsx:12
 #: src/admin-ui/accounts.tsx:348
-#: src/admin-ui/logs.tsx:120
+#: src/admin-ui/logs.tsx:132
 #: src/admin-ui/models.tsx:245
 #: src/admin-ui/models.tsx:465
 #: src/admin-ui/models.tsx:672
@@ -1405,7 +1416,7 @@ msgstr "Public Model"
 msgid "Public model identity and client-facing metadata."
 msgstr "Public model identity and client-facing metadata."
 
-#: src/admin-ui/logs.tsx:87
+#: src/admin-ui/logs.tsx:99
 msgid "Queue wait"
 msgstr "Queue wait"
 
@@ -1445,7 +1456,7 @@ msgstr "Raw refresh token"
 msgid "Reached"
 msgstr "Reached"
 
-#: src/admin-ui/logs.tsx:164
+#: src/admin-ui/logs.tsx:176
 msgid "Recent requests"
 msgstr "Recent requests"
 
@@ -1506,7 +1517,7 @@ msgstr "Relay operations console"
 msgid "Relay result and accounting for this completed attempt."
 msgstr "Relay result and accounting for this completed attempt."
 
-#: src/admin-ui/logs.tsx:166
+#: src/admin-ui/logs.tsx:178
 msgid "Relay status, latency, model, sanitized routing metadata, and token accounting."
 msgstr "Relay status, latency, model, sanitized routing metadata, and token accounting."
 
@@ -1515,17 +1526,17 @@ msgstr "Relay status, latency, model, sanitized routing metadata, and token acco
 msgid "Remaining"
 msgstr "Remaining"
 
-#: src/admin-ui/logs.tsx:188
-#: src/admin-ui/logs.tsx:289
+#: src/admin-ui/logs.tsx:200
+#: src/admin-ui/logs.tsx:309
 msgid "Request"
 msgstr "Request"
 
-#: src/admin-ui/dashboard.tsx:228
+#: src/admin-ui/dashboard.tsx:256
 msgid "Request count by local time"
 msgstr "Request count by local time"
 
 #. placeholder {0}: values.length
-#: src/admin-ui/dashboard.tsx:234
+#: src/admin-ui/dashboard.tsx:262
 msgid "Request counts across {0} clock-aligned {intervalMinutes}-minute intervals"
 msgstr "Request counts across {0} clock-aligned {intervalMinutes}-minute intervals"
 
@@ -1537,7 +1548,7 @@ msgstr "Request flow"
 #: src/admin-routes.tsx:18
 #: src/admin-ui/logs.tsx:50
 #: src/admin-ui/logs.tsx:55
-#: src/admin-ui/logs.tsx:164
+#: src/admin-ui/logs.tsx:176
 msgid "Request Log"
 msgstr "Request Log"
 
@@ -1549,15 +1560,19 @@ msgstr "Request Log not found"
 msgid "Request summary"
 msgstr "Request summary"
 
-#: src/admin-ui/logs.tsx:270
-#: src/admin-ui/logs.tsx:350
-#: src/admin-ui/logs.tsx:362
+#: src/admin-ui/logs.tsx:290
+#: src/admin-ui/logs.tsx:378
+#: src/admin-ui/logs.tsx:390
 msgid "Requests appear here after clients call the relay."
 msgstr "Requests appear here after clients call the relay."
 
-#: src/admin-ui/dashboard.tsx:204
+#: src/admin-ui/dashboard.tsx:232
 msgid "Requests per {intervalMinutes} minutes"
 msgstr "Requests per {intervalMinutes} minutes"
+
+#: src/admin-ui/dashboard.tsx:152
+msgid "Requests rejected before an upstream account could be selected."
+msgstr "Requests rejected before an upstream account could be selected."
 
 #: src/admin-ui/dashboard.tsx:47
 msgid "Requests today"
@@ -1580,6 +1595,10 @@ msgstr "Reset credits"
 #: src/admin-ui/client-setup.tsx:214
 msgid "Responses routed"
 msgstr "Responses routed"
+
+#: src/admin-ui/logs.tsx:484
+msgid "Retry-After"
+msgstr "Retry-After"
 
 #: src/admin-ui/accounts.tsx:517
 #: src/admin-ui/models.tsx:251
@@ -1617,14 +1636,18 @@ msgstr "Routes"
 msgid "Routing and limits"
 msgstr "Routing and limits"
 
-#: src/admin-ui/logs.tsx:139
-#: src/admin-ui/logs.tsx:427
+#: src/admin-ui/logs.tsx:151
+#: src/admin-ui/logs.tsx:459
 msgid "Routing details"
 msgstr "Routing details"
 
 #: src/admin-ui/dashboard.tsx:109
 msgid "Routing health and availability."
 msgstr "Routing health and availability."
+
+#: src/admin-ui/dashboard.tsx:149
+msgid "Routing warnings"
+msgstr "Routing warnings"
 
 #: src/admin-ui/api-keys.tsx:424
 msgid "RPM"
@@ -1724,8 +1747,8 @@ msgstr "Start a new sign-in to try again."
 #: src/admin-ui/accounts.tsx:1006
 #: src/admin-ui/accounts.tsx:1053
 #: src/admin-ui/api-keys.tsx:295
-#: src/admin-ui/logs.tsx:194
-#: src/admin-ui/logs.tsx:292
+#: src/admin-ui/logs.tsx:206
+#: src/admin-ui/logs.tsx:312
 #: src/admin-ui/models.tsx:150
 #: src/admin-ui/models.tsx:257
 #: src/admin-ui/models.tsx:430
@@ -1822,19 +1845,30 @@ msgstr "This secret is shown once."
 msgid "Tier"
 msgstr "Tier"
 
-#: src/admin-ui/logs.tsx:185
-#: src/admin-ui/logs.tsx:439
+#: src/admin-ui/logs.tsx:197
+#: src/admin-ui/logs.tsx:491
 msgid "Time"
 msgstr "Time"
 
-#: src/admin-ui/logs.tsx:96
-#: src/admin-ui/logs.tsx:463
+#: src/admin-ui/logs.tsx:108
+#: src/admin-ui/logs.tsx:515
 msgid "Tokens"
 msgstr "Tokens"
 
 #: src/admin-ui/dashboard.tsx:53
 msgid "Tokens today"
 msgstr "Tokens today"
+
+#: src/admin-ui/logs.tsx:86
+#: src/admin-ui/logs.tsx:477
+msgid "TTFT"
+msgstr "TTFT"
+
+#. placeholder {0}: formatDuration(log.ttftMs)
+#: src/admin-ui/logs.tsx:264
+#: src/admin-ui/logs.tsx:354
+msgid "TTFT {0}"
+msgstr "TTFT {0}"
 
 #: src/admin-ui/use-admin-workspace.ts:426
 msgid "Unable to connect Codex account"
@@ -1908,7 +1942,7 @@ msgstr "until {0}"
 msgid "Update routing details or replace the upstream credential."
 msgstr "Update routing details or replace the upstream credential."
 
-#: src/admin-ui/logs.tsx:454
+#: src/admin-ui/logs.tsx:506
 msgid "Upstream"
 msgstr "Upstream"
 
@@ -1943,8 +1977,8 @@ msgstr "Upstream path"
 msgid "usable client credentials"
 msgstr "usable client credentials"
 
-#: src/admin-ui/logs.tsx:200
-#: src/admin-ui/logs.tsx:298
+#: src/admin-ui/logs.tsx:212
+#: src/admin-ui/logs.tsx:318
 msgid "Usage"
 msgstr "Usage"
 
@@ -1992,7 +2026,7 @@ msgstr "Weight applies among healthy routes with the same role. Primary routes a
 msgid "Window"
 msgstr "Window"
 
-#: src/admin-ui/dashboard.tsx:316
+#: src/admin-ui/dashboard.tsx:344
 msgid "Window total"
 msgstr "Window total"
 
