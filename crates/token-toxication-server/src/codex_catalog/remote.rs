@@ -11,6 +11,9 @@
 //!   parameter returns `400`, so a request that omitted it would fail the whole
 //!   catalog. TT therefore always sends one, falling back to
 //!   [`FALLBACK_CLIENT_VERSION`] when the client sent nothing usable.
+//! - The catalog is shaped **by version**: an older or unknown value returns a
+//!   smaller set. The version is therefore part of the cache key, and never a
+//!   constant that is not a real release.
 //! - The Codex client abandons its catalog refresh after 5 seconds. TT's own
 //!   budget stays well inside that so a slow upstream cannot make the client
 //!   time out and lose its model list.
@@ -32,9 +35,14 @@ const CATALOG_TIMEOUT: Duration = Duration::from_secs(3);
 
 /// Version TT reports upstream when the client sent nothing usable.
 ///
-/// The backend only checks that the parameter is present, not its value, so this
-/// placeholder never has to track a released Codex version.
-pub const FALLBACK_CLIENT_VERSION: &str = "0.0.0";
+/// The backend shapes the catalog to the requested version, so a placeholder
+/// such as `0.0.0` is not neutral: it yields a **reduced** catalog that is
+/// missing models newer clients can use. TT therefore reports the current Codex
+/// release, which is what a client that sends no version most likely is.
+///
+/// Keep this current. Latest verified `2026-10-16` from `~/.codex/version.json`
+/// (`latest_version`) and `https://registry.npmjs.org/@openai/codex/latest`.
+pub const FALLBACK_CLIENT_VERSION: &str = "0.163.0";
 
 /// Longest client version TT forwards.
 const MAX_CLIENT_VERSION_LEN: usize = 32;
@@ -301,9 +309,30 @@ mod tests {
     }
 
     #[test]
+    fn the_fallback_version_is_a_real_release() {
+        // A placeholder such as `0.0.0` is not neutral: the backend shapes the
+        // catalog by version and returns a smaller set for an unknown one, which
+        // is how a single versionless request used to downgrade every client.
+        let parts: Vec<&str> = FALLBACK_CLIENT_VERSION.split('.').collect();
+        assert_eq!(parts.len(), 3, "expected major.minor.patch");
+        for part in &parts {
+            assert!(
+                part.parse::<u32>().is_ok(),
+                "fallback version component {part:?} is not numeric"
+            );
+        }
+        assert_ne!(FALLBACK_CLIENT_VERSION, "0.0.0");
+        assert!(
+            parts.iter().any(|part| *part != "0"),
+            "fallback version must name a real release"
+        );
+    }
+
+    #[test]
     fn a_client_version_is_always_usable() {
         // The backend rejects an absent parameter, so this must never be empty.
         assert_eq!(upstream_client_version(None), FALLBACK_CLIENT_VERSION);
+        assert_eq!(FALLBACK_CLIENT_VERSION, "0.163.0");
         assert_eq!(upstream_client_version(Some("")), FALLBACK_CLIENT_VERSION);
         assert_eq!(
             upstream_client_version(Some("   ")),

@@ -31,7 +31,10 @@ use crate::{
         gemini_account_models, gemini_account_quota,
     },
     auth::{generate_secret, login, logout, me, require_admin},
-    codex_catalog::{remote as codex_catalog_remote, upstream as codex_catalog_upstream},
+    codex_catalog::{
+        cache as codex_catalog_cache, remote as codex_catalog_remote,
+        upstream as codex_catalog_upstream,
+    },
     codex_context, codex_device_oauth,
     codex_subscription::{
         CodexSubscriptionAuthorization, codex_account_quota, codex_models_endpoint,
@@ -271,8 +274,13 @@ pub async fn list_codex_models(
     authenticate_relay_api_key(&state, &headers, uri.query()).await?;
     let account = codex_catalog_account(&state).await?;
     let account_id = account.account.id.clone();
+    let client_version =
+        codex_catalog_remote::upstream_client_version(query.client_version.as_deref());
+    // The upstream shapes the catalog by version, so the version belongs in the
+    // key: a body fetched for one client must never be served to another.
+    let cache_key = codex_catalog_cache::cache_key(&account_id, &client_version);
 
-    if let Some(cached) = state.codex_catalog_cache.fresh(&account_id) {
+    if let Some(cached) = state.codex_catalog_cache.fresh(&cache_key) {
         tracing::debug!(
             account_id,
             age_ms = cached.age.as_millis() as u64,
@@ -282,17 +290,15 @@ pub async fn list_codex_models(
         return Ok(json_body(cached.body));
     }
 
-    let client_version =
-        codex_catalog_remote::upstream_client_version(query.client_version.as_deref());
     let started = std::time::Instant::now();
-    let fetched = fetch_and_render_catalog(&state, &account, &client_version).await;
+    let fetched = fetch_and_render_catalog(&state, &account, &client_version, &cache_key).await;
 
     match fetched {
         Ok(Refreshed::Unchanged) => {
-            state.codex_catalog_cache.touch(&account_id);
+            state.codex_catalog_cache.touch(&cache_key);
             let cached = state
                 .codex_catalog_cache
-                .get(&account_id)
+                .get(&cache_key)
                 .expect("a 304 response implies a stored catalog");
             tracing::info!(
                 account_id,
@@ -308,12 +314,12 @@ pub async fn list_codex_models(
             let body = bytes::Bytes::from(rendered.body);
             state
                 .codex_catalog_cache
-                .store(&account_id, body.clone(), etag);
+                .store(&cache_key, body.clone(), etag);
             Ok(json_body(body))
         }
         Err(error) => {
             // A transient upstream problem must not empty the client's model list.
-            if let Some(cached) = state.codex_catalog_cache.get(&account_id) {
+            if let Some(cached) = state.codex_catalog_cache.get(&cache_key) {
                 tracing::warn!(
                     account_id,
                     client_version = client_version.as_str(),
@@ -353,10 +359,11 @@ async fn fetch_and_render_catalog(
     state: &AppState,
     account: &crate::models::ProviderAccountRecord,
     client_version: &str,
+    cache_key: &str,
 ) -> Result<Refreshed, AppError> {
     let authorization = resolve_codex_authorization(state, account).await?;
     let endpoint = codex_models_endpoint(&account.account.base_url)?;
-    let etag = state.codex_catalog_cache.etag(&account.account.id);
+    let etag = state.codex_catalog_cache.etag(cache_key);
 
     match codex_catalog_remote::fetch(
         &state.http,
@@ -3581,6 +3588,110 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn codex_catalog_endpoint_keeps_client_versions_apart() {
+        // The backend shapes the catalog by client version. Sharing one cache
+        // entry across versions meant a single versionless request handed its
+        // reduced catalog to every client that followed.
+        let seen: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+        let capture = Arc::clone(&seen);
+        let upstream = Router::new().route(
+            "/codex/models",
+            get(move |uri: Uri| {
+                let capture = Arc::clone(&capture);
+                async move {
+                    capture.lock().await.push(uri.to_string());
+                    Json(codex_catalog_body())
+                }
+            }),
+        );
+        let upstream_listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind upstream");
+        let upstream_address = upstream_listener.local_addr().expect("upstream address");
+        let upstream_server =
+            tokio::spawn(async move { axum::serve(upstream_listener, upstream).await });
+
+        let database_path = test_database_path();
+        let db = Db::open(&database_path).await.expect("open test database");
+        let seed = seed_relay_route(
+            &db,
+            RelayRouteSeed {
+                base_url: format!("http://{upstream_address}"),
+                provider: "openai-compatible",
+                auth_mode: "codex-oauth",
+                provider_secret: json!({
+                    "type": "token-toxication-codex-oauth-v1",
+                    "refresh": "synthetic-refresh",
+                    "access": "synthetic-provider-key",
+                    "expires": Utc::now().timestamp_millis() + 3_600_000,
+                    "accountId": "synthetic-account"
+                })
+                .to_string(),
+                wire_api: "openai-responses",
+                public_model: "gpt-6.1-sol",
+                upstream_model: "gpt-6.1-sol",
+            },
+        )
+        .await;
+        let state = test_state(db, database_path.clone());
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
+        let address = listener.local_addr().expect("address");
+        let server = tokio::spawn(async move {
+            axum::serve(
+                listener,
+                crate::app(state, PathBuf::from("missing-admin-assets")),
+            )
+            .await
+            .expect("serve");
+        });
+
+        let http = test_http_client();
+        // No version first (which resolves to the current release), then that
+        // same release, then an older client.
+        for query in [
+            "",
+            "?client_version=0.163.0",
+            "?client_version=0.162.0",
+            "?client_version=0.163.0",
+        ] {
+            let response = http
+                .get(&format!("http://{address}/openai/v1/codex/models{query}"))
+                .expect("build catalog request")
+                .bearer_auth(&seed.relay_secret)
+                .send()
+                .await
+                .expect("send catalog request");
+            assert_eq!(response.status(), StatusCode::OK, "query: {query}");
+        }
+
+        let upstream_uris = seen.lock().await.clone();
+        assert_eq!(
+            upstream_uris.len(),
+            2,
+            "one upstream fetch per distinct version, repeats served from cache: {upstream_uris:?}"
+        );
+        assert!(
+            upstream_uris[0].contains(&format!(
+                "client_version={}",
+                codex_catalog_remote::FALLBACK_CLIENT_VERSION
+            )),
+            "a versionless client must report the current release, not a placeholder: {}",
+            upstream_uris[0]
+        );
+        assert!(
+            upstream_uris[1].contains("client_version=0.162.0"),
+            "an older client must fetch its own catalog: {}",
+            upstream_uris[1]
+        );
+
+        upstream_server.abort();
+        server.abort();
+        let _ = server.await;
+        remove_test_database(&database_path);
+    }
+
+    #[tokio::test]
     async fn codex_catalog_endpoint_serves_the_stored_catalog_when_upstream_fails() {
         let calls = Arc::new(Mutex::new(0usize));
         let counter = Arc::clone(&calls);
@@ -3750,8 +3861,11 @@ mod tests {
         let upstream_uris = captured.lock().await.clone();
         assert_eq!(upstream_uris.len(), 2);
         assert!(
-            upstream_uris[0].contains("client_version=0.0.0"),
-            "a missing client version must still be sent upstream: {}",
+            upstream_uris[0].contains(&format!(
+                "client_version={}",
+                codex_catalog_remote::FALLBACK_CLIENT_VERSION
+            )),
+            "a missing client version must report the current release, not a placeholder: {}",
             upstream_uris[0]
         );
         assert!(

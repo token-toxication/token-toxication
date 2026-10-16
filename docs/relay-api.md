@@ -90,6 +90,11 @@ list. The cache is memory-only: catalog bodies carry instruction text, which TT
 does not write to disk. A cold start against a failing upstream is therefore the
 one case where the endpoint has nothing to serve.
 
+The Codex **Desktop** app cannot use this endpoint: setting `model_catalog_url`
+empties its model picker even though the catalog is valid and its own
+`model/list` returns every entry. Do not configure the generated desktop snippet
+with it; CLI clients are unaffected.
+
 `-fast` is accepted as a request alias, not as a model: no upstream serves a
 suffixed id. A client that requests one is routed to its base model's accounts,
 and the request log keeps the id the client asked for so Fast traffic stays

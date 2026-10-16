@@ -107,14 +107,11 @@ export function ClientSetupView({
   routableModels,
   apiKey,
   setApiKey,
-  hasCodexSubscriptionAccount,
 }: {
   models: ModelCatalogEntry[];
   routableModels: RoutableModelCatalogEntry[];
   apiKey: string;
   setApiKey: React.Dispatch<React.SetStateAction<string>>;
-  /** Whether the relay can serve a Codex-native catalog at all. */
-  hasCodexSubscriptionAccount: boolean;
 }) {
   const serviceOrigin = useMemo(
     () => (typeof window === "undefined" ? "http://127.0.0.1:3000" : window.location.origin),
@@ -154,9 +151,8 @@ export function ClientSetupView({
         opencodeModels,
         piModels,
         dshModels,
-        codexCatalogEnabled: hasCodexSubscriptionAccount,
       }),
-    [apiKey, serviceOrigin, opencodeModels, piModels, dshModels, hasCodexSubscriptionAccount],
+    [apiKey, serviceOrigin, opencodeModels, piModels, dshModels],
   );
   const keyLooksValid = apiKey.trim() === "" || apiKey.trim().startsWith("tokentoxication-");
 
@@ -244,21 +240,6 @@ export function ClientSetupView({
           <TabsContent value="codex">
             {codexModels.length > 0 ? (
               <div className="grid gap-5">
-                {!hasCodexSubscriptionAccount ? (
-                  <Alert>
-                    <DatabaseIcon className="size-4" />
-                    <AlertTitle>
-                      <Trans>Codex model catalog is not enabled</Trans>
-                    </AlertTitle>
-                    <AlertDescription>
-                      <Trans>
-                        Add an active Codex subscription account to let the relay serve the
-                        account&apos;s own model catalog. Without it Codex falls back to its bundled
-                        catalog, which reports smaller context limits.
-                      </Trans>
-                    </AlertDescription>
-                  </Alert>
-                ) : null}
                 <Card>
                   <CardHeader>
                     <CardTitle>
@@ -289,11 +270,7 @@ export function ClientSetupView({
                 />
                 <ClientSnippetCard
                   title={t`Codex provider configuration`}
-                  description={
-                    hasCodexSubscriptionAccount
-                      ? t`Merge this TOML into ~/.codex/config.toml. It points Codex at the relay's account catalog, so model context windows come from your subscription account. Keep your own model and reasoning preferences.`
-                      : t`Merge this TOML into ~/.codex/config.toml. Keep your own model preferences and remove any earlier Token Toxication model_catalog_json override.`
-                  }
+                  description={t`Merge this TOML into ~/.codex/config.toml. Keep your own model preferences and remove any earlier Token Toxication model_catalog_json override.`}
                   endpoint="/openai/v1/responses"
                   model={t`Chosen in Codex`}
                   snippet={snippets.codexConfig}
@@ -423,22 +400,12 @@ export function buildClientSetupSnippets({
   opencodeModels,
   piModels,
   dshModels,
-  codexCatalogEnabled = false,
 }: {
   apiKey: string;
   serviceOrigin: string;
   opencodeModels: OpencodeModelOption[];
   piModels: ClientModelOption[];
   dshModels: DshModelOption[];
-  /**
-   * Emit `model_catalog_url` only when the relay can serve it.
-   *
-   * A Codex-native catalog replaces the client's bundled catalog, so a relay
-   * without a Codex subscription account answers 503 and leaves the client with
-   * no models at all. The caller enables this only when an active Codex
-   * subscription account exists.
-   */
-  codexCatalogEnabled?: boolean;
 }) {
   const origin = serviceOrigin.replace(/\/+$/, "");
   const relayApiKey = apiKey.trim() || "tokentoxication-REPLACE_ME";
@@ -521,24 +488,16 @@ export function buildClientSetupSnippets({
     codexConfig: [
       "# Set TOKEN_TOXICATION_API_KEY in the Codex process environment.",
       "# Merge into ~/.codex/config.toml; keep your own model and reasoning settings.",
-      ...(codexCatalogEnabled
-        ? [
-            "# model_catalog_url makes the relay serve the subscription account's own model",
-            "# catalog, so context limits match Codex instead of the client's bundled values.",
-            "# Removing this line restores Codex's bundled catalog.",
-          ]
-        : [
-            "# Remove earlier Token Toxication model_catalog_json/model_catalog_url overrides to use Codex's catalog.",
-          ]),
+      "# Remove earlier Token Toxication model_catalog_json overrides; Codex uses its own catalog.",
+      "# Do not add model_catalog_url: an explicit catalog empties the Codex Desktop",
+      "# model picker even though the relay serves valid models. The relay endpoint",
+      "# stays available for CLI clients, which are unaffected.",
       "",
       `model_provider = ${tomlString("token-toxication")}`,
       "",
       "[model_providers.token-toxication]",
       `name = ${tomlString("Token Toxication")}`,
       `base_url = ${tomlString(openaiBaseUrl)}`,
-      ...(codexCatalogEnabled
-        ? [`model_catalog_url = ${tomlString(`${openaiBaseUrl}/codex/models`)}`]
-        : []),
       `env_key = ${tomlString("TOKEN_TOXICATION_API_KEY")}`,
       `wire_api = ${tomlString("responses")}`,
       "supports_websockets = true",

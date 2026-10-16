@@ -39,9 +39,9 @@ Custom clients should send `Token-Toxication-Session-ID` exactly as written (wit
 
 This setup targets the Codex reference inspected at commit `6cc7d9cc5c702c0ca133f7ea48432166e0b880be`.
 Codex owns its model catalog, instructions, reasoning options, Responses Lite,
-Code Mode, and multi-agent behavior. The relay setup supplies a provider
-endpoint, an environment-based relay key, and, for an active Codex subscription
-account, that account's own catalog; it does not select a default model.
+Code Mode, and multi-agent behavior. The relay setup supplies only a provider
+endpoint and an environment-based relay key; it does not select a default model
+or replace Codex's catalog.
 
 1. Configure enabled public model IDs and OpenAI Responses routes for the
    Codex models you intend to use. Each candidate route, including fallback
@@ -52,40 +52,53 @@ account, that account's own catalog; it does not select a default model.
 3. Merge the generated provider TOML into `~/.codex/config.toml`. Keep your
    own `model` and reasoning preferences. Select models through Codex.
 4. If migrating from an earlier Token Toxication setup, remove any hand-edited
-   `model_catalog_json` file. The generated `model_catalog_url` is the supported
-   replacement and is emitted automatically; see below. Review any `model = ...`
-   entry that came from the old snippet; keep or remove it according to your own
-   preference. Do not remove unrelated settings without reviewing them.
+   `model_catalog_json` file and any `model_catalog_url` override. The generated
+   snippet sets neither; see below. Review any `model = ...` entry that came from
+   the old snippet; keep or remove it according to your own preference. Do not
+   remove unrelated settings without reviewing them.
 
-### Account model catalog
+### Do not set a catalog URL for the Codex Desktop app
 
-The generated provider block includes
-`model_catalog_url = "<relay>/openai/v1/codex/models"` when the relay has an
-active Codex subscription account. That catalog is the account's own upstream
-catalog, so the models, their context windows, their service tiers, and their
-instructions are the account's rather than the client's bundled values:
-`gpt-6.1-sol` is 500000 tokens upstream against 272000 for the other GPT-6
-models. The relay adds no model and rewrites no field.
+The generated provider block never sets `model_catalog_url`, because an explicit
+catalog empties the Codex Desktop model picker. The desktop then shows no model
+list at all, even though the relay answers with a valid catalog and the client's
+own `model/list` returns every model in it.
 
-The URL is omitted when no Codex subscription account is configured. An explicit
-catalog replaces Codex's bundled one, so a relay that could not serve it would
-leave the client with no models at all. Merge the generated snippet again after
-adding an account.
+Measured against the Desktop's bundled core `0.163.0-aarch64-apple-darwin`
+(`~/Library/.../codex`), with the same client, key, and relay:
 
-Codex's model picker lists the account's models, including any the relay has no
-route for. Create the route before selecting such a model; an unroutable request
-fails rather than silently switching models. The relay does not claim that every
-upstream supports the features declared by Codex's model catalog.
+| Catalog served at `model_catalog_url` | Desktop model picker |
+| --- | --- |
+| The account's own upstream catalog | empty |
+| Codex's own bundled catalog, served verbatim | empty |
+| The relay-authored catalog shape that an earlier desktop accepted | empty |
+| The account catalog plus the one slug it was missing | empty |
+| Not set (Codex uses its bundled catalog) | lists every model |
 
-Fast is a service tier on a model, not a separate model: the account catalog
+Removing the line restores the picker immediately. This is a client-side
+regression, not a relay content problem, and the relay cannot work around it.
+
+`GET /openai/v1/codex/models` remains available and is unaffected for CLI
+clients; see the [relay API](relay-api.md) for what it serves.
+
+Codex's built-in model picker may list a model without a matching relay route.
+Create the route before selecting that model; an unroutable request fails
+rather than silently switching models.
+
+Fast is a service tier on a model, not a separate model. The account catalog
 declares `priority` as an available tier, Codex offers it on the model, and the
-relay forwards it unchanged as `service_tier = "priority"`. The Codex TUI derives
-the tier it starts with from the model's `default_service_tier`; `codex exec`
-does not, and needs an explicit `service_tier` setting. The current
-Codex Desktop app does not show the Fast picker for an API-key model provider
-such as `TOKEN_TOXICATION_API_KEY`; this is a client UI restriction, not a
-missing relay catalog entry. A client-side change or a ChatGPT/PAT
-authentication mode is required for that Desktop control to appear.
+relay forwards it unchanged as `service_tier = "priority"`.
+
+The tier a request starts with comes from the model's `default_service_tier`,
+which the Codex TUI honours and `codex exec` does not. Setting `service_tier`
+in `config.toml` applies it to every request that model supports, for both:
+
+```toml
+service_tier = "fast"
+```
+
+Both `fast` and `priority` are accepted and reach the relay as
+`service_tier = "priority"`.
 
 ### Protocol compatibility
 

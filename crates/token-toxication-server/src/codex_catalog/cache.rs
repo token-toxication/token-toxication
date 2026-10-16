@@ -29,6 +29,16 @@ use std::time::{Duration, Instant};
 /// stale view much longer than TT does.
 pub const CATALOG_CACHE_TTL: Duration = Duration::from_secs(120);
 
+/// Cache key for one account's catalog as served to one client version.
+///
+/// The upstream tailors the catalog to the requested `client_version`, so a body
+/// fetched for one version must never be served to a client on another. Keying
+/// on the account alone let a single request without a usable version downgrade
+/// every client that followed.
+pub fn cache_key(account_id: &str, client_version: &str) -> String {
+    format!("{account_id}\u{1f}{client_version}")
+}
+
 /// A stored catalog body and how long ago it was fetched.
 #[derive(Debug, Clone)]
 pub struct CachedCatalog {
@@ -171,6 +181,19 @@ mod tests {
             Some(body("first")),
             "a stale body is better than no body"
         );
+    }
+
+    #[test]
+    fn keys_separate_client_versions_and_accounts() {
+        let a_v1 = cache_key("account-a", "0.162.0");
+        let a_v2 = cache_key("account-a", "0.163.0");
+        let b_v1 = cache_key("account-b", "0.162.0");
+        assert_ne!(
+            a_v1, a_v2,
+            "one client's version must not see another's body"
+        );
+        assert_ne!(a_v1, b_v1);
+        assert_eq!(a_v1, cache_key("account-a", "0.162.0"));
     }
 
     #[test]

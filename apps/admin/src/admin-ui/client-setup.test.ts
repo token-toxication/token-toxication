@@ -258,27 +258,23 @@ describe("Codex provider configuration snippet", () => {
     expect(snippets.codexConfig).not.toContain("--profile");
   });
 
-  it("adds the relay model catalog URL only when a subscription account exists", () => {
-    const base = {
+  it("never sets a catalog URL, and says why", () => {
+    // An explicit catalog empties the Codex Desktop model picker even when the
+    // relay serves valid models, so the generated provider block must not set one.
+    const snippets = buildClientSetupSnippets({
       apiKey: "tokentoxication-test",
       serviceOrigin: "http://relay.example:3000",
       opencodeModels: [],
       piModels: [],
       dshModels: [],
-    };
+    });
 
-    const disabled = buildClientSetupSnippets(base);
-    expect(disabled.codexConfig).not.toMatch(/^\s*model_catalog_url\s*=/m);
-    expect(disabled.codexConfig).toContain("Remove earlier Token Toxication");
-
-    const enabled = buildClientSetupSnippets({ ...base, codexCatalogEnabled: true });
-    expect(enabled.codexConfig).toContain(
-      'model_catalog_url = "http://relay.example:3000/openai/v1/codex/models"',
-    );
-    expect(enabled.codexConfig).toContain('base_url = "http://relay.example:3000/openai/v1"');
-    expect(enabled.codexConfig).toContain("supports_websockets = true");
-    expect(enabled.codexConfig).not.toContain("tokentoxication-test");
-    expect(enabled.codexConfig).not.toContain("Remove earlier Token Toxication");
+    expect(snippets.codexConfig).not.toMatch(/^\s*model_catalog_url\s*=/m);
+    expect(snippets.codexConfig).not.toMatch(/^\s*model_catalog_json\s*=/m);
+    expect(snippets.codexConfig).toContain("Do not add model_catalog_url");
+    expect(snippets.codexConfig).toContain('base_url = "http://relay.example:3000/openai/v1"');
+    expect(snippets.codexConfig).toContain("supports_websockets = true");
+    expect(snippets.codexConfig).not.toContain("tokentoxication-test");
   });
 });
 

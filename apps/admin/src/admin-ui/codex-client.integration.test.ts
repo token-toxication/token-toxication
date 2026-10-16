@@ -483,16 +483,21 @@ describe.skipIf(!codexBinary)("Codex relay model catalog", () => {
         opencodeModels: [],
         piModels: [],
         dshModels: [],
-        codexCatalogEnabled: true,
       });
-      expect(snippets.codexConfig).toContain(
-        `model_catalog_url = ${JSON.stringify(`${relayUrl}/openai/v1/codex/models`)}`,
-      );
+      // The generated setup must not enable a catalog: it empties the Desktop
+      // picker. This test still exercises the endpoint, which CLI clients use,
+      // by pointing the provider at it explicitly.
+      expect(snippets.codexConfig).not.toMatch(/^\s*model_catalog_url\s*=/m);
       await writeFile(
         path.join(configDirectory, "config.toml"),
-        // The mock upstream speaks HTTP only; the setup snippet enables
-        // WebSockets for production.
-        snippets.codexConfig.replace("supports_websockets = true", "supports_websockets = false"),
+        [
+          snippets.codexConfig,
+          `model_catalog_url = ${JSON.stringify(`${relayUrl}/openai/v1/codex/models`)}`,
+        ]
+          .join("\n")
+          // The mock upstream speaks HTTP only; the setup snippet enables
+          // WebSockets for production.
+          .replace("supports_websockets = true", "supports_websockets = false"),
       );
 
       const env = {

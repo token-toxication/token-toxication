@@ -72,7 +72,7 @@ import {
 import { EmptyNotice, LoadingState, NotFoundView } from "./admin-ui/shared";
 import { SettingsView } from "./admin-ui/settings";
 import { useAdminWorkspace } from "./admin-ui/use-admin-workspace";
-import { copyText, isCodexSubscriptionAuth } from "./admin-ui/helpers";
+import { copyText } from "./admin-ui/helpers";
 
 const navigationIcons: Record<AdminRouteId, ComponentType<{ className?: string }>> = {
   overview: LayoutDashboardIcon,
@@ -405,12 +405,6 @@ function App() {
                         routableModels={routableModels}
                         apiKey={clientSetupApiKey}
                         setApiKey={setClientSetupApiKey}
-                        hasCodexSubscriptionAccount={accounts.some(
-                          (account) =>
-                            account.isActive &&
-                            account.status !== "blocked" &&
-                            isCodexSubscriptionAuth(account.authMode),
-                        )}
                       />
                     ),
                     logs: <RequestLogsView logs={logs} />,
