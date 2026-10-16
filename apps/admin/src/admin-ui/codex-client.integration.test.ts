@@ -363,13 +363,19 @@ describe.skipIf(!codexBinary)("Codex relay model catalog", () => {
     const upstream = createServer(async (request, response) => {
       if (request.method === "GET" && request.url?.startsWith("/codex/models")) {
         catalogRequests.push({ url: request.url ?? "", headers: request.headers });
+        const withoutInstructions = codexModel("gpt-reserve", "GPT-Reserve", 272_000, 9);
+        delete (withoutInstructions as { model_messages?: unknown }).model_messages;
         response.writeHead(200, { "content-type": "application/json" }).end(
           JSON.stringify({
             models: [
               codexModel("gpt-6.1-sol", "GPT-6.1-Sol", 500_000),
               codexModel("gpt-6-astra", "GPT-6-Astra", 272_000),
-              // Outside TT's supported range: the relay must drop it.
+              // TT has no relay route for this one, but the client's picker needs
+              // it: a catalog that omits account models breaks the whole list.
               codexModel("gpt-5.6-sol", "GPT-5.6-Sol", 272_000, 3),
+              // The client cannot parse a catalog containing this entry, so the
+              // relay must drop the entry rather than the account catalog.
+              withoutInstructions,
             ],
           }),
         );
@@ -498,19 +504,23 @@ describe.skipIf(!codexBinary)("Codex relay model catalog", () => {
       const listed = await modelList(codexBinary, env, workspace);
       const ids = listed.map((entry) => entry.model);
       expect(ids).toContain("gpt-6.1-sol");
-      expect(ids).toContain("gpt-6.1-sol-fast");
       expect(ids).toContain("gpt-6-astra");
-      expect(ids).toContain("gpt-6-astra-fast");
-      expect(ids).not.toContain("gpt-5.6-sol");
+      // Account models beyond TT's relay routes still reach the client, because
+      // the client's model picker is rendered from this list.
+      expect(ids).toContain("gpt-5.6-sol");
+      // Fast is a service tier on the base model, not a separate model TT invents.
+      expect(ids).not.toContain("gpt-6.1-sol-fast");
+      // Dropped for the client's sake, not because of TT policy.
+      expect(ids).not.toContain("gpt-reserve");
 
       expect(catalogRequests).toHaveLength(1);
       expect(catalogRequests[0].url).toContain("client_version=");
       expect(catalogRequests[0].headers.authorization).toBe("Bearer synthetic-access");
       expect(catalogRequests[0].headers["chatgpt-account-id"]).toBe("synthetic-account");
 
-      // The catalog advertises `gpt-6.1-sol-fast`, so selecting it must reach the
-      // upstream as the base model. Without the alias, this turn fails 403.
-      const fastTurn = spawn(
+      // A Code Mode turn is two upstream requests. This is the ordinary path: a
+      // model the catalog advertises, selected with the client's own Fast tier.
+      const turn = spawn(
         codexBinary,
         [
           "exec",
@@ -525,31 +535,68 @@ describe.skipIf(!codexBinary)("Codex relay model catalog", () => {
           "-c",
           "service_tier=priority",
           "-m",
+          "gpt-6.1-sol",
+          "Reply with the synthetic response.",
+        ],
+        { cwd: workspace, env, stdio: ["ignore", "pipe", "pipe"] },
+      );
+      let output = "";
+      turn.stdout?.on("data", (data) => {
+        output += data;
+      });
+      turn.stderr?.on("data", (data) => {
+        output += data;
+      });
+      const turnTimer = setTimeout(() => turn.kill("SIGTERM"), 45000);
+      try {
+        const [code] = await once(turn, "close");
+        expect(code, output).toBe(0);
+      } finally {
+        clearTimeout(turnTimer);
+      }
+      expect(turnRequests).toHaveLength(2);
+      for (const request of turnRequests) {
+        expect(request.model).toBe("gpt-6.1-sol");
+        expect(request.service_tier).toBe("priority");
+      }
+
+      // A client may still ask for a `-fast` id even though the catalog does not
+      // publish one. Routing resolves the alias to the base model, so the turn
+      // does not fail with "no active provider account".
+      const aliasTurn = spawn(
+        codexBinary,
+        [
+          "exec",
+          "--skip-git-repo-check",
+          "--json",
+          "--cd",
+          workspace,
+          "-c",
+          "features.plugins=false",
+          "-m",
           "gpt-6.1-sol-fast",
           "Reply with the synthetic response.",
         ],
         { cwd: workspace, env, stdio: ["ignore", "pipe", "pipe"] },
       );
-      let fastOutput = "";
-      fastTurn.stdout?.on("data", (data) => {
-        fastOutput += data;
+      let aliasOutput = "";
+      aliasTurn.stdout?.on("data", (data) => {
+        aliasOutput += data;
       });
-      fastTurn.stderr?.on("data", (data) => {
-        fastOutput += data;
+      aliasTurn.stderr?.on("data", (data) => {
+        aliasOutput += data;
       });
-      const fastTimer = setTimeout(() => fastTurn.kill("SIGTERM"), 45000);
+      const aliasTimer = setTimeout(() => aliasTurn.kill("SIGTERM"), 45000);
       try {
-        const [code] = await once(fastTurn, "close");
-        expect(code, fastOutput).toBe(0);
+        const [code] = await once(aliasTurn, "close");
+        expect(code, aliasOutput).toBe(0);
       } finally {
-        clearTimeout(fastTimer);
+        clearTimeout(aliasTimer);
       }
-      // A Code Mode turn is two upstream requests. Every one of them must carry
-      // the base model, so the `-fast` alias is resolved before the upstream call.
-      expect(turnRequests).toHaveLength(2);
-      for (const request of turnRequests) {
+      const aliasRequests = turnRequests.slice(2);
+      expect(aliasRequests.length).toBeGreaterThan(0);
+      for (const request of aliasRequests) {
         expect(request.model).toBe("gpt-6.1-sol");
-        expect(request.service_tier).toBe("priority");
       }
     } finally {
       if (relay) await stop(relay);

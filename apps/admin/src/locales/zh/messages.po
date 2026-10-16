@@ -24,7 +24,7 @@ msgid "{0, plural, one {# route} other {# routes}}"
 msgstr "{0, plural, other {# 条路由}}"
 
 #. placeholder {0}: piModels.length
-#: src/admin-ui/client-setup.tsx:343
+#: src/admin-ui/client-setup.tsx:347
 msgid "{0, plural, one {# routed model} other {# routed models}}"
 msgstr "{0, plural, other {# 个已路由模型}}"
 
@@ -220,23 +220,23 @@ msgstr "添加账号以使中继可被调度。"
 msgid "Add an active Codex subscription account to let the relay serve the account's own model catalog. Without it Codex falls back to its bundled catalog, which reports smaller context limits."
 msgstr "添加一个启用的 Codex 订阅账号，让中继提供该账号自己的模型目录。否则 Codex 会回退到内置目录，其上报的上下文上限更小。"
 
-#: src/admin-ui/client-setup.tsx:333
+#: src/admin-ui/client-setup.tsx:337
 msgid "Add an eligible OpenAI Chat or Responses route to generate an opencode config."
 msgstr "添加可用的 OpenAI Chat 或 Responses 路由以生成 opencode 配置。"
 
-#: src/admin-ui/client-setup.tsx:368
+#: src/admin-ui/client-setup.tsx:372
 msgid "Add an eligible OpenAI Chat, OpenAI Responses, or Anthropic Messages route to generate a DeepSeek Harness config."
 msgstr "添加可用的 OpenAI Chat、OpenAI Responses 或 Anthropic Messages 路由以生成 DeepSeek Harness 配置。"
 
-#: src/admin-ui/client-setup.tsx:352
+#: src/admin-ui/client-setup.tsx:356
 msgid "Add an eligible OpenAI Responses route to generate a Pi provider config."
 msgstr "添加可用的 OpenAI Responses 路由以生成 Pi 供应商配置。"
 
-#: src/admin-ui/client-setup.tsx:317
+#: src/admin-ui/client-setup.tsx:321
 msgid "Add an enabled Anthropic Messages route to configure Claude Code."
 msgstr "添加已启用的 Anthropic Messages 路由，以配置 Claude Code。"
 
-#: src/admin-ui/client-setup.tsx:301
+#: src/admin-ui/client-setup.tsx:305
 msgid "Add an enabled OpenAI Responses route to configure Codex."
 msgstr "添加已启用的 OpenAI Responses 路由，以配置 Codex。"
 
@@ -449,7 +449,7 @@ msgstr "绑定详情"
 msgid "Bindings that make this Catalog Model reachable."
 msgstr "使此目录模型可达的绑定。"
 
-#: src/admin-ui/client-setup.tsx:325
+#: src/admin-ui/client-setup.tsx:329
 msgid "Binds each model to the AI SDK matching its configured OpenAI route."
 msgstr "将每个模型绑定到与其 OpenAI 路由匹配的 AI SDK。"
 
@@ -496,24 +496,24 @@ msgstr "已路由 Chat"
 msgid "Choose how the relay obtains and sends the upstream credential."
 msgstr "选择中继获取并发送上游凭证的方式。"
 
-#: src/admin-ui/client-setup.tsx:311
+#: src/admin-ui/client-setup.tsx:315
 msgid "Chosen in Claude Code"
 msgstr "在 Claude Code 中选择"
 
 #: src/admin-ui/client-setup.tsx:287
-#: src/admin-ui/client-setup.tsx:294
+#: src/admin-ui/client-setup.tsx:298
 msgid "Chosen in Codex"
 msgstr "在 Codex 中选择"
 
-#: src/admin-ui/client-setup.tsx:362
+#: src/admin-ui/client-setup.tsx:366
 msgid "Chosen in DeepSeek Harness"
 msgstr "在 DeepSeek Harness 中选择"
 
-#: src/admin-ui/client-setup.tsx:327
+#: src/admin-ui/client-setup.tsx:331
 msgid "Chosen in opencode"
 msgstr "在 opencode 中选择"
 
-#: src/admin-ui/client-setup.tsx:308
+#: src/admin-ui/client-setup.tsx:312
 msgid "Claude Code environment"
 msgstr "Claude Code 环境"
 
@@ -638,7 +638,7 @@ msgstr "控制请求去向以及此账号可以处理的并发工作量。"
 msgid "Copied"
 msgstr "已复制"
 
-#: src/admin-ui/client-setup.tsx:399
+#: src/admin-ui/client-setup.tsx:403
 msgid "Copy"
 msgstr "复制"
 
@@ -712,7 +712,7 @@ msgstr "深色"
 msgid "Dashboard unavailable"
 msgstr "仪表盘不可用"
 
-#: src/admin-ui/client-setup.tsx:359
+#: src/admin-ui/client-setup.tsx:363
 msgid "DeepSeek Harness provider"
 msgstr "DeepSeek Harness 供应商"
 
@@ -988,7 +988,11 @@ msgstr "手动 refresh token 已弃用。新账号应使用 Codex 设备登录�
 msgid "Max running requests"
 msgstr "最大并发请求数"
 
-#: src/admin-ui/client-setup.tsx:292
+#: src/admin-ui/client-setup.tsx:294
+msgid "Merge this TOML into ~/.codex/config.toml. It points Codex at the relay's account catalog, so model context windows come from your subscription account. Keep your own model and reasoning preferences."
+msgstr "将这段 TOML 合并进 ~/.codex/config.toml。它让 Codex 使用中继的账号目录，因此模型的上下文上限来自你的订阅账号。你自己的模型与推理偏好请保留。"
+
+#: src/admin-ui/client-setup.tsx:295
 msgid "Merge this TOML into ~/.codex/config.toml. Keep your own model preferences and remove any earlier Token Toxication model_catalog_json override."
 msgstr "将此 TOML 合并到 ~/.codex/config.toml。保留自己的模型偏好，并移除之前由 Token Toxication 设置的 model_catalog_json 覆盖。"
 
@@ -997,7 +1001,7 @@ msgid "Messages routed"
 msgstr "已路由 Messages"
 
 #: src/admin-ui/accounts.tsx:737
-#: src/admin-ui/client-setup.tsx:406
+#: src/admin-ui/client-setup.tsx:410
 #: src/admin-ui/logs.tsx:191
 #: src/admin-ui/models.tsx:138
 msgid "Model"
@@ -1081,11 +1085,11 @@ msgstr "没有目录模型"
 msgid "No catalog models yet"
 msgstr "还没有目录模型"
 
-#: src/admin-ui/client-setup.tsx:316
+#: src/admin-ui/client-setup.tsx:320
 msgid "No Claude Code routes"
 msgstr "没有 Claude Code 路由"
 
-#: src/admin-ui/client-setup.tsx:300
+#: src/admin-ui/client-setup.tsx:304
 msgid "No Codex routes"
 msgstr "没有 Codex 路由"
 
@@ -1098,7 +1102,7 @@ msgstr "无并发限制"
 msgid "No concurrent requests"
 msgstr "无并发请求限制"
 
-#: src/admin-ui/client-setup.tsx:367
+#: src/admin-ui/client-setup.tsx:371
 msgid "No DeepSeek Harness routes"
 msgstr "没有 DeepSeek Harness 路由"
 
@@ -1115,11 +1119,11 @@ msgstr "无字段"
 msgid "No limit"
 msgstr "无上限"
 
-#: src/admin-ui/client-setup.tsx:332
+#: src/admin-ui/client-setup.tsx:336
 msgid "No opencode routes"
 msgstr "没有 opencode 路由"
 
-#: src/admin-ui/client-setup.tsx:351
+#: src/admin-ui/client-setup.tsx:355
 msgid "No Pi routes"
 msgstr "没有 Pi 路由"
 
@@ -1174,7 +1178,7 @@ msgstr "无"
 msgid "Not found"
 msgstr "未找到"
 
-#: src/admin-ui/client-setup.tsx:406
+#: src/admin-ui/client-setup.tsx:410
 msgid "not set"
 msgstr "未设置"
 
@@ -1202,7 +1206,7 @@ msgstr "OpenAI Chat"
 msgid "OpenAI-compatible only"
 msgstr "仅 OpenAI 兼容"
 
-#: src/admin-ui/client-setup.tsx:324
+#: src/admin-ui/client-setup.tsx:328
 msgid "opencode project config"
 msgstr "opencode 项目配置"
 
@@ -1260,7 +1264,7 @@ msgstr "性能"
 msgid "Permissions"
 msgstr "权限"
 
-#: src/admin-ui/client-setup.tsx:340
+#: src/admin-ui/client-setup.tsx:344
 msgid "Pi custom provider"
 msgstr "Pi 自定义供应商"
 
@@ -1268,7 +1272,7 @@ msgstr "Pi 自定义供应商"
 msgid "Plan"
 msgstr "套餐"
 
-#: src/admin-ui/client-setup.tsx:309
+#: src/admin-ui/client-setup.tsx:313
 msgid "Points Claude Code at the Anthropic Messages namespace."
 msgstr "将 Claude Code 指向 Anthropic Messages 命名空间。"
 
@@ -1589,7 +1593,7 @@ msgstr "角色"
 msgid "Routable Responses models"
 msgstr "可路由的 Responses 模型"
 
-#: src/admin-ui/client-setup.tsx:405
+#: src/admin-ui/client-setup.tsx:409
 msgid "Route"
 msgstr "路由"
 
@@ -1670,7 +1674,7 @@ msgstr "选择模型"
 msgid "Set the relay key in the environment that starts Codex. Do not put it in config.toml."
 msgstr "在启动 Codex 的进程环境中设置中继密钥，不要将其写入 config.toml。"
 
-#: src/admin-ui/client-setup.tsx:360
+#: src/admin-ui/client-setup.tsx:364
 msgid "Set TOKEN_TOXICATION_API_KEY in the harness process environment, then merge these llm-pi-ai provider routes into ~/.dsh/settings.yaml. Keep existing keys; the harness applies changes on the next request."
 msgstr "在 harness 进程环境中设置 TOKEN_TOXICATION_API_KEY，然后将这些 llm-pi-ai 供应商路由合并到 ~/.dsh/settings.yaml。保留现有键；harness 会在下次请求时应用更改。"
 
@@ -1992,6 +1996,6 @@ msgstr "窗口"
 msgid "Window total"
 msgstr "窗口合计"
 
-#: src/admin-ui/client-setup.tsx:341
+#: src/admin-ui/client-setup.tsx:345
 msgid "Writes a complete Pi models.json file using the OpenAI Responses API. Back up any existing Pi configuration first."
 msgstr "使用 OpenAI Responses API 写入完整的 Pi models.json。请先备份现有 Pi 配置。"

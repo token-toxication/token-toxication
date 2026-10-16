@@ -250,58 +250,185 @@ async fn codex_catalog_account(
         })
 }
 
-/// Longest accepted `client_version` value.
-const MAX_CLIENT_VERSION_LEN: usize = 32;
-
-/// Validate an optional client version without inventing a default.
-fn normalize_client_version(value: Option<&str>) -> Result<Option<String>, AppError> {
-    let Some(value) = value.map(str::trim).filter(|value| !value.is_empty()) else {
-        return Ok(None);
-    };
-    if value.len() > MAX_CLIENT_VERSION_LEN
-        || !value.chars().all(|character| {
-            character.is_ascii_alphanumeric() || matches!(character, '.' | '-' | '_')
-        })
-    {
-        return Err(AppError::BadRequest("invalid client_version".into()));
-    }
-    Ok(Some(value.to_string()))
-}
-
 /// `GET /openai/v1/codex/models`
 ///
-/// Serves a Codex-native catalog so the client stops falling back to its stale
-/// bundled metadata. The payload is the account's own upstream catalog, filtered
-/// to the models TT supports and expanded with `-fast` variants.
+/// Serves a Codex-native catalog so the client reports the account's real model
+/// metadata instead of its stale bundled values. The payload is the account's own
+/// upstream catalog with only the entries a client could not accept removed.
+///
+/// A client that cannot load this catalog has no models at all, because an
+/// explicit catalog replaces the bundled one. The flow is built around that:
+/// serve the stored copy while it is fresh, revalidate it after that, and fall
+/// back to it whenever upstream fails.
 pub async fn list_codex_models(
     State(state): State<AppState>,
     headers: HeaderMap,
     uri: Uri,
     Query(query): Query<CodexCatalogQuery>,
-) -> Result<Json<Value>, AppError> {
+) -> Result<Response, AppError> {
     authenticate_relay_api_key(&state, &headers, uri.query()).await?;
-    let client_version = normalize_client_version(query.client_version.as_deref())?;
     let account = codex_catalog_account(&state).await?;
-    let authorization = resolve_codex_authorization(&state, &account).await?;
-    let endpoint = codex_models_endpoint(&account.account.base_url)?;
+    let account_id = account.account.id.clone();
 
-    let fetched = codex_catalog_remote::fetch(
+    if let Some(cached) = state.codex_catalog_cache.fresh(&account_id) {
+        tracing::debug!(
+            account_id,
+            age_ms = cached.age.as_millis() as u64,
+            bytes = cached.body.len(),
+            "served codex catalog from cache"
+        );
+        return Ok(json_body(cached.body));
+    }
+
+    let client_version =
+        codex_catalog_remote::upstream_client_version(query.client_version.as_deref());
+    let started = std::time::Instant::now();
+    let fetched = fetch_and_render_catalog(&state, &account, &client_version).await;
+
+    match fetched {
+        Ok(Refreshed::Unchanged) => {
+            state.codex_catalog_cache.touch(&account_id);
+            let cached = state
+                .codex_catalog_cache
+                .get(&account_id)
+                .expect("a 304 response implies a stored catalog");
+            tracing::info!(
+                account_id,
+                client_version = client_version.as_str(),
+                duration_ms = started.elapsed().as_millis() as u64,
+                bytes = cached.body.len(),
+                "codex catalog revalidated upstream"
+            );
+            Ok(json_body(cached.body))
+        }
+        Ok(Refreshed::Rendered { rendered, etag }) => {
+            log_served_catalog(&account_id, &client_version, started, &rendered);
+            let body = bytes::Bytes::from(rendered.body);
+            state
+                .codex_catalog_cache
+                .store(&account_id, body.clone(), etag);
+            Ok(json_body(body))
+        }
+        Err(error) => {
+            // A transient upstream problem must not empty the client's model list.
+            if let Some(cached) = state.codex_catalog_cache.get(&account_id) {
+                tracing::warn!(
+                    account_id,
+                    client_version = client_version.as_str(),
+                    duration_ms = started.elapsed().as_millis() as u64,
+                    age_ms = cached.age.as_millis() as u64,
+                    reason = %error,
+                    "served the stored codex catalog after an upstream failure"
+                );
+                return Ok(json_body(cached.body));
+            }
+            tracing::warn!(
+                account_id,
+                client_version = client_version.as_str(),
+                duration_ms = started.elapsed().as_millis() as u64,
+                reason = %error,
+                "codex catalog unavailable and no stored copy exists"
+            );
+            Err(AppError::ServiceUnavailable(
+                "codex catalog is unavailable".to_string(),
+            ))
+        }
+    }
+}
+
+/// Outcome of asking upstream for the catalog.
+enum Refreshed {
+    /// Upstream reported the stored copy is still current.
+    Unchanged,
+    Rendered {
+        rendered: codex_catalog_upstream::RenderedCatalog,
+        etag: Option<String>,
+    },
+}
+
+/// Fetch the upstream catalog and reduce it to the body TT serves.
+async fn fetch_and_render_catalog(
+    state: &AppState,
+    account: &crate::models::ProviderAccountRecord,
+    client_version: &str,
+) -> Result<Refreshed, AppError> {
+    let authorization = resolve_codex_authorization(state, account).await?;
+    let endpoint = codex_models_endpoint(&account.account.base_url)?;
+    let etag = state.codex_catalog_cache.etag(&account.account.id);
+
+    match codex_catalog_remote::fetch(
         &state.http,
         &endpoint,
         &authorization,
-        client_version.as_deref(),
+        client_version,
+        etag.as_deref(),
     )
-    .await?;
-    let upstream_models = codex_catalog_upstream::models_from_body(&fetched.body)
-        .map_err(|error| AppError::ServiceUnavailable(error.to_string()))?;
-    let selected = codex_catalog_upstream::select_models(upstream_models)
-        .map_err(|error| AppError::ServiceUnavailable(error.to_string()))?;
-    let models = codex_catalog_upstream::expand_fast_variants(selected)
-        .into_iter()
-        .map(|model| model.value)
-        .collect::<Vec<Value>>();
+    .await?
+    {
+        codex_catalog_remote::FetchedCatalog::NotModified => Ok(Refreshed::Unchanged),
+        codex_catalog_remote::FetchedCatalog::Ok { body, etag } => {
+            let decoded: Value = serde_json::from_slice(&body)
+                .map_err(|_| AppError::ServiceUnavailable("codex catalog was not JSON".into()))?;
+            let models = codex_catalog_upstream::models_from_body(&decoded)
+                .map_err(|error| AppError::ServiceUnavailable(error.to_string()))?;
+            Ok(Refreshed::Rendered {
+                rendered: codex_catalog_upstream::render_catalog(models),
+                etag,
+            })
+        }
+    }
+}
 
-    Ok(Json(json!({ "models": models })))
+/// Report what was served without logging any model body.
+fn log_served_catalog(
+    account_id: &str,
+    client_version: &str,
+    started: std::time::Instant,
+    rendered: &codex_catalog_upstream::RenderedCatalog,
+) {
+    let dropped: Vec<&str> = rendered
+        .dropped
+        .iter()
+        .map(|entry| entry.reason.code())
+        .collect();
+    if rendered.dropped.is_empty() {
+        tracing::info!(
+            account_id,
+            client_version,
+            duration_ms = started.elapsed().as_millis() as u64,
+            bytes = rendered.body.len(),
+            models = rendered.kept,
+            "served codex catalog from upstream"
+        );
+    } else {
+        tracing::warn!(
+            account_id,
+            client_version,
+            duration_ms = started.elapsed().as_millis() as u64,
+            bytes = rendered.body.len(),
+            models = rendered.kept,
+            dropped_models = rendered.dropped.len(),
+            dropped_slugs = %rendered
+                .dropped
+                .iter()
+                .map(|entry| entry.slug.as_str())
+                .collect::<Vec<_>>()
+                .join(","),
+            dropped_reasons = %dropped.join(","),
+            "served codex catalog with entries the client could not accept dropped"
+        );
+    }
+}
+
+/// A JSON response built from an already encoded catalog body.
+///
+/// `Bytes` moves into the body without copying, so serving a cached catalog is
+/// just the response write.
+fn json_body(body: bytes::Bytes) -> Response {
+    Response::builder()
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(axum::body::Body::from(body))
+        .expect("a response with a static header always builds")
 }
 
 #[derive(Debug, Deserialize)]
@@ -2959,6 +3086,7 @@ mod tests {
                 .unwrap(),
             antigravity_oauth: AntigravityOAuthStore::default(),
             codex_device_oauth: crate::codex_device_oauth::CodexDeviceOAuthStore::default(),
+            codex_catalog_cache: Default::default(),
             relay_metrics: Default::default(),
             account_concurrency: Default::default(),
             relay_stream_idle_timeout: Duration::from_secs(5),
@@ -3296,7 +3424,7 @@ mod tests {
                     "model_messages": {"instructions_template": instructions},
                 },
                 {
-                    // Outside TT's supported range: must be filtered out.
+                    // Beyond TT's relay routes, but the client's picker needs it.
                     "slug": "gpt-5.6-sol",
                     "display_name": "GPT-5.6-Sol",
                     "visibility": "list",
@@ -3306,7 +3434,8 @@ mod tests {
                     "model_messages": {"instructions_template": instructions},
                 },
                 {
-                    // Hidden upstream model with no instructions: skipped, not fatal.
+                    // No instructions: the client rejects a whole catalog for this,
+                    // so TT must drop the entry rather than fail the request.
                     "slug": "gpt-reserve",
                     "display_name": "GPT-Reserve",
                     "visibility": "hide",
@@ -3319,7 +3448,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn codex_catalog_endpoint_proxies_upstream_and_expands_fast_variants() {
+    async fn codex_catalog_endpoint_serves_the_account_catalog_verbatim() {
         let captured: Arc<Mutex<Vec<(String, HeaderMap)>>> = Arc::new(Mutex::new(Vec::new()));
         let capture = Arc::clone(&captured);
         let upstream = Router::new().route(
@@ -3396,22 +3525,16 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(
             slugs,
-            vec![
-                "gpt-6.1-sol",
-                "gpt-6.1-sol-fast",
-                "gpt-6-astra",
-                "gpt-6-astra-fast"
-            ],
-            "unsupported and hidden upstream models must be dropped"
+            vec!["gpt-6.1-sol", "gpt-6-astra", "gpt-5.6-sol"],
+            "every model the client can parse is served; only the entry without \
+             instructions is dropped"
         );
 
-        // Upstream context is passed through untouched; only identity and the
-        // Fast tier are added to the derived variants.
+        // Upstream values are what the client sees. TT neither rewrites the
+        // context window nor invents `-fast` models or a default service tier.
         assert_eq!(body["models"][0]["context_window"], json!(500_000));
         assert_eq!(body["models"][0]["default_service_tier"], Value::Null);
-        assert_eq!(body["models"][1]["context_window"], json!(500_000));
-        assert_eq!(body["models"][1]["default_service_tier"], json!("priority"));
-        assert_eq!(body["models"][1]["display_name"], json!("GPT-6.1-Sol Fast"));
+        assert_eq!(body["models"][1]["context_window"], json!(272_000));
         assert_eq!(body["models"][2]["context_window"], json!(272_000));
 
         // The upstream call carried the relay's own account identity, not client input.
@@ -3425,6 +3548,200 @@ mod tests {
         assert_eq!(headers["authorization"], "Bearer synthetic-provider-key");
         assert_eq!(headers["chatgpt-account-id"], "synthetic-account");
         assert_eq!(headers["originator"], "opencode");
+
+        upstream_server.abort();
+        server.abort();
+        let _ = server.await;
+        remove_test_database(&database_path);
+    }
+
+    /// Force the catalog cache to expire between requests so a test can observe
+    /// what happens on the revalidation path.
+    fn expire_catalog_cache(state: &mut AppState) {
+        state.codex_catalog_cache = Arc::new(crate::codex_catalog::cache::CatalogCache::new(
+            Duration::ZERO,
+        ));
+    }
+
+    #[tokio::test]
+    async fn codex_catalog_endpoint_serves_the_stored_catalog_when_upstream_fails() {
+        let calls = Arc::new(Mutex::new(0usize));
+        let counter = Arc::clone(&calls);
+        let upstream = Router::new().route(
+            "/codex/models",
+            get(move || {
+                let counter = Arc::clone(&counter);
+                async move {
+                    let mut calls = counter.lock().await;
+                    *calls += 1;
+                    if *calls == 1 {
+                        (StatusCode::OK, Json(codex_catalog_body()))
+                    } else {
+                        // The client would lose every model if this reached it.
+                        (StatusCode::BAD_GATEWAY, Json(json!({"error": "upstream"})))
+                    }
+                }
+            }),
+        );
+        let upstream_listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind upstream");
+        let upstream_address = upstream_listener.local_addr().expect("upstream address");
+        let upstream_server =
+            tokio::spawn(async move { axum::serve(upstream_listener, upstream).await });
+
+        let database_path = test_database_path();
+        let db = Db::open(&database_path).await.expect("open test database");
+        let seed = seed_relay_route(
+            &db,
+            RelayRouteSeed {
+                base_url: format!("http://{upstream_address}"),
+                provider: "openai-compatible",
+                auth_mode: "codex-oauth",
+                provider_secret: json!({
+                    "type": "token-toxication-codex-oauth-v1",
+                    "refresh": "synthetic-refresh",
+                    "access": "synthetic-provider-key",
+                    "expires": Utc::now().timestamp_millis() + 3_600_000,
+                    "accountId": "synthetic-account"
+                })
+                .to_string(),
+                wire_api: "openai-responses",
+                public_model: "gpt-6.1-sol",
+                upstream_model: "gpt-6.1-sol",
+            },
+        )
+        .await;
+        let mut state = test_state(db, database_path.clone());
+        expire_catalog_cache(&mut state);
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
+        let address = listener.local_addr().expect("address");
+        let server = tokio::spawn(async move {
+            axum::serve(
+                listener,
+                crate::app(state, PathBuf::from("missing-admin-assets")),
+            )
+            .await
+            .expect("serve");
+        });
+
+        let http = test_http_client();
+        let endpoint = format!("http://{address}/openai/v1/codex/models?client_version=0.162.1");
+        let mut bodies = Vec::new();
+        for _ in 0..2 {
+            let response = http
+                .get(&endpoint)
+                .expect("build catalog request")
+                .bearer_auth(&seed.relay_secret)
+                .send()
+                .await
+                .expect("send catalog request");
+            assert_eq!(
+                response.status(),
+                StatusCode::OK,
+                "an upstream failure must not empty the client's model list"
+            );
+            bodies.push(response.bytes().await.expect("read catalog"));
+        }
+        assert_eq!(*calls.lock().await, 2, "both requests reached upstream");
+        assert_eq!(
+            bodies[0], bodies[1],
+            "the stored catalog must be served unchanged"
+        );
+        let body: Value = serde_json::from_slice(&bodies[1]).expect("decode served catalog");
+        assert_eq!(body["models"][0]["slug"], json!("gpt-6.1-sol"));
+
+        upstream_server.abort();
+        server.abort();
+        let _ = server.await;
+        remove_test_database(&database_path);
+    }
+
+    #[tokio::test]
+    async fn codex_catalog_endpoint_always_sends_a_usable_client_version_upstream() {
+        let captured: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+        let capture = Arc::clone(&captured);
+        let upstream = Router::new().route(
+            "/codex/models",
+            get(move |uri: Uri| {
+                let capture = Arc::clone(&capture);
+                async move {
+                    capture.lock().await.push(uri.to_string());
+                    Json(codex_catalog_body())
+                }
+            }),
+        );
+        let upstream_listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind upstream");
+        let upstream_address = upstream_listener.local_addr().expect("upstream address");
+        let upstream_server =
+            tokio::spawn(async move { axum::serve(upstream_listener, upstream).await });
+
+        let database_path = test_database_path();
+        let db = Db::open(&database_path).await.expect("open test database");
+        let seed = seed_relay_route(
+            &db,
+            RelayRouteSeed {
+                base_url: format!("http://{upstream_address}"),
+                provider: "openai-compatible",
+                auth_mode: "codex-oauth",
+                provider_secret: json!({
+                    "type": "token-toxication-codex-oauth-v1",
+                    "refresh": "synthetic-refresh",
+                    "access": "synthetic-provider-key",
+                    "expires": Utc::now().timestamp_millis() + 3_600_000,
+                    "accountId": "synthetic-account"
+                })
+                .to_string(),
+                wire_api: "openai-responses",
+                public_model: "gpt-6.1-sol",
+                upstream_model: "gpt-6.1-sol",
+            },
+        )
+        .await;
+        let mut state = test_state(db, database_path.clone());
+        expire_catalog_cache(&mut state);
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
+        let address = listener.local_addr().expect("address");
+        let server = tokio::spawn(async move {
+            axum::serve(
+                listener,
+                crate::app(state, PathBuf::from("missing-admin-assets")),
+            )
+            .await
+            .expect("serve");
+        });
+
+        let http = test_http_client();
+        // A client with no version and a client with an unexpected one must both
+        // get a catalog: the backend 400s on an absent parameter, and rejecting
+        // the odd value would cost the client every model.
+        for query in ["", "?client_version=%2Bweird+build"] {
+            let response = http
+                .get(&format!("http://{address}/openai/v1/codex/models{query}"))
+                .expect("build catalog request")
+                .bearer_auth(&seed.relay_secret)
+                .send()
+                .await
+                .expect("send catalog request");
+            assert_eq!(response.status(), StatusCode::OK, "query: {query}");
+        }
+
+        let upstream_uris = captured.lock().await.clone();
+        assert_eq!(upstream_uris.len(), 2);
+        assert!(
+            upstream_uris[0].contains("client_version=0.0.0"),
+            "a missing client version must still be sent upstream: {}",
+            upstream_uris[0]
+        );
+        assert!(
+            upstream_uris[1].contains("client_version=weirdbuild"),
+            "an unexpected client version must be sanitized, not rejected: {}",
+            upstream_uris[1]
+        );
 
         upstream_server.abort();
         server.abort();

@@ -54,27 +54,50 @@ older clients can continue with HTTP/SSE.
 ### Codex model catalog
 
 `GET /openai/v1/codex/models` serves the subscription account's own Codex
-catalog, so the client reports that account's real context window instead of its
-bundled value. The relay selects one enabled, non-blocked Codex subscription
-account, fetches `{base_url}/codex/models` with that account's credentials, and
-returns the upstream entries with two changes:
+catalog, so the client reports that account's real model metadata instead of its
+bundled values. The relay selects one enabled, non-blocked Codex subscription
+account and fetches `{base_url}/codex/models` with that account's credentials.
 
-- models outside the supported range, hidden models, and models unsupported by
-  the API are dropped;
-- each public model gains a `-fast` variant that keeps every upstream field and
-  sets `default_service_tier = "priority"`.
+The upstream entries are served as they are. TT adds no model, renames none, and
+rewrites no field: the account's context windows, service tiers, reasoning
+levels, and instruction templates are what the client receives. Models the relay
+has no route for are included too, because a client renders its model picker
+from this list and a trimmed catalog can leave the picker unable to list
+anything.
 
-`-fast` is a relay-declared alias, not an upstream model: no upstream serves a
-suffixed id. Route selection therefore resolves a `-fast` request to its base
-model before choosing an account, and the upstream request carries the base id.
-The requested id still appears in request logs, so Fast traffic stays
+Only entries a client could not parse are dropped, because one bad entry costs
+the client the whole catalog:
+
+- an entry with no usable `slug`, or a slug another entry already used;
+- an entry with neither `model_messages.instructions_template` nor
+  `base_instructions`.
+
+The served body is also kept below the client's 1 MiB cap on an explicitly
+configured catalog; if upstream ever exceeds it, entries are dropped from the
+end until it fits. The endpoint answers `503` when no Codex subscription account
+is configured.
+
+Two upstream constraints are handled for the client. `/codex/models` **requires**
+a `client_version` query parameter, and the backend answers `400` without one, so
+the relay always sends one and falls back to a placeholder when the client sent
+nothing usable. The relay also keeps its upstream budget inside the client's five
+second refresh window.
+
+The served catalog is cached in memory per account and revalidated with the
+upstream `ETag`. When an upstream refresh fails, the last known good catalog is
+served instead, so a transient upstream problem does not empty the client's model
+list. The cache is memory-only: catalog bodies carry instruction text, which TT
+does not write to disk. A cold start against a failing upstream is therefore the
+one case where the endpoint has nothing to serve.
+
+`-fast` is accepted as a request alias, not as a model: no upstream serves a
+suffixed id. A client that requests one is routed to its base model's accounts,
+and the request log keeps the id the client asked for so Fast traffic stays
 distinguishable. An operator-declared route for a `-fast` id wins over the alias.
 
-Instruction text is required. An entry without `model_messages.instructions_template`
-or `base_instructions` fails the whole request with `503` rather than serving a
-catalog the client would reject. The endpoint answers `503` when no Codex
-subscription account is configured. Upstream bodies are never logged, and the
-response size and request duration are bounded.
+Instruction text is never logged. Catalog outcomes are logged with the account,
+the resolved client version, duration, byte count, model count, and bounded drop
+codes only.
 
 For Device OAuth, the relay forwards only the bounded context headers
 `session-id`, `thread-id`, `x-client-request-id`, `x-codex-beta-features`,

@@ -289,7 +289,11 @@ export function ClientSetupView({
                 />
                 <ClientSnippetCard
                   title={t`Codex provider configuration`}
-                  description={t`Merge this TOML into ~/.codex/config.toml. Keep your own model preferences and remove any earlier Token Toxication model_catalog_json override.`}
+                  description={
+                    hasCodexSubscriptionAccount
+                      ? t`Merge this TOML into ~/.codex/config.toml. It points Codex at the relay's account catalog, so model context windows come from your subscription account. Keep your own model and reasoning preferences.`
+                      : t`Merge this TOML into ~/.codex/config.toml. Keep your own model preferences and remove any earlier Token Toxication model_catalog_json override.`
+                  }
                   endpoint="/openai/v1/responses"
                   model={t`Chosen in Codex`}
                   snippet={snippets.codexConfig}

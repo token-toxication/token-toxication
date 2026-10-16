@@ -83,6 +83,7 @@ async fn run_server(config: Config) -> Result<(), MainError> {
         websocket_http,
         antigravity_oauth: Default::default(),
         codex_device_oauth: Default::default(),
+        codex_catalog_cache: Default::default(),
         relay_metrics: Default::default(),
         account_concurrency: Default::default(),
         relay_stream_idle_timeout,

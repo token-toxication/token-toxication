@@ -1,51 +1,86 @@
-//! Upstream Codex subscription catalog handling.
+//! Turning an upstream Codex catalog into the body TT serves.
 //!
-//! The relay serves a Codex-native catalog by **proxying the account's own
-//! upstream catalog** rather than inventing model metadata. Upstream entries
-//! already carry the instruction templates Codex requires, so TT never authors,
-//! vendors, or redistributes a system prompt.
+//! TT proxies the account's own catalog, so upstream is the single source of
+//! truth for which models exist, their context windows, their service tiers, and
+//! their instruction templates. TT authors nothing and rewrites nothing.
 //!
-//! Two properties of the Codex client drive the rules here:
+//! Two properties of the Codex client decide what TT must still do:
 //!
 //! 1. A catalog supplied through `model_catalog_url` **replaces** the bundled
-//!    catalog; it is not merged field-by-field.
-//! 2. `ModelsResponse` deserializes with
-//!    `deserialize_model_infos_with_legacy_base`, which **hard-errors** when an
-//!    entry has neither `model_messages.instructions_template` nor the legacy
-//!    top-level `base_instructions`. A model without instructions is not a
-//!    degraded model; it breaks the whole catalog.
+//!    catalog, and it is parsed as a whole. `ModelsResponse` deserializes with
+//!    `deserialize_model_infos_with_legacy_base`, which hard-errors when an entry
+//!    has neither `model_messages.instructions_template` nor the legacy
+//!    `base_instructions`; the client also rejects duplicate or empty slugs.
+//!    One unusable entry therefore costs the client *every* model, so TT drops
+//!    the entry instead of forwarding a catalog that cannot be parsed.
+//! 2. The client refuses an explicitly configured catalog larger than 1 MiB
+//!    before decoding it. TT keeps the served body under that cap.
 //!
-//! Verified against `codex-cli 0.162.1`: an entry with instructions omitted
-//! fails with `model \`…\` is missing both \`base_instructions\` and
-//! \`model_messages.instructions_template\``.
+//! Everything else is passed through verbatim, including models upstream marks
+//! hidden and models TT has no route for. Clients render their picker from
+//! metadata that includes models TT cannot route, and dropping those entries
+//! breaks the client's model list; an unroutable selection fails per request
+//! instead.
 //!
-//! Entries are carried as opaque [`Value`]s so every field Codex needs survives
-//! the round trip. This module is pure: no I/O, and no logging of model bodies.
+//! The module is pure: no I/O, and no logging of model bodies.
 
-use serde_json::Value;
+use serde_json::{Value, json};
 
-use crate::codex_catalog::policy;
+/// Largest body TT serves to a client.
+///
+/// The Codex client rejects an explicitly configured catalog above 1 MiB before
+/// decoding it, and a rejected catalog leaves the client with no models at all.
+/// TT stays under that cap with margin for the JSON envelope.
+pub const CLIENT_CATALOG_BUDGET_BYTES: usize = 1_048_576 - 32_768;
 
-/// A selected model keeps its upstream slug alongside the untouched payload.
-#[derive(Debug, Clone, PartialEq)]
-pub struct SelectedModel {
-    pub slug: String,
-    pub value: Value,
-}
-
-/// Why an upstream catalog could not be served.
+/// Why an upstream catalog could not be read at all.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum CatalogError {
     #[error("upstream catalog is missing the `models` array")]
     MissingModels,
-    #[error("upstream model at index {index} has no usable slug")]
-    MissingSlug { index: usize },
-    #[error(
-        "upstream model `{slug}` is missing both `base_instructions` and `model_messages.instructions_template`"
-    )]
-    MissingInstructions { slug: String },
-    #[error("upstream catalog contains duplicate slug `{slug}`")]
-    DuplicateSlug { slug: String },
+}
+
+/// Why one upstream entry was left out of the served catalog.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DropReason {
+    /// The entry has no usable `slug`, so the client cannot address it.
+    MissingSlug,
+    /// An earlier entry already used this slug.
+    DuplicateSlug,
+    /// The client would reject the entire catalog for this entry.
+    MissingInstructions,
+    /// The entry would push the served body past the client's size cap.
+    OverSizeBudget,
+}
+
+impl DropReason {
+    /// Bounded code for structured logs. Never carries upstream text.
+    pub fn code(self) -> &'static str {
+        match self {
+            Self::MissingSlug => "missing_slug",
+            Self::DuplicateSlug => "duplicate_slug",
+            Self::MissingInstructions => "missing_instructions",
+            Self::OverSizeBudget => "over_size_budget",
+        }
+    }
+}
+
+/// One omitted entry, identified by slug when it had one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DroppedModel {
+    pub slug: String,
+    pub reason: DropReason,
+}
+
+/// The body TT serves, with bounded counters for structured logs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RenderedCatalog {
+    /// A complete `{"models": [...]}` JSON document.
+    pub body: Vec<u8>,
+    /// Entries included in `body`.
+    pub kept: usize,
+    /// Entries left out, in upstream order.
+    pub dropped: Vec<DroppedModel>,
 }
 
 /// Field Codex reads for the instruction template.
@@ -84,180 +119,67 @@ fn slug_of(model: &Value) -> Option<&str> {
         .filter(|slug| !slug.is_empty())
 }
 
-fn is_listed(model: &Value) -> bool {
-    model
-        .get("visibility")
-        .and_then(Value::as_str)
-        .is_none_or(|visibility| visibility == "list")
-}
-
-fn is_supported_in_api(model: &Value) -> bool {
-    model
-        .get("supported_in_api")
-        .and_then(Value::as_bool)
-        .unwrap_or(true)
-}
-
-/// Select the upstream models TT is willing to serve.
+/// Serve the upstream catalog with only the entries a client could not accept
+/// removed, in upstream order.
 ///
-/// Models are dropped when the eligibility policy rejects them, when upstream
-/// marks them hidden, or when they are not API-supported. Dropping is safe: the
-/// Codex client resolves unknown slugs through its own local fallback metadata.
-///
-/// The result fails closed on the properties that would break the whole
-/// catalog: a duplicate slug or an entry without instructions.
-pub fn select_models(models: &[Value]) -> Result<Vec<SelectedModel>, CatalogError> {
-    let mut selected: Vec<SelectedModel> = Vec::new();
-
-    for (index, model) in models.iter().enumerate() {
-        let Some(slug) = slug_of(model) else {
-            return Err(CatalogError::MissingSlug { index });
-        };
-
-        if !is_listed(model) || !is_supported_in_api(model) {
-            continue;
-        }
-
-        if !matches!(policy::decide(slug, None), policy::Decision::Eligible) {
-            continue;
-        }
-
-        // Only check instructions for entries we intend to serve, so an unrelated
-        // hidden model cannot take down the catalog.
-        if !has_instructions(model) {
-            return Err(CatalogError::MissingInstructions {
-                slug: slug.to_string(),
-            });
-        }
-
-        if selected.iter().any(|existing| existing.slug == slug) {
-            return Err(CatalogError::DuplicateSlug {
-                slug: slug.to_string(),
-            });
-        }
-
-        selected.push(SelectedModel {
-            slug: slug.to_string(),
-            value: model.clone(),
-        });
-    }
-
-    Ok(selected)
-}
-
-/// Suffix TT appends when deriving a `-fast` variant.
-const FAST_SUFFIX: &str = "-fast";
-
-/// Service tier id the Codex client uses for the Fast speed tier.
-///
-/// Taken from the catalog Codex itself ships for these models:
-/// `service_tiers: [{"id": "priority", "name": "Fast", "description": "2x speed,
-/// increased usage"}]`. The client sends this value on the wire as
-/// `service_tier`. TT writes it as the entry's `default_service_tier`, so a
-/// `-fast` model actually selects Fast instead of being a duplicate.
-const FAST_SERVICE_TIER: &str = "priority";
-
-/// Add a `-fast` clone for every selected model that does not already have one.
-///
-/// The upstream catalog has no `-fast` slugs, so TT derives them. Each clone
-/// reuses the base entry's instruction template and every other field, changing
-/// only `slug`, `display_name`, and `default_service_tier`. That keeps upstream
-/// as the single source of truth: nothing but the variant identity and the
-/// speed tier declared by the shipped catalog is added.
-///
-/// Bases that already end in `-fast`, and slugs upstream already provides, are
-/// left alone so the catalog never contains a duplicate.
-pub fn expand_fast_variants(models: Vec<SelectedModel>) -> Vec<SelectedModel> {
-    let existing: std::collections::HashSet<String> =
-        models.iter().map(|model| model.slug.clone()).collect();
-    let mut expanded = Vec::with_capacity(models.len() * 2);
+/// Nothing is dropped for product policy: every model upstream advertises is
+/// passed through, including ones TT has no route for.
+pub fn render_catalog(models: &[Value]) -> RenderedCatalog {
+    let mut kept: Vec<Value> = Vec::with_capacity(models.len());
+    let mut dropped: Vec<DroppedModel> = Vec::new();
 
     for model in models {
-        let fast = if model.slug.ends_with(FAST_SUFFIX) {
-            None
-        } else {
-            let slug = format!("{}{FAST_SUFFIX}", model.slug);
-            if existing.contains(&slug) {
-                None
-            } else {
-                fast_variant(&model, slug)
-            }
+        let Some(slug) = slug_of(model) else {
+            dropped.push(DroppedModel {
+                slug: String::new(),
+                reason: DropReason::MissingSlug,
+            });
+            continue;
         };
-        expanded.push(model);
-        if let Some(fast) = fast {
-            expanded.push(fast);
+        if kept.iter().any(|existing| slug_of(existing) == Some(slug)) {
+            dropped.push(DroppedModel {
+                slug: slug.to_string(),
+                reason: DropReason::DuplicateSlug,
+            });
+            continue;
         }
+        if !has_instructions(model) {
+            dropped.push(DroppedModel {
+                slug: slug.to_string(),
+                reason: DropReason::MissingInstructions,
+            });
+            continue;
+        }
+        kept.push(model.clone());
     }
 
-    expanded
-}
-
-fn fast_variant(base: &SelectedModel, slug: String) -> Option<SelectedModel> {
-    let mut value = base.value.clone();
-    let object = value.as_object_mut()?;
-    let display_name = object
-        .get("display_name")
-        .and_then(Value::as_str)
-        .filter(|name| !name.trim().is_empty())
-        .map(|name| format!("{name} Fast"))
-        .unwrap_or_else(|| slug.clone());
-    object.insert("slug".to_string(), Value::from(slug.clone()));
-    object.insert("display_name".to_string(), Value::from(display_name));
-    object.insert(
-        "default_service_tier".to_string(),
-        Value::from(FAST_SERVICE_TIER),
-    );
-    Some(SelectedModel { slug, value })
-}
-
-/// Apply an explicit context override to one selected model.
-///
-/// `effective_context_window_percent` is written alongside `context_window`
-/// because the Codex client computes the usable budget as
-/// `context_window * effective_context_window_percent / 100`. Omitting it would
-/// silently apply the client's 95% default.
-pub fn apply_context_override(
-    model: &mut Value,
-    context_window: i64,
-    effective_context_window_percent: u8,
-) -> Result<(), &'static str> {
-    if context_window <= 0 {
-        return Err("context window must be positive");
+    let mut body = encode(&kept);
+    // The client reads the whole document or nothing, so an oversized catalog is
+    // trimmed from the end rather than served in a form the client rejects.
+    while body.len() > CLIENT_CATALOG_BUDGET_BYTES && !kept.is_empty() {
+        let removed = kept.pop().expect("a non-empty catalog has a last entry");
+        dropped.push(DroppedModel {
+            slug: slug_of(&removed).unwrap_or_default().to_string(),
+            reason: DropReason::OverSizeBudget,
+        });
+        body = encode(&kept);
     }
-    if effective_context_window_percent > 100 {
-        return Err("effective context window percent must be between 0 and 100");
+
+    RenderedCatalog {
+        body,
+        kept: kept.len(),
+        dropped,
     }
-    let Some(object) = model.as_object_mut() else {
-        return Err("model entry must be a JSON object");
-    };
-    object.insert("context_window".to_string(), Value::from(context_window));
-    object.insert(
-        "effective_context_window_percent".to_string(),
-        Value::from(effective_context_window_percent),
-    );
-    Ok(())
 }
 
-/// Usable context the Codex client will derive from a catalog entry.
-///
-/// Mirrors `ModelInfo::usable_context_window`: `context_window` wins over
-/// `max_context_window`, then the effective percentage is applied.
-pub fn usable_context_window(model: &Value) -> Option<i64> {
-    let context = model
-        .get("context_window")
-        .and_then(Value::as_i64)
-        .or_else(|| model.get("max_context_window").and_then(Value::as_i64))?;
-    let percent = model
-        .get("effective_context_window_percent")
-        .and_then(Value::as_i64)
-        .unwrap_or(95);
-    Some(context.saturating_mul(percent) / 100)
+/// A `Value` always serializes, so encoding cannot fail.
+fn encode(models: &[Value]) -> Vec<u8> {
+    serde_json::to_vec(&json!({ "models": models })).expect("a JSON value always serializes")
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::json;
 
     fn instructions(count: usize) -> String {
         "x".repeat(count)
@@ -275,58 +197,90 @@ mod tests {
             "truncation_policy": {"mode": "tokens", "limit": 10000},
             "context_window": 500_000,
             "max_context_window": 872_000,
+            "service_tiers": [{"id": "priority", "name": "Fast"}],
+            "additional_speed_tiers": ["fast"],
             "model_messages": {"instructions_template": instructions(64)},
         })
     }
 
-    fn slugs(models: &[SelectedModel]) -> Vec<&str> {
-        models.iter().map(|model| model.slug.as_str()).collect()
+    fn served_slugs(catalog: &RenderedCatalog) -> Vec<String> {
+        let body: Value = serde_json::from_slice(&catalog.body).expect("decode served body");
+        body["models"]
+            .as_array()
+            .expect("models array")
+            .iter()
+            .map(|model| model["slug"].as_str().unwrap_or_default().to_string())
+            .collect()
     }
 
     #[test]
-    fn keeps_supported_gpt_6_models_only() {
+    fn passes_every_upstream_model_through_including_ones_tt_does_not_route() {
+        // Regression: TT used to publish only the GPT-6 family. The Codex
+        // Desktop picker builds its categories from the full account catalog,
+        // and a trimmed catalog left the picker unable to list any model.
         let models = vec![
-            upstream_model("gpt-6.1-sol"),
-            upstream_model("gpt-6-astra"),
-            upstream_model("gpt-6-sol"),
-            upstream_model("gpt-6-luna"),
             upstream_model("gpt-5.6-sol"),
             upstream_model("gpt-5.6-terra"),
             upstream_model("gpt-5.6-luna"),
             upstream_model("gpt-5.5"),
+            upstream_model("gpt-6-astra"),
+            upstream_model("gpt-6.1-sol"),
+            upstream_model("gpt-6-sol"),
+            upstream_model("gpt-6-luna"),
         ];
-        let selected = select_models(&models).expect("select models");
+        let catalog = render_catalog(&models);
         assert_eq!(
-            slugs(&selected),
-            vec!["gpt-6.1-sol", "gpt-6-astra", "gpt-6-sol", "gpt-6-luna"]
+            served_slugs(&catalog),
+            vec![
+                "gpt-5.6-sol",
+                "gpt-5.6-terra",
+                "gpt-5.6-luna",
+                "gpt-5.5",
+                "gpt-6-astra",
+                "gpt-6.1-sol",
+                "gpt-6-sol",
+                "gpt-6-luna",
+            ]
         );
+        assert!(catalog.dropped.is_empty());
+        assert_eq!(catalog.kept, 8);
     }
 
     #[test]
-    fn drops_hidden_and_non_api_models_without_inspecting_instructions() {
+    fn invents_no_fast_variants() {
+        // Fast is a service tier on the base entry; a derived `-fast` slug is a
+        // model the account does not have.
+        let catalog = render_catalog(&[upstream_model("gpt-6.1-sol")]);
+        assert_eq!(served_slugs(&catalog), vec!["gpt-6.1-sol"]);
+    }
+
+    #[test]
+    fn keeps_hidden_and_non_api_entries_so_client_metadata_stays_complete() {
         let mut hidden = upstream_model("gpt-reserve");
         hidden["visibility"] = json!("hide");
-        hidden.as_object_mut().unwrap().remove("model_messages");
-
         let mut not_in_api = upstream_model("codex-auto-review");
         not_in_api["supported_in_api"] = json!(false);
-        not_in_api.as_object_mut().unwrap().remove("model_messages");
 
-        // Neither entry has instructions; both must be skipped, not fail the catalog.
-        let selected = select_models(&[hidden, not_in_api]).expect("select models");
-        assert!(selected.is_empty());
+        let catalog = render_catalog(&[hidden, not_in_api]);
+        assert_eq!(catalog.kept, 2);
+        assert!(catalog.dropped.is_empty());
     }
 
     #[test]
-    fn fails_closed_when_a_served_model_lacks_instructions() {
-        let mut model = upstream_model("gpt-6.1-sol");
-        model.as_object_mut().unwrap().remove("model_messages");
+    fn drops_an_entry_the_client_would_reject_instead_of_failing_the_catalog() {
+        // One unparsable entry costs the client every model, so the catalog is
+        // trimmed rather than forwarded.
+        let mut broken = upstream_model("gpt-6-sol");
+        broken.as_object_mut().unwrap().remove("model_messages");
 
+        let catalog = render_catalog(&[upstream_model("gpt-6.1-sol"), broken]);
+        assert_eq!(served_slugs(&catalog), vec!["gpt-6.1-sol"]);
         assert_eq!(
-            select_models(&[model]),
-            Err(CatalogError::MissingInstructions {
-                slug: "gpt-6.1-sol".to_string()
-            })
+            catalog.dropped,
+            vec![DroppedModel {
+                slug: "gpt-6-sol".to_string(),
+                reason: DropReason::MissingInstructions,
+            }]
         );
     }
 
@@ -336,8 +290,8 @@ mod tests {
         model.as_object_mut().unwrap().remove("model_messages");
         model["base_instructions"] = json!(instructions(32));
 
-        let selected = select_models(&[model]).expect("select models");
-        assert_eq!(slugs(&selected), vec!["gpt-6-astra"]);
+        let catalog = render_catalog(&[model]);
+        assert_eq!(served_slugs(&catalog), vec!["gpt-6-astra"]);
     }
 
     #[test]
@@ -345,31 +299,94 @@ mod tests {
         let mut model = upstream_model("gpt-6-sol");
         model["model_messages"] = json!({"instructions_template": "   "});
 
-        assert!(matches!(
-            select_models(&[model]),
-            Err(CatalogError::MissingInstructions { .. })
-        ));
-    }
-
-    #[test]
-    fn rejects_duplicate_slugs() {
-        let models = vec![upstream_model("gpt-6-sol"), upstream_model("gpt-6-sol")];
+        let catalog = render_catalog(&[model]);
         assert_eq!(
-            select_models(&models),
-            Err(CatalogError::DuplicateSlug {
-                slug: "gpt-6-sol".to_string()
-            })
+            catalog.dropped.first().map(|entry| entry.reason),
+            Some(DropReason::MissingInstructions)
         );
+        assert_eq!(served_slugs(&catalog), Vec::<String>::new());
     }
 
     #[test]
-    fn rejects_entries_without_a_slug() {
+    fn keeps_the_first_of_duplicate_slugs() {
+        let mut second = upstream_model("gpt-6-sol");
+        second["display_name"] = json!("duplicate");
+
+        let catalog = render_catalog(&[upstream_model("gpt-6-sol"), second]);
+        assert_eq!(served_slugs(&catalog), vec!["gpt-6-sol"]);
+        assert_eq!(
+            catalog.dropped,
+            vec![DroppedModel {
+                slug: "gpt-6-sol".to_string(),
+                reason: DropReason::DuplicateSlug,
+            }]
+        );
+        let body: Value = serde_json::from_slice(&catalog.body).expect("decode served body");
+        assert_eq!(body["models"][0]["display_name"], json!("gpt-6-sol"));
+    }
+
+    #[test]
+    fn drops_entries_without_a_slug() {
         let mut model = upstream_model("gpt-6-sol");
         model.as_object_mut().unwrap().remove("slug");
+
+        let catalog = render_catalog(&[model]);
+        assert_eq!(served_slugs(&catalog), Vec::<String>::new());
         assert_eq!(
-            select_models(&[model]),
-            Err(CatalogError::MissingSlug { index: 0 })
+            catalog.dropped.first().map(|entry| entry.reason),
+            Some(DropReason::MissingSlug)
         );
+    }
+
+    #[test]
+    fn trims_from_the_end_to_stay_under_the_client_size_cap() {
+        let big = 400 * 1024;
+        let models: Vec<Value> = (0..5)
+            .map(|index| {
+                let mut model = upstream_model(&format!("gpt-6-{index}"));
+                model["model_messages"] = json!({"instructions_template": instructions(big)});
+                model
+            })
+            .collect();
+
+        let catalog = render_catalog(&models);
+        assert!(
+            catalog.body.len() <= CLIENT_CATALOG_BUDGET_BYTES,
+            "served body must stay under the client cap: {} bytes",
+            catalog.body.len()
+        );
+        assert!(catalog.kept > 0, "the catalog must keep what fits");
+        // Trimming happens from the end, so what survives is the upstream prefix.
+        assert_eq!(
+            served_slugs(&catalog),
+            (0..catalog.kept)
+                .map(|index| format!("gpt-6-{index}"))
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(
+            catalog
+                .dropped
+                .iter()
+                .filter(|entry| entry.reason == DropReason::OverSizeBudget)
+                .count(),
+            5 - catalog.kept
+        );
+    }
+
+    #[test]
+    fn a_normal_catalog_is_far_under_the_client_cap() {
+        // Measured shape: the account catalog is roughly 500 KB.
+        let models: Vec<Value> = (0..8)
+            .map(|index| {
+                let mut model = upstream_model(&format!("gpt-6-{index}"));
+                model["model_messages"] = json!({"instructions_template": instructions(20 * 1024)});
+                model
+            })
+            .collect();
+
+        let catalog = render_catalog(&models);
+        assert_eq!(catalog.kept, 8);
+        assert!(catalog.body.len() < CLIENT_CATALOG_BUDGET_BYTES);
     }
 
     #[test]
@@ -387,100 +404,15 @@ mod tests {
     }
 
     #[test]
-    fn override_sets_context_and_effective_percent() {
-        let mut model = upstream_model("gpt-6.1-sol");
-        apply_context_override(&mut model, 628_000, 100).expect("apply override");
-
-        assert_eq!(model["context_window"], json!(628_000));
-        assert_eq!(model["effective_context_window_percent"], json!(100));
-        assert_eq!(usable_context_window(&model), Some(628_000));
-    }
-
-    #[test]
-    fn override_rejects_invalid_values() {
-        let mut model = upstream_model("gpt-6-sol");
+    fn serving_the_upstream_value_keeps_the_account_context_window() {
+        // The point of proxying: `gpt-6.1-sol` is 500_000 upstream against the
+        // 272_000 the client's bundled catalog reports. TT invents no number.
+        let catalog = render_catalog(&[upstream_model("gpt-6.1-sol")]);
+        let body: Value = serde_json::from_slice(&catalog.body).expect("decode served body");
+        assert_eq!(body["models"][0]["context_window"], json!(500_000));
         assert_eq!(
-            apply_context_override(&mut model, 0, 100),
-            Err("context window must be positive")
+            body["models"][0]["model_messages"]["instructions_template"],
+            json!(instructions(64))
         );
-        assert_eq!(
-            apply_context_override(&mut model, 1_000, 101),
-            Err("effective context window percent must be between 0 and 100")
-        );
-    }
-
-    #[test]
-    fn pass_through_uses_upstream_context_and_client_default_percent() {
-        // Deliberate outcome: TT serves the account's own metadata unchanged.
-        // 500_000 is the upstream value for gpt-6.1-sol; the client applies its
-        // own 95% headroom, yielding 475_000 usable. TT invents no number here,
-        // and the old bundled-catalog path reported only 272_000.
-        let model = upstream_model("gpt-6.1-sol");
-        assert_eq!(usable_context_window(&model), Some(475_000));
-    }
-
-    #[test]
-    fn usable_window_prefers_context_window_over_max() {
-        let mut model = upstream_model("gpt-6-sol");
-        model["effective_context_window_percent"] = json!(100);
-        assert_eq!(usable_context_window(&model), Some(500_000));
-
-        model.as_object_mut().unwrap().remove("context_window");
-        assert_eq!(usable_context_window(&model), Some(872_000));
-    }
-
-    #[test]
-    fn fast_variants_are_cloned_with_the_fast_service_tier() {
-        let models = select_models(&[upstream_model("gpt-6.1-sol"), upstream_model("gpt-6-astra")])
-            .expect("select models");
-
-        let expanded = expand_fast_variants(models);
-        assert_eq!(
-            slugs(&expanded),
-            vec![
-                "gpt-6.1-sol",
-                "gpt-6.1-sol-fast",
-                "gpt-6-astra",
-                "gpt-6-astra-fast",
-            ]
-        );
-
-        let fast = expanded
-            .iter()
-            .find(|model| model.slug == "gpt-6.1-sol-fast")
-            .expect("fast variant exists");
-        assert_eq!(fast.value["default_service_tier"], json!("priority"));
-        assert_eq!(fast.value["display_name"], json!("gpt-6.1-sol Fast"));
-        // Everything else, including instructions and context, is carried over.
-        assert_eq!(fast.value["context_window"], json!(500_000));
-        assert!(has_instructions(&fast.value));
-        assert_eq!(
-            fast.value["model_messages"]["instructions_template"],
-            upstream_model("gpt-6.1-sol")["model_messages"]["instructions_template"]
-        );
-        assert_eq!(usable_context_window(&fast.value), Some(475_000));
-    }
-
-    #[test]
-    fn fast_expansion_does_not_duplicate_a_slug_upstream_already_provides() {
-        let models = select_models(&[
-            upstream_model("gpt-6-sol"),
-            upstream_model("gpt-6-sol-fast"),
-        ])
-        .expect("select models");
-
-        let expanded = expand_fast_variants(models);
-        assert_eq!(
-            slugs(&expanded),
-            vec!["gpt-6-sol", "gpt-6-sol-fast"],
-            "an upstream-provided fast slug must not be cloned again"
-        );
-    }
-
-    #[test]
-    fn fast_expansion_leaves_existing_fast_bases_alone() {
-        let models = select_models(&[upstream_model("gpt-6-luna-fast")]).expect("select models");
-        let expanded = expand_fast_variants(models);
-        assert_eq!(slugs(&expanded), vec!["gpt-6-luna-fast"]);
     }
 }

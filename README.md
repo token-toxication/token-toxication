@@ -62,7 +62,7 @@ Use the admin interface to create these records in order:
 3. A **provider model route** mapping that public ID to the upstream model ID.
 4. A **relay API key** for client authentication.
 
-The model becomes routable after the catalog entry, route, and provider account are enabled and eligible. When the relay has an active Codex subscription account it also serves that account's own model catalog to Codex, including derived `-fast` variants; a Codex model picker may still list a model without a relay route.
+The model becomes routable after the catalog entry, route, and provider account are enabled and eligible. When the relay has an active Codex subscription account it also serves that account's own model catalog to Codex, so a Codex model picker may list a model without a relay route.
 
 Open **Client Setup** to generate configuration for a supported client. See the [client setup guide](docs/client-setup.md) for route selection, credentials, reasoning levels, and image input support.
 

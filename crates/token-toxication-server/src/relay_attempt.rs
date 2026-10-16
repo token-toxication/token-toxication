@@ -427,7 +427,7 @@ impl AuthenticatedRelayAttempt {
         wire_api: &str,
         model: &'a str,
     ) -> Result<Cow<'a, str>, AppError> {
-        let base = crate::codex_catalog::policy::canonical_model_id(model);
+        let base = crate::codex_catalog::alias::base_model_id(model);
         if base == model {
             return Ok(Cow::Borrowed(model));
         }

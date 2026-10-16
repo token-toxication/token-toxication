@@ -53,6 +53,11 @@ pub struct AppState {
     pub websocket_http: aioduct::TokioClient,
     pub antigravity_oauth: antigravity_oauth::AntigravityOAuthStore,
     pub codex_device_oauth: codex_device_oauth::CodexDeviceOAuthStore,
+    /// Last known good Codex catalogs, keyed by subscription account.
+    ///
+    /// Held in memory only: the bodies carry upstream instruction text, which TT
+    /// does not persist to disk.
+    pub codex_catalog_cache: Arc<codex_catalog::cache::CatalogCache>,
     pub relay_metrics: relay_metrics::RelayMetrics,
     pub account_concurrency: account_concurrency::AccountConcurrency,
     pub relay_stream_idle_timeout: Duration,

@@ -62,26 +62,26 @@ account, that account's own catalog; it does not select a default model.
 The generated provider block includes
 `model_catalog_url = "<relay>/openai/v1/codex/models"` when the relay has an
 active Codex subscription account. That catalog is the account's own upstream
-catalog, so it carries the exact instruction source for every model and the
-account's real context window: `gpt-6.1-sol` is 500000 tokens upstream against
-272000 for the other GPT-6 models. Each model also gains a `-fast` variant on
-the Fast service tier.
+catalog, so the models, their context windows, their service tiers, and their
+instructions are the account's rather than the client's bundled values:
+`gpt-6.1-sol` is 500000 tokens upstream against 272000 for the other GPT-6
+models. The relay adds no model and rewrites no field.
 
 The URL is omitted when no Codex subscription account is configured. An explicit
 catalog replaces Codex's bundled one, so a relay that could not serve it would
 leave the client with no models at all. Merge the generated snippet again after
 adding an account.
 
-Codex's built-in model picker may list a model without a matching relay route.
-Create the route before selecting that model; an unroutable request fails
-rather than silently switching models. The relay does not claim that every
+Codex's model picker lists the account's models, including any the relay has no
+route for. Create the route before selecting such a model; an unroutable request
+fails rather than silently switching models. The relay does not claim that every
 upstream supports the features declared by Codex's model catalog.
 
-Codex's catalog advertises the Fast service tier for eligible models; Codex
-sends that tier as `service_tier = "priority"`, which the relay forwards
-unchanged. The Codex TUI derives the tier from the model's
-`default_service_tier`, which is what the generated `-fast` variants set;
-`codex exec` does not, and needs an explicit `service_tier` setting. The current
+Fast is a service tier on a model, not a separate model: the account catalog
+declares `priority` as an available tier, Codex offers it on the model, and the
+relay forwards it unchanged as `service_tier = "priority"`. The Codex TUI derives
+the tier it starts with from the model's `default_service_tier`; `codex exec`
+does not, and needs an explicit `service_tier` setting. The current
 Codex Desktop app does not show the Fast picker for an API-key model provider
 such as `TOKEN_TOXICATION_API_KEY`; this is a client UI restriction, not a
 missing relay catalog entry. A client-side change or a ChatGPT/PAT
@@ -106,10 +106,10 @@ transport tests for connection lifecycle and error handling.
 
 The opt-in client test uses a real Codex binary and an isolated relay/mock;
 run `just codex-compat /absolute/path/to/matching/codex`. The installed
-`codex-cli 0.162.1` was used to verify the built-in catalog's Lite round trip,
-the relay-served account catalog with its `-fast` variants, and a Fast turn
-resolved to its base model. The test does not use production credentials or
-prove a live upstream's Lite eligibility.
+`codex-cli 0.162.1` was used to verify the built-in catalog's Lite round trip, the
+relay-served account catalog, a Fast turn on a catalog model, and a `-fast`
+request resolved to its base model. The test does not use production credentials
+or prove a live upstream's Lite eligibility.
 
 ## DeepSeek Harness
 

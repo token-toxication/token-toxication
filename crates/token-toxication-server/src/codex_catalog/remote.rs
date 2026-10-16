@@ -1,53 +1,87 @@
-//! Fetching an account's own Codex-native model catalog.
+//! Fetching an account's own Codex-native catalog.
 //!
-//! The relay proxies the account's catalog instead of authoring one, so the
-//! instruction templates Codex requires come from the same source the Codex
-//! client would use. Nothing here is persisted: the body is validated, filtered,
-//! and returned.
+//! Security: a catalog body carries model instruction text. It is never logged,
+//! echoed into errors, or written to disk; only status codes, byte lengths, and
+//! model counts are observable.
 //!
-//! Security: the response body contains model instruction text. It is never
-//! logged, echoed into errors, or stored; only the status code and byte length
-//! are observable.
+//! Two upstream constraints shape this module, both verified against the live
+//! ChatGPT backend:
+//!
+//! - `/codex/models` **requires** a `client_version` query parameter. An absent
+//!   parameter returns `400`, so a request that omitted it would fail the whole
+//!   catalog. TT therefore always sends one, falling back to
+//!   [`FALLBACK_CLIENT_VERSION`] when the client sent nothing usable.
+//! - The Codex client abandons its catalog refresh after 5 seconds. TT's own
+//!   budget stays well inside that so a slow upstream cannot make the client
+//!   time out and lose its model list.
+
+use std::time::Duration;
 
 use axum::http::header;
-use serde_json::Value;
 
 use crate::{codex_subscription::CodexSubscriptionAuthorization, error::AppError};
 
-/// Upper bound on a fetched catalog.
+/// Upper bound on an upstream catalog body.
 ///
-/// The Codex client bounds an explicitly configured catalog at 1 MiB. TT allows
-/// headroom for the extra `-fast` entries it derives and rejects anything
-/// larger instead of buffering without limit.
-pub const MAX_CATALOG_BYTES: usize = 2 * 1024 * 1024;
+/// Larger than the client-side cap on purpose: TT reads the whole document so it
+/// can decide what fits, instead of forwarding a truncated body.
+pub const MAX_UPSTREAM_CATALOG_BYTES: usize = 4 * 1024 * 1024;
 
-/// Codex refreshes a catalog inside a 5 second budget.
-const CATALOG_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
+/// TT's upstream budget, comfortably inside the client's 5 second refresh.
+const CATALOG_TIMEOUT: Duration = Duration::from_secs(3);
 
-/// A validated upstream catalog response.
-#[derive(Debug)]
-pub struct FetchedCatalog {
-    pub body: Value,
-    pub etag: Option<String>,
+/// Version TT reports upstream when the client sent nothing usable.
+///
+/// The backend only checks that the parameter is present, not its value, so this
+/// placeholder never has to track a released Codex version.
+pub const FALLBACK_CLIENT_VERSION: &str = "0.0.0";
+
+/// Longest client version TT forwards.
+const MAX_CLIENT_VERSION_LEN: usize = 32;
+
+/// A catalog response, or a `304` revalidation result.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FetchedCatalog {
+    /// The upstream returned a fresh body.
+    Ok { body: Vec<u8>, etag: Option<String> },
+    /// The cached copy is still current.
+    NotModified,
 }
 
-/// Fetch and decode the Codex-native catalog for one subscription account.
+/// Reduce an untrusted client version to something safe to place in a query.
 ///
-/// `client_version` is appended only when the caller supplied one, so TT never
-/// invents a version string that would age.
+/// Never rejects: a client with an unexpected version string still needs a
+/// catalog, and losing every model is worse than reporting a placeholder.
+pub fn upstream_client_version(value: Option<&str>) -> String {
+    let sanitized: String = value
+        .unwrap_or_default()
+        .trim()
+        .chars()
+        .filter(|character| {
+            character.is_ascii_alphanumeric() || matches!(character, '.' | '-' | '_')
+        })
+        .take(MAX_CLIENT_VERSION_LEN)
+        .collect();
+    if sanitized.is_empty() {
+        FALLBACK_CLIENT_VERSION.to_string()
+    } else {
+        sanitized
+    }
+}
+
+/// Fetch the catalog for one subscription account.
+///
+/// `etag` turns the call into a conditional request; a `304` is reported as
+/// [`FetchedCatalog::NotModified`] so the caller can keep the body it has.
 pub async fn fetch(
     http: &aioduct::TokioClient,
     endpoint: &str,
     auth: &CodexSubscriptionAuthorization,
-    client_version: Option<&str>,
+    client_version: &str,
+    etag: Option<&str>,
 ) -> Result<FetchedCatalog, AppError> {
-    let url = match client_version {
-        Some(version) => {
-            let separator = if endpoint.contains('?') { '&' } else { '?' };
-            format!("{endpoint}{separator}client_version={version}")
-        }
-        None => endpoint.to_string(),
-    };
+    let separator = if endpoint.contains('?') { '&' } else { '?' };
+    let url = format!("{endpoint}{separator}client_version={client_version}");
 
     let mut request = http
         .get(&url)
@@ -58,9 +92,15 @@ pub async fn fetch(
             .header_str("chatgpt-account-id", account_id)
             .map_err(AppError::Upstream)?;
     }
-    let request = request
+    request = request
         .header_str("originator", auth.originator)
-        .map_err(AppError::Upstream)?
+        .map_err(AppError::Upstream)?;
+    if let Some(etag) = etag {
+        request = request
+            .header_str(header::IF_NONE_MATCH.as_str(), etag)
+            .map_err(AppError::Upstream)?;
+    }
+    let request = request
         .header_str(header::ACCEPT.as_str(), "application/json")
         .map_err(AppError::Upstream)?;
 
@@ -70,6 +110,9 @@ pub async fn fetch(
         .map_err(|error| AppError::Upstream(error.into()))?;
 
     let status = response.status();
+    if status == axum::http::StatusCode::NOT_MODIFIED {
+        return Ok(FetchedCatalog::NotModified);
+    }
     let etag = response
         .headers()
         .get(header::ETAG)
@@ -84,15 +127,16 @@ pub async fn fetch(
     }
 
     let bytes = response.bytes().await.map_err(AppError::Upstream)?;
-    if bytes.len() > MAX_CATALOG_BYTES {
+    if bytes.len() > MAX_UPSTREAM_CATALOG_BYTES {
         return Err(AppError::ServiceUnavailable(format!(
-            "codex catalog response exceeded {MAX_CATALOG_BYTES} bytes"
+            "codex catalog response exceeded {MAX_UPSTREAM_CATALOG_BYTES} bytes"
         )));
     }
-    let body = serde_json::from_slice(&bytes)
-        .map_err(|_| AppError::ServiceUnavailable("codex catalog response was not JSON".into()))?;
 
-    Ok(FetchedCatalog { body, etag })
+    Ok(FetchedCatalog::Ok {
+        body: bytes.to_vec(),
+        etag,
+    })
 }
 
 #[cfg(test)]
@@ -111,10 +155,10 @@ mod tests {
         }
     }
 
-    async fn serve(
-        response: (axum::http::StatusCode, &'static str),
-    ) -> (String, Arc<Mutex<Vec<(String, HeaderMap)>>>) {
-        let seen: Arc<Mutex<Vec<(String, HeaderMap)>>> = Arc::new(Mutex::new(Vec::new()));
+    type Seen = Arc<Mutex<Vec<(String, HeaderMap)>>>;
+
+    async fn serve(response: (axum::http::StatusCode, &'static str)) -> (String, Seen) {
+        let seen: Seen = Arc::new(Mutex::new(Vec::new()));
         let handler_seen = Arc::clone(&seen);
         let app = Router::new().route(
             "/codex/models",
@@ -142,22 +186,27 @@ mod tests {
         aioduct::TokioClient::builder()
             .tls(aioduct::tls::RustlsConnector::with_webpki_roots())
             .user_agent("token-toxication-test")
-            .timeout(std::time::Duration::from_secs(5))
-            .read_timeout(std::time::Duration::from_secs(5))
+            .timeout(Duration::from_secs(5))
+            .read_timeout(Duration::from_secs(5))
             .build()
             .expect("build test HTTP client")
     }
 
     #[tokio::test]
-    async fn sends_account_identity_and_appends_client_version_once() {
+    async fn sends_account_identity_and_the_client_version() {
         let (endpoint, seen) = serve((axum::http::StatusCode::OK, r#"{"models":[]}"#)).await;
         let http = client();
 
-        let fetched = fetch(&http, &endpoint, &authorization(), Some("0.162.1"))
+        let fetched = fetch(&http, &endpoint, &authorization(), "0.162.0", None)
             .await
             .expect("fetch catalog");
-        assert_eq!(fetched.etag, None);
-        assert_eq!(fetched.body["models"], serde_json::json!([]));
+        match fetched {
+            FetchedCatalog::Ok { body, etag } => {
+                assert_eq!(etag, None);
+                assert_eq!(body, br#"{"models":[]}"#);
+            }
+            other => panic!("expected a body, got {other:?}"),
+        }
 
         let (uri, headers) = seen
             .lock()
@@ -165,28 +214,36 @@ mod tests {
             .first()
             .cloned()
             .expect("captured request");
-        assert_eq!(uri, "/codex/models?client_version=0.162.1");
+        assert_eq!(uri, "/codex/models?client_version=0.162.0");
         assert_eq!(headers["authorization"], "Bearer synthetic-access");
         assert_eq!(headers["chatgpt-account-id"], "synthetic-account");
         assert_eq!(headers["originator"], "opencode");
+        assert!(headers.get("if-none-match").is_none());
     }
 
     #[tokio::test]
-    async fn omits_client_version_when_the_caller_supplies_none() {
-        let (endpoint, seen) = serve((axum::http::StatusCode::OK, r#"{"models":[]}"#)).await;
+    async fn a_conditional_request_carries_the_etag() {
+        let (endpoint, seen) = serve((axum::http::StatusCode::NOT_MODIFIED, "")).await;
         let http = client();
 
-        fetch(&http, &endpoint, &authorization(), None)
-            .await
-            .expect("fetch catalog");
+        let fetched = fetch(
+            &http,
+            &endpoint,
+            &authorization(),
+            "0.162.0",
+            Some("W/\"abc\""),
+        )
+        .await
+        .expect("fetch catalog");
+        assert_eq!(fetched, FetchedCatalog::NotModified);
 
-        let (uri, _) = seen
+        let (_, headers) = seen
             .lock()
             .expect("lock seen")
             .first()
             .cloned()
             .expect("captured request");
-        assert_eq!(uri, "/codex/models");
+        assert_eq!(headers["if-none-match"], "W/\"abc\"");
     }
 
     #[tokio::test]
@@ -198,7 +255,7 @@ mod tests {
         .await;
         let http = client();
 
-        let error = fetch(&http, &endpoint, &authorization(), None)
+        let error = fetch(&http, &endpoint, &authorization(), "0.162.0", None)
             .await
             .expect_err("upstream failure");
         let message = error.to_string();
@@ -207,17 +264,6 @@ mod tests {
             !message.contains("leaked-instruction-text"),
             "error must not echo the upstream body"
         );
-    }
-
-    #[tokio::test]
-    async fn malformed_json_is_reported_as_unavailable() {
-        let (endpoint, _) = serve((axum::http::StatusCode::OK, "not json")).await;
-        let http = client();
-
-        let error = fetch(&http, &endpoint, &authorization(), None)
-            .await
-            .expect_err("malformed body");
-        assert!(error.to_string().contains("was not JSON"));
     }
 
     #[tokio::test]
@@ -243,10 +289,43 @@ mod tests {
             &http,
             &format!("http://{address}/codex/models"),
             &authorization(),
+            "0.162.0",
             None,
         )
         .await
         .expect("fetch catalog");
-        assert_eq!(fetched.etag.as_deref(), Some("W/\"abc\""));
+        match fetched {
+            FetchedCatalog::Ok { etag, .. } => assert_eq!(etag.as_deref(), Some("W/\"abc\"")),
+            other => panic!("expected a body, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_client_version_is_always_usable() {
+        // The backend rejects an absent parameter, so this must never be empty.
+        assert_eq!(upstream_client_version(None), FALLBACK_CLIENT_VERSION);
+        assert_eq!(upstream_client_version(Some("")), FALLBACK_CLIENT_VERSION);
+        assert_eq!(
+            upstream_client_version(Some("   ")),
+            FALLBACK_CLIENT_VERSION
+        );
+        assert_eq!(
+            upstream_client_version(Some("0.162.0-alpha.17.2")),
+            "0.162.0-alpha.17.2"
+        );
+        // Unexpected input is sanitized rather than rejected: a client with an
+        // odd version string still needs its model list.
+        assert_eq!(
+            upstream_client_version(Some("1.2.3+build 4")),
+            "1.2.3build4"
+        );
+        assert_eq!(
+            upstream_client_version(Some("../../etc/passwd")),
+            "....etcpasswd"
+        );
+        assert_eq!(
+            upstream_client_version(Some(&"9".repeat(80))).len(),
+            MAX_CLIENT_VERSION_LEN
+        );
     }
 }
