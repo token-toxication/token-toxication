@@ -90,10 +90,12 @@ list. The cache is memory-only: catalog bodies carry instruction text, which TT
 does not write to disk. A cold start against a failing upstream is therefore the
 one case where the endpoint has nothing to serve.
 
-The Codex **Desktop** app cannot use this endpoint: setting `model_catalog_url`
-empties its model picker even though the catalog is valid and its own
-`model/list` returns every entry. Do not configure the generated desktop snippet
-with it; CLI clients are unaffected.
+The Codex **Desktop** app has a client-side catalog gate. Configure a valid local
+`model_catalog_json` in the provider block together with this endpoint as
+`model_catalog_url`; the local file lets Desktop recognize the custom catalog,
+while this endpoint remains the dynamic source of model metadata. Configuring
+`model_catalog_url` without the local gate can produce an empty picker. CLI
+clients can use this endpoint directly.
 
 `-fast` is accepted as a request alias, not as a model: no upstream serves a
 suffixed id. A client that requests one is routed to its base model's accounts,

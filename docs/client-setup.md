@@ -51,32 +51,43 @@ or replace Codex's catalog.
    the secret out of `config.toml` and shared screenshots.
 3. Merge the generated provider TOML into `~/.codex/config.toml`. Keep your
    own `model` and reasoning preferences. Select models through Codex.
-4. If migrating from an earlier Token Toxication setup, remove any hand-edited
-   `model_catalog_json` file and any `model_catalog_url` override. The generated
-   snippet sets neither; see below. Review any `model = ...` entry that came from
-   the old snippet; keep or remove it according to your own preference. Do not
-   remove unrelated settings without reviewing them.
+4. If migrating from an earlier Token Toxication setup, remove stale hand-edited
+   model entries and review any `model = ...` entry that came from the old
+   snippet. Keep or remove it according to your own preference. Do not remove
+   unrelated settings without reviewing them.
 
-### Do not set a catalog URL for the Codex Desktop app
+### Codex Desktop catalog configuration
 
-The generated provider block never sets `model_catalog_url`, because an explicit
-catalog empties the Codex Desktop model picker. The desktop then shows no model
-list at all, even though the relay answers with a valid catalog and the client's
-own `model/list` returns every model in it.
+Codex Desktop has a client-side compatibility gate: it only recognizes a custom
+provider catalog when `model_catalog_json` is present, but it can then use
+`model_catalog_url` for the actual dynamic catalog. Configure both fields inside
+the provider block:
+
+```toml
+[model_providers.token-toxication]
+name = "Token Toxication"
+base_url = "https://tokentoxication.sensecore-maas.dev/openai/v1"
+env_key = "TOKEN_TOXICATION_API_KEY"
+model_catalog_json = "/Users/you/.codex/token-toxication-model-catalog.json"
+model_catalog_url = "https://tokentoxication.sensecore-maas.dev/openai/v1/codex/models"
+```
+
+`model_catalog_json` is only the Desktop compatibility gate; TT's dynamic
+endpoint remains the source of model metadata. Keep the local file as a valid
+non-empty Codex catalog and refresh it when the Desktop version changes.
 
 Measured against the Desktop's bundled core `0.163.0-aarch64-apple-darwin`
 (`~/Library/.../codex`), with the same client, key, and relay:
 
-| Catalog served at `model_catalog_url` | Desktop model picker |
+| Catalog configuration | Desktop model picker |
 | --- | --- |
-| The account's own upstream catalog | empty |
-| Codex's own bundled catalog, served verbatim | empty |
-| The relay-authored catalog shape that an earlier desktop accepted | empty |
-| The account catalog plus the one slug it was missing | empty |
-| Not set (Codex uses its bundled catalog) | lists every model |
+| `model_catalog_url` only | empty |
+| `model_catalog_json` plus TT `model_catalog_url` | lists TT models |
+| Neither field | lists bundled models |
 
-Removing the line restores the picker immediately. This is a client-side
-regression, not a relay content problem, and the relay cannot work around it.
+The two-field configuration is a Desktop compatibility workaround, not a second
+source of truth. The empty-picker behavior is a client-side regression; TT's
+catalog endpoint remains valid and works directly for CLI clients.
 
 `GET /openai/v1/codex/models` remains available and is unaffected for CLI
 clients; see the [relay API](relay-api.md) for what it serves.
