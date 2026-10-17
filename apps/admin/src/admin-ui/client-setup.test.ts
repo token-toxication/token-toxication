@@ -242,25 +242,21 @@ describe("Codex provider configuration snippet", () => {
       dshModels: [],
     });
 
-    expect(snippets.codexEnvironment).toBe(
+    expect(snippets.codexEnvironment).toContain(
       "export TOKEN_TOXICATION_API_KEY='tokentoxication-test'",
     );
     expect(snippets.codexConfig).toContain('model_provider = "token-toxication"');
     expect(snippets.codexConfig).toContain('env_key = "TOKEN_TOXICATION_API_KEY"');
     expect(snippets.codexConfig).toContain("supports_websockets = true");
     expect(snippets.codexConfig).not.toContain("tokentoxication-test");
-    expect(snippets.codexConfig).not.toMatch(
-      /^\s*(?:model|model_catalog_json|model_catalog_url)\s*=/m,
-    );
+    expect(snippets.codexConfig).not.toMatch(/^\s*model\s*=/m);
     expect(snippets.codexConfig).not.toMatch(
       /^\s*(?:use_responses_lite|tool_mode|multi_agent_version)\s*=/m,
     );
     expect(snippets.codexConfig).not.toContain("--profile");
   });
 
-  it("never sets a catalog URL, and says why", () => {
-    // An explicit catalog empties the Codex Desktop model picker even when the
-    // relay serves valid models, so the generated provider block must not set one.
+  it("downloads the compatibility catalog and enables the dynamic source", () => {
     const snippets = buildClientSetupSnippets({
       apiKey: "tokentoxication-test",
       serviceOrigin: "http://relay.example:3000",
@@ -269,9 +265,15 @@ describe("Codex provider configuration snippet", () => {
       dshModels: [],
     });
 
-    expect(snippets.codexConfig).not.toMatch(/^\s*model_catalog_url\s*=/m);
-    expect(snippets.codexConfig).not.toMatch(/^\s*model_catalog_json\s*=/m);
-    expect(snippets.codexConfig).toContain("Do not add model_catalog_url");
+    expect(snippets.codexEnvironment).toContain("mkdir -p ~/.codex");
+    expect(snippets.codexEnvironment).toContain("/openai/v1/codex/models");
+    expect(snippets.codexEnvironment).toContain("token-toxication-model-catalog.json");
+    expect(snippets.codexConfig).toContain(
+      'model_catalog_json = "token-toxication-model-catalog.json"',
+    );
+    expect(snippets.codexConfig).toContain(
+      'model_catalog_url = "http://relay.example:3000/openai/v1/codex/models"',
+    );
     expect(snippets.codexConfig).toContain('base_url = "http://relay.example:3000/openai/v1"');
     expect(snippets.codexConfig).toContain("supports_websockets = true");
     expect(snippets.codexConfig).not.toContain("tokentoxication-test");

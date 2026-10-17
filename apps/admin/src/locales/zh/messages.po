@@ -986,8 +986,8 @@ msgid "Max running requests"
 msgstr "最大并发请求数"
 
 #: src/admin-ui/client-setup.tsx:273
-msgid "Merge this TOML into ~/.codex/config.toml. Keep your own model preferences and remove any earlier Token Toxication model_catalog_json override."
-msgstr "将此 TOML 合并到 ~/.codex/config.toml。保留自己的模型偏好，并移除之前由 Token Toxication 设置的 model_catalog_json 覆盖。"
+msgid "Merge this TOML into ~/.codex/config.toml. It uses TT's dynamic catalog while the downloaded file keeps the Desktop picker populated."
+msgstr "将此 TOML 合并到 ~/.codex/config.toml。它使用 TT 的动态 catalog，同时通过下载的文件保持 Desktop 模型选择器可用。"
 
 #: src/admin-ui/client-setup.tsx:211
 msgid "Messages routed"
@@ -1682,8 +1682,8 @@ msgid "Select model"
 msgstr "选择模型"
 
 #: src/admin-ui/client-setup.tsx:266
-msgid "Set the relay key in the environment that starts Codex. Do not put it in config.toml."
-msgstr "在启动 Codex 的进程环境中设置中继密钥，不要将其写入 config.toml。"
+msgid "Set the relay key and download the Desktop compatibility catalog before starting Codex."
+msgstr "启动 Codex 前设置中继密钥并下载 Desktop 兼容 catalog。"
 
 #: src/admin-ui/client-setup.tsx:341
 msgid "Set TOKEN_TOXICATION_API_KEY in the harness process environment, then merge these llm-pi-ai provider routes into ~/.dsh/settings.yaml. Keep existing keys; the harness applies changes on the next request."

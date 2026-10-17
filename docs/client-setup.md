@@ -60,21 +60,27 @@ or replace Codex's catalog.
 
 Codex Desktop has a client-side compatibility gate: it only recognizes a custom
 provider catalog when `model_catalog_json` is present, but it can then use
-`model_catalog_url` for the actual dynamic catalog. Configure both fields inside
-the provider block:
+`model_catalog_url` for the actual dynamic catalog. The Client Setup page
+generates both the download command and the provider block. Run its Codex
+environment snippet first; it downloads the current TT catalog into
+`~/.codex/token-toxication-model-catalog.json` using the relay key, so users do
+not need to write or maintain JSON by hand.
+
+The generated provider block has this shape:
 
 ```toml
 [model_providers.token-toxication]
 name = "Token Toxication"
 base_url = "https://tokentoxication.sensecore-maas.dev/openai/v1"
 env_key = "TOKEN_TOXICATION_API_KEY"
-model_catalog_json = "/Users/you/.codex/token-toxication-model-catalog.json"
+model_catalog_json = "token-toxication-model-catalog.json"
 model_catalog_url = "https://tokentoxication.sensecore-maas.dev/openai/v1/codex/models"
 ```
 
 `model_catalog_json` is only the Desktop compatibility gate; TT's dynamic
-endpoint remains the source of model metadata. Keep the local file as a valid
-non-empty Codex catalog and refresh it when the Desktop version changes.
+endpoint remains the source of model metadata. Re-run the generated download
+command when the Desktop version changes or when the account's available models
+change.
 
 Measured against the Desktop's bundled core `0.163.0-aarch64-apple-darwin`
 (`~/Library/.../codex`), with the same client, key, and relay:

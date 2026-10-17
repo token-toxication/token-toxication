@@ -263,14 +263,14 @@ export function ClientSetupView({
                 </Card>
                 <ClientSnippetCard
                   title={t`Codex environment`}
-                  description={t`Set the relay key in the environment that starts Codex. Do not put it in config.toml.`}
+                  description={t`Set the relay key and download the Desktop compatibility catalog before starting Codex.`}
                   endpoint="TOKEN_TOXICATION_API_KEY"
                   model={t`Chosen in Codex`}
                   snippet={snippets.codexEnvironment}
                 />
                 <ClientSnippetCard
                   title={t`Codex provider configuration`}
-                  description={t`Merge this TOML into ~/.codex/config.toml. Keep your own model preferences and remove any earlier Token Toxication model_catalog_json override.`}
+                  description={t`Merge this TOML into ~/.codex/config.toml. It uses TT's dynamic catalog while the downloaded file keeps the Desktop picker populated.`}
                   endpoint="/openai/v1/responses"
                   model={t`Chosen in Codex`}
                   snippet={snippets.codexConfig}
@@ -484,14 +484,18 @@ export function buildClientSetupSnippets({
   return {
     openaiBaseUrl,
     anthropicBaseUrl,
-    codexEnvironment: `export TOKEN_TOXICATION_API_KEY=${shellQuote(relayApiKey)}`,
+    codexEnvironment: [
+      `export TOKEN_TOXICATION_API_KEY=${shellQuote(relayApiKey)}`,
+      "mkdir -p ~/.codex",
+      `curl --fail --silent --show-error --location \\
+  --header "Authorization: Bearer $TOKEN_TOXICATION_API_KEY" \\
+  ${shellQuote(`${openaiBaseUrl}/codex/models`)} \\
+  --output ~/.codex/token-toxication-model-catalog.json`,
+    ].join("\n"),
     codexConfig: [
       "# Set TOKEN_TOXICATION_API_KEY in the Codex process environment.",
+      "# Run the Codex environment snippet first to download the Desktop compatibility catalog.",
       "# Merge into ~/.codex/config.toml; keep your own model and reasoning settings.",
-      "# Remove earlier Token Toxication model_catalog_json overrides; Codex uses its own catalog.",
-      "# Do not add model_catalog_url: an explicit catalog empties the Codex Desktop",
-      "# model picker even though the relay serves valid models. The relay endpoint",
-      "# stays available for CLI clients, which are unaffected.",
       "",
       `model_provider = ${tomlString("token-toxication")}`,
       "",
@@ -501,6 +505,8 @@ export function buildClientSetupSnippets({
       `env_key = ${tomlString("TOKEN_TOXICATION_API_KEY")}`,
       `wire_api = ${tomlString("responses")}`,
       "supports_websockets = true",
+      `model_catalog_json = ${tomlString("token-toxication-model-catalog.json")}`,
+      `model_catalog_url = ${tomlString(`${openaiBaseUrl}/codex/models`)}`,
     ].join("\n"),
     claudeCode: [
       `export ANTHROPIC_BASE_URL=${shellQuote(anthropicBaseUrl)}`,

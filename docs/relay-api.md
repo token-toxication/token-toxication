@@ -94,7 +94,9 @@ The Codex **Desktop** app has a client-side catalog gate. Configure a valid loca
 `model_catalog_json` in the provider block together with this endpoint as
 `model_catalog_url`; the local file lets Desktop recognize the custom catalog,
 while this endpoint remains the dynamic source of model metadata. Configuring
-`model_catalog_url` without the local gate can produce an empty picker. CLI
+`model_catalog_url` without the local gate can produce an empty picker. The
+Client Setup page generates a command that downloads this endpoint into the
+local gate file, so users do not need to author catalog JSON themselves. CLI
 clients can use this endpoint directly.
 
 `-fast` is accepted as a request alias, not as a model: no upstream serves a
