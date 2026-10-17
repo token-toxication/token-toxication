@@ -542,9 +542,15 @@ pub fn get_anthropic_model() {}
     get,
     path = "/openai/v1/models",
     tag = "Relay",
+    params((
+        "wire_api" = Option<String>,
+        Query,
+        description = "Optional route protocol filter: openai-chat or openai-responses"
+    )),
     responses(
         (status = 200, description = "Configured OpenAI-compatible models", body = OpenAiModelListResponse),
         (status = 401, description = "Missing or invalid API key", body = ErrorResponse),
+        (status = 400, description = "Unsupported wire_api filter", body = ErrorResponse),
     ),
 )]
 pub fn list_openai_models() {}

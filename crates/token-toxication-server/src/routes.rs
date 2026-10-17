@@ -561,15 +561,23 @@ pub struct CodexCatalogQuery {
     pub client_version: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct OpenAiModelsQuery {
+    /// Restrict the listing to routes speaking one relay wire API. Omitting it
+    /// preserves the standard OpenAI-compatible union listing.
+    pub wire_api: Option<String>,
+}
+
 pub async fn list_openai_models(
     State(state): State<AppState>,
     headers: HeaderMap,
     uri: Uri,
+    Query(query): Query<OpenAiModelsQuery>,
 ) -> Result<Json<OpenAiModelListResponse>, AppError> {
     authenticate_relay_api_key(&state, &headers, uri.query()).await?;
     Ok(Json(OpenAiModelListResponse {
         object: "list".to_string(),
-        data: openai_models(&state).await?,
+        data: openai_models(&state, query.wire_api.as_deref()).await?,
     }))
 }
 
@@ -580,7 +588,7 @@ pub async fn get_openai_model(
     Path(model): Path<String>,
 ) -> Result<Json<OpenAiModel>, AppError> {
     authenticate_relay_api_key(&state, &headers, uri.query()).await?;
-    let model = openai_models(&state)
+    let model = openai_models(&state, None)
         .await?
         .into_iter()
         .find(|entry| entry.id == model)
@@ -3027,11 +3035,21 @@ fn token_field(value: &Value, names: &[&str]) -> Option<u64> {
         .find_map(|name| value.get(*name).and_then(Value::as_u64))
 }
 
-async fn openai_models(state: &AppState) -> Result<Vec<OpenAiModel>, AppError> {
-    let models = state
-        .db
-        .list_routable_model_catalog(&["openai-chat", "openai-responses"])
-        .await?;
+async fn openai_models(
+    state: &AppState,
+    wire_api: Option<&str>,
+) -> Result<Vec<OpenAiModel>, AppError> {
+    let wire_apis = match wire_api {
+        None => vec!["openai-chat", "openai-responses"],
+        Some("openai-chat") => vec!["openai-chat"],
+        Some("openai-responses") => vec!["openai-responses"],
+        Some(value) => {
+            return Err(AppError::BadRequest(format!(
+                "unsupported OpenAI model listing wire_api: {value}"
+            )));
+        }
+    };
+    let models = state.db.list_routable_model_catalog(&wire_apis).await?;
     Ok(models
         .into_iter()
         .map(|model| OpenAiModel {
@@ -3353,6 +3371,87 @@ mod tests {
             HeaderValue::from_str(&format!("Bearer {secret}")).expect("relay key header"),
         );
         headers
+    }
+
+    #[tokio::test]
+    async fn openai_model_listing_can_filter_by_wire_api() {
+        let database_path = test_database_path();
+        let db = Db::open(&database_path).await.expect("open test database");
+        for (model_id, wire_api) in [
+            ("chat-model", "openai-chat"),
+            ("responses-model", "openai-responses"),
+        ] {
+            let account = db
+                .create_provider_account(CreateProviderAccountRequest {
+                    name: format!("{wire_api} provider"),
+                    provider: "test".to_string(),
+                    base_url: "https://example.com".to_string(),
+                    auth_mode: "bearer".to_string(),
+                    wire_api: wire_api.to_string(),
+                    api_key: "provider-key".to_string(),
+                    is_active: true,
+                    max_running_requests: 0,
+                })
+                .await
+                .expect("create provider account");
+            db.create_model_catalog_entry(CreateModelCatalogEntryRequest {
+                id: model_id.to_string(),
+                display_name: model_id.to_string(),
+                family: "test".to_string(),
+                enabled: true,
+            })
+            .await
+            .expect("create model");
+            db.create_provider_model_route(CreateProviderModelRouteRequest {
+                public_model_id: model_id.to_string(),
+                provider_account_id: account.id,
+                upstream_model_id: model_id.to_string(),
+                wire_api: wire_api.to_string(),
+                role: "primary".to_string(),
+                enabled: true,
+                weight: 100,
+                strip_params: Vec::new(),
+            })
+            .await
+            .expect("create model route");
+        }
+        let state = test_state(db, database_path.clone());
+
+        let chat = openai_models(&state, Some("openai-chat"))
+            .await
+            .expect("list chat models");
+        let responses = openai_models(&state, Some("openai-responses"))
+            .await
+            .expect("list Responses models");
+        let all = openai_models(&state, None).await.expect("list all models");
+
+        assert_eq!(
+            chat.iter()
+                .map(|model| model.id.as_str())
+                .collect::<Vec<_>>(),
+            ["chat-model"]
+        );
+        assert_eq!(
+            responses
+                .iter()
+                .map(|model| model.id.as_str())
+                .collect::<Vec<_>>(),
+            ["responses-model"]
+        );
+        assert_eq!(
+            all.iter()
+                .map(|model| model.id.as_str())
+                .collect::<Vec<_>>(),
+            ["chat-model", "responses-model"]
+        );
+        assert!(matches!(
+            openai_models(&state, Some("unsupported"))
+                .await
+                .expect_err("unsupported filter must fail"),
+            AppError::BadRequest(_)
+        ));
+
+        remove_test_database(&database_path);
     }
 
     #[tokio::test]

@@ -168,6 +168,9 @@ describe("DeepSeek Harness settings snippet", () => {
     expect(snippets.dsh).toMatch(/^# Set TOKEN_TOXICATION_API_KEY/);
     expect(snippets.dsh).not.toContain("export TOKEN_TOXICATION_API_KEY");
     expect(snippets.dsh).not.toContain("tokentoxication-test");
+    expect(snippets.dsh).toContain(
+      "Model discovery endpoints: http://relay.example:3000/openai/v1/models",
+    );
     expect(snippets.dsh).toContain("\nllm-pi-ai:\n");
   });
 
@@ -293,14 +296,49 @@ describe("harness service-tier model aliases", () => {
       piModels: [],
       dshModels: [],
     });
-    const config = JSON.parse(snippets.opencode.split("<<'JSON'\n")[1].split("\nJSON")[0]);
-    const models = config.provider["token-toxication"].models;
+    expect(snippets.opencode).toContain('"id":"gpt-chat-fast"');
+    expect(snippets.opencode).toContain('"id":"gpt-chat-ultrafast"');
+    expect(snippets.opencode).toContain('"id":"gpt-responses-fast"');
+    expect(snippets.opencode).toContain('"id":"gpt-responses-ultrafast"');
+  });
+});
 
-    expect(models).toHaveProperty("gpt-chat-fast");
-    expect(models).toHaveProperty("gpt-chat-ultrafast");
-    expect(models).toHaveProperty("gpt-responses-fast");
-    expect(models).toHaveProperty("gpt-responses-ultrafast");
-    expect(models["gpt-chat-fast"].provider).toEqual(models["gpt-chat"].provider);
+describe("dynamic model catalog setup", () => {
+  it("installs an OpenCode discovery plugin without embedding the relay key", () => {
+    const snippets = buildClientSetupSnippets({
+      apiKey: "tokentoxication-test",
+      serviceOrigin: "https://relay.example",
+      opencodeModels: [{ id: "gpt-6-astra", displayName: "Astra", wireApi: "openai-responses" }],
+      piModels: [],
+      dshModels: [],
+    });
+
+    expect(snippets.opencode).toContain(".opencode/plugins/token-toxication-models.ts");
+    expect(snippets.opencode).toContain("wire_api=openai-chat");
+    expect(snippets.opencode).toContain("wire_api=openai-responses");
+    expect(snippets.opencode).toContain("process.env.TOKEN_TOXICATION_API_KEY");
+    const plugin = snippets.opencode.split(
+      "cat > .opencode/plugins/token-toxication-models.ts <<'TS'\n",
+    )[1];
+    expect(plugin?.split("\nTS")[0]).not.toContain("tokentoxication-test");
+  });
+
+  it("installs a Pi discovery extension without embedding the relay key", () => {
+    const snippets = buildClientSetupSnippets({
+      apiKey: "tokentoxication-test",
+      serviceOrigin: "https://relay.example",
+      opencodeModels: [],
+      piModels: [{ id: "gpt-6-astra", displayName: "Astra" }],
+      dshModels: [],
+    });
+
+    expect(snippets.pi).toContain("~/.pi/agent/extensions/token-toxication-models.mjs");
+    expect(snippets.pi).toContain("wire_api=openai-responses");
+    expect(snippets.pi).toContain('pi.on("session_shutdown"');
+    const extension = snippets.pi.split(
+      "cat > ~/.pi/agent/extensions/token-toxication-models.mjs <<'JS'\n",
+    )[1];
+    expect(extension?.split("\nJS")[0]).not.toContain("tokentoxication-test");
   });
 });
 
@@ -315,8 +353,8 @@ describe("client model selection", () => {
     });
     expect(snippets.claudeCode).toContain("CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1");
     expect(snippets.claudeCode).not.toContain("ANTHROPIC_MODEL=");
+    expect(snippets.opencode).toContain('"id":"gpt-6-astra"');
     const json = JSON.parse(snippets.opencode.split("<<'JSON'\n")[1].split("\nJSON")[0]);
-    expect(json.provider["token-toxication"].models).toHaveProperty("gpt-6-astra");
     expect(json).not.toHaveProperty("model");
     expect(json).not.toHaveProperty("small_model");
     expect(snippets.dsh).toContain("token-toxication-responses:");

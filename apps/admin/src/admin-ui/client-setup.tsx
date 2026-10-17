@@ -65,6 +65,233 @@ function withSpeedTierAliases<T extends ClientModelOption>(models: T[]): T[] {
   });
 }
 
+function opencodeCatalogPluginSource(openaiBaseUrl: string, fallbackModels: OpencodeModelOption[]) {
+  const chatUrl = `${openaiBaseUrl}/models?wire_api=openai-chat`;
+  const responsesUrl = `${openaiBaseUrl}/models?wire_api=openai-responses`;
+  const fallbackEntries = JSON.stringify(
+    withSpeedTierAliases(fallbackModels).map((model) => ({
+      id: model.id,
+      name: model.displayName || model.id,
+      wireApi: model.wireApi,
+    })),
+  );
+  return `import { Plugin } from "@opencode/plugin";
+
+const PROVIDER_ID = "token-toxication";
+const OPENAI_BASE_URL = ${JSON.stringify(openaiBaseUrl)};
+const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
+const FALLBACK_ENTRIES = ${fallbackEntries};
+const endpoints = [
+  { wireApi: "openai-chat", url: ${JSON.stringify(chatUrl)} },
+  { wireApi: "openai-responses", url: ${JSON.stringify(responsesUrl)} },
+];
+
+function withSpeedTierAliases(entries) {
+  return entries.flatMap((entry) => {
+    if (!entry.id.startsWith("gpt-") || entry.id.endsWith("-fast") || entry.id.endsWith("-ultrafast")) {
+      return [entry];
+    }
+    return [
+      entry,
+      { ...entry, id: entry.id + "-fast", name: entry.name + " (Fast)" },
+      { ...entry, id: entry.id + "-ultrafast", name: entry.name + " (Ultrafast)" },
+    ];
+  });
+}
+
+async function fetchCatalog() {
+  const key = process.env.TOKEN_TOXICATION_API_KEY;
+  if (!key) return undefined;
+  const responses = await Promise.all(
+    endpoints.map(async ({ wireApi, url }) => {
+      const response = await fetch(url, {
+        signal: AbortSignal.timeout(4_000),
+        headers: { accept: "application/json", authorization: "Bearer " + key },
+      });
+      if (!response.ok) throw new Error("Token Toxication model catalog failed: " + response.status);
+      const body = await response.json();
+      return (Array.isArray(body.data) ? body.data : [])
+        .filter((entry) => typeof entry?.id === "string" && entry.id.length > 0)
+        .map((entry) => ({ id: entry.id, name: entry.id, wireApi }));
+    }),
+  );
+  const byId = new Map();
+  for (const entry of responses.flat()) {
+    const previous = byId.get(entry.id);
+    if (!previous || entry.wireApi === "openai-responses") byId.set(entry.id, entry);
+  }
+  return withSpeedTierAliases([...byId.values()]);
+}
+
+function modelDefinition(entry, template) {
+  const packageName =
+    entry.wireApi === "openai-responses"
+      ? "aisdk:@ai-sdk/openai"
+      : "aisdk:@ai-sdk/openai-compatible";
+  const base =
+    template ||
+    {
+      id: entry.id,
+      modelID: entry.id,
+      providerID: PROVIDER_ID,
+      name: entry.name,
+      package: packageName,
+      capabilities: { tools: true, input: ["text", "image"], output: ["text"] },
+      variants: [],
+      time: { released: 0 },
+      cost: [],
+      status: "active",
+      enabled: true,
+      limit: { context: 200000, output: 32000 },
+    };
+  return {
+    ...structuredClone(base),
+    id: entry.id,
+    modelID: entry.id,
+    providerID: PROVIDER_ID,
+    name: entry.name,
+    package: packageName,
+    settings: { ...(base.settings || {}), baseURL: OPENAI_BASE_URL },
+  };
+}
+
+function modelDefinitions(entries, provider) {
+  const templates = provider ? [...provider.models.values()] : [];
+  return entries.map((entry) => {
+    const template = templates.find((model) => {
+      const packageName = String(model.package || "");
+      const isCompatible = packageName.includes("openai-compatible");
+      return entry.wireApi === "openai-chat" ? isCompatible : !isCompatible && packageName.includes("openai");
+    });
+    return modelDefinition(entry, template);
+  });
+}
+
+export default Plugin.define({
+  id: "token-toxication-model-catalog",
+  setup: async (ctx) => {
+    let discovered = FALLBACK_ENTRIES;
+    try {
+      const next = await fetchCatalog();
+      if (next !== undefined) discovered = next;
+    } catch {
+      // The generated fallback entries remain available.
+    }
+
+    await ctx.provider.transform((editor) => {
+      const provider = editor.get(PROVIDER_ID);
+      if (provider) {
+        editor.models.set(PROVIDER_ID, modelDefinitions(discovered, provider));
+      } else {
+        editor.add({
+          info: {
+            id: PROVIDER_ID,
+            name: "Token Toxication",
+            activation: "enabled",
+            package: "aisdk:@ai-sdk/openai-compatible",
+            settings: { baseURL: OPENAI_BASE_URL },
+          },
+          models: modelDefinitions(discovered, undefined),
+        });
+      }
+    });
+
+    const refresh = async () => {
+      try {
+        const next = await fetchCatalog();
+        if (next === undefined) return;
+        discovered = next;
+        await ctx.provider.reload();
+      } catch {
+        // Keep the last successful catalog or generated fallback.
+      }
+    };
+    if (discovered.length === 0) await refresh();
+    const timer = setInterval(() => void refresh(), REFRESH_INTERVAL_MS);
+    return () => clearInterval(timer);
+  },
+});
+`;
+}
+
+function piCatalogExtensionSource(openaiBaseUrl: string) {
+  const endpoint = `${openaiBaseUrl}/models?wire_api=openai-responses`;
+  return `const PROVIDER_ID = "token-toxication";
+const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
+const CATALOG_URL = ${JSON.stringify(endpoint)};
+const API_KEY = "$TOKEN_TOXICATION_API_KEY";
+
+function withSpeedTierAliases(entries) {
+  return entries.flatMap((entry) => {
+    if (!entry.id.startsWith("gpt-") || entry.id.endsWith("-fast") || entry.id.endsWith("-ultrafast")) {
+      return [entry];
+    }
+    return [
+      entry,
+      { ...entry, id: entry.id + "-fast", name: entry.name + " (Fast)" },
+      { ...entry, id: entry.id + "-ultrafast", name: entry.name + " (Ultrafast)" },
+    ];
+  });
+}
+
+async function fetchCatalog(signal) {
+  const key = process.env.TOKEN_TOXICATION_API_KEY;
+  if (!key) return undefined;
+  const timeout = AbortSignal.timeout(4_000);
+  const requestSignal = signal ? AbortSignal.any([signal, timeout]) : timeout;
+  const response = await fetch(CATALOG_URL, {
+    signal: requestSignal,
+    headers: { accept: "application/json", authorization: "Bearer " + key },
+  });
+  if (!response.ok) throw new Error("Token Toxication model catalog failed: " + response.status);
+  const body = await response.json();
+  const entries = (Array.isArray(body.data) ? body.data : [])
+    .filter((entry) => typeof entry?.id === "string" && entry.id.length > 0)
+    .map((entry) => ({
+      id: entry.id,
+      name: entry.id,
+      reasoning: true,
+      input: ["text"],
+      contextWindow: 200000,
+      maxTokens: 32768,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    }));
+  return withSpeedTierAliases(entries);
+}
+
+function providerConfig(models) {
+  return {
+    name: "Token Toxication",
+    baseUrl: ${JSON.stringify(openaiBaseUrl)},
+    api: "openai-responses",
+    apiKey: API_KEY,
+    ...(models !== undefined ? { models } : {}),
+    refreshModels: async ({ signal }) => (await fetchCatalog(signal)) ?? [],
+  };
+}
+
+export default async function tokenToxicationModels(pi) {
+  let models;
+  try {
+    models = await fetchCatalog();
+  } catch {
+    // models.json remains the offline fallback until the next refresh.
+  }
+  pi.registerProvider(PROVIDER_ID, providerConfig(models));
+  const timer = setInterval(async () => {
+    try {
+      const next = await fetchCatalog();
+      if (next !== undefined) pi.registerProvider(PROVIDER_ID, providerConfig(next));
+    } catch {
+      // Keep the last successful catalog.
+    }
+  }, REFRESH_INTERVAL_MS);
+  timer.unref?.();
+  pi.on("session_shutdown", () => clearInterval(timer));
+}
+`;
+}
+
 export function dshModelEntryYaml(model: DshModelOption, protocol: DshProtocol) {
   const entryIndent = "          ";
   const lines = [`- id: ${JSON.stringify(model.id)}`];
@@ -324,7 +551,7 @@ export function ClientSetupView({
             {opencodeModels.length > 0 ? (
               <ClientSnippetCard
                 title={t`opencode project config`}
-                description={t`Binds each model to the AI SDK matching its configured OpenAI route.`}
+                description={t`Installs a project plugin that refreshes the relay model catalog, with the generated list as a fallback.`}
                 endpoint="/openai/v1"
                 model={t`Chosen in opencode`}
                 snippet={snippets.opencode}
@@ -340,7 +567,7 @@ export function ClientSetupView({
             {piModels.length > 0 ? (
               <ClientSnippetCard
                 title={t`Pi custom provider`}
-                description={t`Writes a complete Pi models.json file using the OpenAI Responses API. Back up any existing Pi configuration first.`}
+                description={t`Writes a fallback models.json file and a provider extension that refreshes the relay catalog. Back up existing Pi configuration first.`}
                 endpoint="/openai/v1/responses"
                 model={plural(piModels.length, {
                   one: "# routed model",
@@ -433,6 +660,8 @@ export function buildClientSetupSnippets({
   const openaiBaseUrl = `${origin}/openai/v1`;
   const anthropicBaseUrl = `${origin}/anthropic`;
   const opencodeProvider = "token-toxication";
+  const opencodeCatalogPlugin = opencodeCatalogPluginSource(openaiBaseUrl, opencodeModels);
+  const piCatalogExtension = piCatalogExtensionSource(openaiBaseUrl);
   const opencodeConfig = JSON.stringify(
     {
       $schema: "https://opencode.ai/config.json",
@@ -443,20 +672,6 @@ export function buildClientSetupSnippets({
             baseURL: openaiBaseUrl,
             apiKey: "{env:TOKEN_TOXICATION_API_KEY}",
           },
-          models: Object.fromEntries(
-            withSpeedTierAliases(opencodeModels).map((model) => [
-              model.id,
-              {
-                name: model.displayName,
-                provider: {
-                  npm:
-                    model.wireApi === "openai-responses"
-                      ? "@ai-sdk/openai"
-                      : "@ai-sdk/openai-compatible",
-                },
-              },
-            ]),
-          ),
         },
       },
     },
@@ -496,6 +711,7 @@ export function buildClientSetupSnippets({
     .filter((section) => section !== "");
   const dshSnippet = [
     "# Set TOKEN_TOXICATION_API_KEY in the DeepSeek Harness process environment.",
+    `# Model discovery endpoints: ${openaiBaseUrl}/models and ${anthropicBaseUrl}/v1/models`,
     "# Merge the sections below into ~/.dsh/settings.yaml, then reload the",
     "# harness page. Keep your existing keys (ui-theme, permission, ...).",
     "",
@@ -538,6 +754,10 @@ export function buildClientSetupSnippets({
     ].join("\n"),
     opencode: [
       `export TOKEN_TOXICATION_API_KEY=${shellQuote(relayApiKey)}`,
+      "mkdir -p .opencode/plugins",
+      "cat > .opencode/plugins/token-toxication-models.ts <<'TS'",
+      opencodeCatalogPlugin,
+      "TS",
       "cat > opencode.json <<'JSON'",
       opencodeConfig,
       "JSON",
@@ -547,9 +767,13 @@ export function buildClientSetupSnippets({
     pi: [
       `export TOKEN_TOXICATION_API_KEY=${shellQuote(relayApiKey)}`,
       "mkdir -p ~/.pi/agent",
+      "mkdir -p ~/.pi/agent/extensions",
       "cat > ~/.pi/agent/models.json <<'JSON'",
       piModelsConfig,
       "JSON",
+      "cat > ~/.pi/agent/extensions/token-toxication-models.mjs <<'JS'",
+      piCatalogExtension,
+      "JS",
       "pi",
     ].join("\n"),
     dsh: dshSnippet,

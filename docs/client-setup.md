@@ -10,11 +10,13 @@ The admin **Client Setup** page generates copy-ready configuration from enabled,
 | --- | --- | --- |
 | Codex | OpenAI Responses | Provider base URL and API-key environment reference; Codex owns model selection |
 | Claude Code | Anthropic Messages | Anthropic-compatible relay settings and native model discovery |
-| opencode | OpenAI Chat or Responses | The matching AI SDK and routed GPT models, including `-fast`/`-ultrafast` aliases |
-| Pi | OpenAI Responses | A complete `~/.pi/agent/models.json` file |
+| opencode | OpenAI Chat or Responses | Static fallback plus a project plugin that refreshes `/openai/v1/models` every five minutes |
+| Pi | OpenAI Responses | Static fallback plus a provider extension that refreshes `/openai/v1/models` every five minutes |
 | DeepSeek Harness | Chat, Responses, and Anthropic Messages | `llm-pi-ai` routes for `$DSH_HOME/settings.yaml`, without changing the agent default |
 
-Pi setup replaces its complete models file. Back up an existing `~/.pi/agent/models.json` before applying the generated content.
+Pi setup replaces its complete models file and writes a trusted provider extension
+under `~/.pi/agent/extensions/`. Back up an existing `~/.pi/agent/models.json`
+before applying the generated content and review the extension before enabling it.
 
 Client Setup does not choose a model for Codex, Claude Code, opencode, or
 DeepSeek Harness. Select a routable model in the client after adding its
@@ -156,12 +158,42 @@ TT routes the suffixed ids to `gpt-6.1-sol` and sends the native
 `service_tier` value (`priority` for `-fast`, `ultrafast` for `-ultrafast`).
 This keeps the configuration usable by clients that only select models by id.
 
+## opencode
+
+The generated `opencode.json` configures the relay endpoint and writes
+`.opencode/plugins/token-toxication-models.ts`. The plugin embeds the current
+model map as a fallback, uses the relay key from `TOKEN_TOXICATION_API_KEY`,
+fetches the Chat and Responses model lists, preserves the
+`-fast`/`-ultrafast` aliases, and refreshes every five minutes. If a refresh
+fails, the last successful list (or the generated fallback on first launch)
+remains available.
+
+The plugin is loaded through opencode's automatic `.opencode/plugins/` discovery.
+This setup targets the inspected opencode reference at commit
+`8ffbcc2c81d1ff558618137204c36954797d7a6f` (`vscode-v1.0.0-5-g8ffbcc2c81`).
+
+## Pi
+
+The generated `~/.pi/agent/models.json` remains an offline fallback. The setup
+also writes `~/.pi/agent/extensions/token-toxication-models.mjs`; Pi loads it at
+startup, fetches the Responses model list, refreshes it every five minutes, and
+keeps the last successful list during transient failures. This setup targets the
+inspected Pi reference at commit `f1b2e77f5b13b2a199b1052cb79c235451afe7d7`
+(`v1.1.0-11-gf1b2e77f5`).
+
 ## DeepSeek Harness
 
 The generated fragment adds one provider route for each eligible protocol.
 Merge it into the existing `$DSH_HOME/settings.yaml` rather than replacing
 unrelated settings. It does not write `agent-default-model`; the harness
 retains its existing selection until changed in the client.
+
+The inspected DSH reference at commit `d743267388641bc76f17c45ce8b4c231aed1d32c`
+(`dsh-v0.2.1-alpha.2`) supports model discovery through **Fetch available
+models** in Settings → Models, but its persistent provider schema has no
+startup `modelCatalogUrl` or polling field. The generated relay URL is therefore
+usable for that action, while the YAML model list remains static until DSH adds
+an automatic catalog-refresh hook.
 
 Model capabilities are generated conservatively:
 
