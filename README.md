@@ -55,7 +55,8 @@ Open [http://localhost:3000](http://localhost:3000) and sign in as `admin` with 
 
 ### Configure the first model
 
-Use the admin interface to create these records in order:
+For manually configured providers, use the admin interface to create these
+records in order:
 
 1. A **provider account** containing the upstream URL, protocol, and credential.
 2. A **catalog model** containing the public model ID clients will request.
@@ -63,6 +64,11 @@ Use the admin interface to create these records in order:
 4. A **relay API key** for client authentication.
 
 The model becomes routable after the catalog entry, route, and provider account are enabled and eligible. Codex's model picker may list a model without a relay route; create the route before selecting it.
+
+Codex subscription accounts are the exception: their upstream model catalog is
+reconciled automatically. New upstream models become managed catalog entries and
+routes; models absent from every successful account refresh are disabled. A
+temporary upstream failure preserves the last known catalog.
 
 Open **Client Setup** to generate configuration for a supported client. See the [client setup guide](docs/client-setup.md) for route selection, credentials, reasoning levels, and image input support.
 

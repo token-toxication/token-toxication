@@ -62,6 +62,12 @@ The two modes have separate credential envelopes and refresh behavior. Device OA
 
 Subscription requests are sent to `{base_url}/codex/responses`, while quota data comes from `{base_url}/wham/usage`. Legacy base URLs ending in `/codex` or `/codex/responses` are normalized automatically.
 
+The upstream `/codex/models` catalog is reconciled automatically for every
+active Codex subscription account. Models are exposed as managed catalog entries
+and supported API models receive managed Responses routes. A model remains
+available while any account still advertises it; a successful refresh removes
+only that account's stale route. Refresh failures do not remove existing models.
+
 Codex subscription routes remove `max_output_tokens` to match the Codex CLI request shape. OpenAI API-key routes continue forwarding that field.
 
 Configure Codex clients with base URL `http://localhost:3000/openai/v1`, the Responses API, and a generated relay key.

@@ -17,6 +17,7 @@ function catalogEntry(
     enabled,
     family,
     id,
+    managed: false,
   };
 }
 

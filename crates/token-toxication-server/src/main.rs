@@ -98,10 +98,14 @@ async fn run_server(config: Config) -> Result<(), MainError> {
         state.codex_device_oauth.clone(),
         shutdown.clone(),
     );
+    let managed_catalog_monitor =
+        token_toxication_server::routes::spawn_managed_catalog_monitor(state.clone());
     let app = app(state, config.static_dir.clone());
     let result = server::serve(config, https_config, app, shutdown.clone()).await;
     quota_monitor.abort();
     let _ = quota_monitor.await;
+    managed_catalog_monitor.abort();
+    let _ = managed_catalog_monitor.await;
     result?;
     Ok(())
 }

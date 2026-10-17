@@ -493,7 +493,19 @@ pub struct ModelCatalogEntry {
     pub display_name: String,
     pub family: String,
     pub enabled: bool,
+    /// Whether the relay owns this entry through a provider catalog sync.
+    pub managed: bool,
     pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ManagedCatalogModel {
+    pub id: String,
+    pub display_name: String,
+    pub family: String,
+    pub upstream_model_id: String,
+    pub wire_api: String,
+    pub supported_in_api: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -551,6 +563,7 @@ pub struct ProviderModelRoute {
     pub wire_api: String,
     pub role: String,
     pub enabled: bool,
+    pub managed: bool,
     pub weight: u32,
     pub status: String,
     pub last_error: Option<String>,

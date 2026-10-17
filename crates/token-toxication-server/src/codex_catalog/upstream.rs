@@ -26,6 +26,8 @@
 
 use serde_json::{Value, json};
 
+use crate::models::ManagedCatalogModel;
+
 /// Largest body TT serves to a client.
 ///
 /// The Codex client rejects an explicitly configured catalog above 1 MiB before
@@ -117,6 +119,37 @@ fn slug_of(model: &Value) -> Option<&str> {
         .and_then(Value::as_str)
         .map(str::trim)
         .filter(|slug| !slug.is_empty())
+}
+
+/// Convert upstream entries into generic managed catalog observations.
+///
+/// The Codex catalog is authoritative for model names and display metadata.
+/// Entries that are not supported in the API are still retained as catalog
+/// models, but the database synchronizer will not create relay routes for them.
+pub fn managed_models(models: &[Value]) -> Vec<ManagedCatalogModel> {
+    models
+        .iter()
+        .filter_map(|model| {
+            let id = slug_of(model)?.to_string();
+            let display_name = model
+                .get("display_name")
+                .and_then(Value::as_str)
+                .filter(|value| !value.trim().is_empty())
+                .unwrap_or(&id)
+                .to_string();
+            Some(ManagedCatalogModel {
+                id: id.clone(),
+                display_name,
+                family: "openai".to_string(),
+                upstream_model_id: id,
+                wire_api: "openai-responses".to_string(),
+                supported_in_api: model
+                    .get("supported_in_api")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false),
+            })
+        })
+        .collect()
 }
 
 /// Serve the upstream catalog with only the entries a client could not accept

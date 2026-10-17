@@ -76,6 +76,7 @@ const MAX_OVERLOAD_RETRIES: u8 = relay_retry::MAX_RETRIES;
 const FAILOVER_START_BUDGET: Duration = Duration::from_secs(30);
 const STREAM_FAILOVER_BUFFER_BYTES: usize = 64 * 1024;
 const STREAM_FAILOVER_WAIT: Duration = Duration::from_secs(1);
+const CODEX_MANAGED_SOURCE_KIND: &str = "provider_catalog";
 
 pub fn admin_routes(state: AppState) -> Router<AppState> {
     let protected = Router::new()
@@ -309,7 +310,22 @@ pub async fn list_codex_models(
             );
             Ok(json_body(cached.body))
         }
-        Ok(Refreshed::Rendered { rendered, etag }) => {
+        Ok(Refreshed::Rendered {
+            rendered,
+            etag,
+            models,
+        }) => {
+            if let Err(error) = state
+                .db
+                .reconcile_managed_catalog(&account_id, CODEX_MANAGED_SOURCE_KIND, &models)
+                .await
+            {
+                tracing::warn!(
+                    account_id,
+                    reason = %error,
+                    "failed to reconcile managed Codex catalog"
+                );
+            }
             log_served_catalog(&account_id, &client_version, started, &rendered);
             let body = bytes::Bytes::from(rendered.body);
             state
@@ -351,6 +367,7 @@ enum Refreshed {
     Rendered {
         rendered: codex_catalog_upstream::RenderedCatalog,
         etag: Option<String>,
+        models: Vec<crate::models::ManagedCatalogModel>,
     },
 }
 
@@ -383,7 +400,106 @@ async fn fetch_and_render_catalog(
             Ok(Refreshed::Rendered {
                 rendered: codex_catalog_upstream::render_catalog(models),
                 etag,
+                models: codex_catalog_upstream::managed_models(models),
             })
+        }
+    }
+}
+
+/// Refresh managed model sources for every active Codex subscription account.
+///
+/// This runs independently of a client's catalog request so a newly added
+/// account or model becomes routable even before a client refreshes its catalog.
+pub fn spawn_managed_catalog_monitor(state: AppState) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        let mut interval = time::interval(codex_catalog_cache::CATALOG_CACHE_TTL);
+        let mut shutdown = state.shutdown.subscribe();
+        loop {
+            tokio::select! {
+                _ = interval.tick() => sync_managed_codex_catalogs(&state).await,
+                changed = shutdown.changed() => {
+                    if changed.is_err() || *shutdown.borrow() {
+                        break;
+                    }
+                }
+            }
+        }
+    })
+}
+
+async fn sync_managed_codex_catalogs(state: &AppState) {
+    let accounts = match state.db.list_provider_accounts().await {
+        Ok(accounts) => accounts,
+        Err(error) => {
+            tracing::warn!(reason = %error, "failed to list accounts for managed catalog sync");
+            return;
+        }
+    };
+    let client_version = codex_catalog_remote::FALLBACK_CLIENT_VERSION.to_string();
+    for account in accounts.iter().filter(|account| {
+        is_codex_subscription_auth(&account.auth_mode)
+            && !(account.is_active && account.status != "blocked")
+    }) {
+        if let Err(error) = state
+            .db
+            .reconcile_managed_catalog(&account.id, CODEX_MANAGED_SOURCE_KIND, &[])
+            .await
+        {
+            tracing::warn!(
+                account_id = %account.id,
+                reason = %error,
+                "failed to clear inactive managed catalog source"
+            );
+        }
+    }
+    for account in accounts.into_iter().filter(|account| {
+        account.is_active
+            && account.status != "blocked"
+            && is_codex_subscription_auth(&account.auth_mode)
+    }) {
+        let Some(account) = (match state.db.get_provider_account_record(&account.id).await {
+            Ok(account) => account,
+            Err(error) => {
+                tracing::warn!(account_id = %account.id, reason = %error, "failed to load account for managed catalog sync");
+                continue;
+            }
+        }) else {
+            continue;
+        };
+        let cache_key = codex_catalog_cache::cache_key(&account.account.id, &client_version);
+        match fetch_and_render_catalog(state, &account, &client_version, &cache_key).await {
+            Ok(Refreshed::Rendered {
+                rendered,
+                etag,
+                models,
+            }) => {
+                state.codex_catalog_cache.store(
+                    &cache_key,
+                    bytes::Bytes::from(rendered.body),
+                    etag,
+                );
+                if let Err(error) = state
+                    .db
+                    .reconcile_managed_catalog(
+                        &account.account.id,
+                        CODEX_MANAGED_SOURCE_KIND,
+                        &models,
+                    )
+                    .await
+                {
+                    tracing::warn!(
+                        account_id = %account.account.id,
+                        reason = %error,
+                        "failed to reconcile managed Codex catalog"
+                    );
+                }
+            }
+            Ok(Refreshed::Unchanged) => {}
+            Err(error) => tracing::warn!(
+                account_id = %account.account.id,
+                reason = %error,
+                "managed Codex catalog refresh failed"
+            ),
         }
     }
 }

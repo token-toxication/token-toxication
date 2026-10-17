@@ -1,4 +1,4 @@
-use std::{path::Path, sync::Arc};
+use std::{collections::HashSet, path::Path, sync::Arc};
 
 use chrono::{DateTime, Duration, NaiveDate, Utc};
 use rusqlite::{Connection, OptionalExtension, params};
@@ -11,9 +11,9 @@ use crate::{
     models::{
         ApiKeyRecord, ApiKeyView, CreateApiKeyRequest, CreateModelCatalogEntryRequest,
         CreateProviderAccountRequest, CreateProviderModelRouteRequest, Dashboard,
-        ModelCatalogEntry, ProviderAccount, ProviderAccountRecord, ProviderModelRoute, RequestLog,
-        RequestSummary, RequestTrend, RequestTrendBucket, UpdateApiKeyRequest,
-        UpdateModelCatalogEntryRequest, UpdateProviderAccountRequest,
+        ManagedCatalogModel, ModelCatalogEntry, ProviderAccount, ProviderAccountRecord,
+        ProviderModelRoute, RequestLog, RequestSummary, RequestTrend, RequestTrendBucket,
+        UpdateApiKeyRequest, UpdateModelCatalogEntryRequest, UpdateProviderAccountRequest,
         UpdateProviderModelRouteRequest, UsageSummary,
     },
     provider_catalog::{default_wire_api_for_provider, normalize_provider_alias},
@@ -123,6 +123,7 @@ impl Db {
                 display_name TEXT NOT NULL,
                 family TEXT NOT NULL DEFAULT 'other',
                 enabled INTEGER NOT NULL DEFAULT 1,
+                managed INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL
             );
 
@@ -134,6 +135,7 @@ impl Db {
                 wire_api TEXT NOT NULL,
                 role TEXT NOT NULL DEFAULT 'primary',
                 enabled INTEGER NOT NULL DEFAULT 1,
+                managed INTEGER NOT NULL DEFAULT 0,
                 weight INTEGER NOT NULL DEFAULT 100,
                 status TEXT NOT NULL DEFAULT 'healthy',
                 last_error TEXT,
@@ -143,6 +145,21 @@ impl Db {
                 strip_params TEXT NOT NULL DEFAULT '[]',
                 created_at TEXT NOT NULL,
                 FOREIGN KEY(public_model_id) REFERENCES model_catalog(id) ON DELETE CASCADE,
+                FOREIGN KEY(provider_account_id) REFERENCES provider_accounts(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS managed_model_sources (
+                model_id TEXT NOT NULL,
+                provider_account_id TEXT NOT NULL,
+                source_kind TEXT NOT NULL,
+                upstream_model_id TEXT NOT NULL,
+                display_name TEXT NOT NULL,
+                family TEXT NOT NULL,
+                wire_api TEXT NOT NULL,
+                supported_in_api INTEGER NOT NULL DEFAULT 0,
+                last_seen_at TEXT NOT NULL,
+                PRIMARY KEY(model_id, provider_account_id, source_kind),
+                FOREIGN KEY(model_id) REFERENCES model_catalog(id) ON DELETE CASCADE,
                 FOREIGN KEY(provider_account_id) REFERENCES provider_accounts(id) ON DELETE CASCADE
             );
 
@@ -265,6 +282,18 @@ impl Db {
             "strip_params",
             "TEXT NOT NULL DEFAULT '[]'",
         )?;
+        ensure_column(
+            &conn,
+            "provider_model_routes",
+            "managed",
+            "INTEGER NOT NULL DEFAULT 0",
+        )?;
+        ensure_column(
+            &conn,
+            "model_catalog",
+            "managed",
+            "INTEGER NOT NULL DEFAULT 0",
+        )?;
         let migrated_codex_accounts = migrate_legacy_codex_accounts(&mut conn)?;
         if migrated_codex_accounts > 0 {
             tracing::info!(
@@ -272,6 +301,7 @@ impl Db {
                 "migrated legacy Codex account modes and base URLs"
             );
         }
+        migrate_legacy_managed_models(&conn)?;
         conn.execute_batch(
             r#"
             CREATE INDEX IF NOT EXISTS idx_provider_accounts_wire_api
@@ -286,6 +316,8 @@ impl Db {
                 ON provider_limits(provider_account_id, scope_kind, scope_key);
             CREATE INDEX IF NOT EXISTS idx_provider_limits_due
                 ON provider_limits(next_check_at);
+            CREATE INDEX IF NOT EXISTS idx_managed_model_sources_account
+                ON managed_model_sources(provider_account_id, source_kind, last_seen_at);
             DROP INDEX IF EXISTS idx_provider_model_routes_primary;
             "#,
         )?;
@@ -564,12 +596,155 @@ impl Db {
     pub async fn list_model_catalog(&self) -> Result<Vec<ModelCatalogEntry>, rusqlite::Error> {
         let conn = self.conn.lock().await;
         let mut stmt = conn.prepare(
-            "SELECT id, display_name, family, enabled, created_at
+            "SELECT id, display_name, family, enabled, managed, created_at
              FROM model_catalog
              ORDER BY id ASC",
         )?;
         let rows = stmt.query_map([], model_catalog_from_row)?;
         rows.collect()
+    }
+
+    /// Reconcile one provider account's authoritative model catalog.
+    ///
+    /// Sources are tracked per account so one subscription's disappearance
+    /// cannot remove a model still offered by another account. Manual catalog
+    /// entries and routes are never overwritten by this operation.
+    pub async fn reconcile_managed_catalog(
+        &self,
+        provider_account_id: &str,
+        source_kind: &str,
+        models: &[ManagedCatalogModel],
+    ) -> Result<(), rusqlite::Error> {
+        let now = Utc::now().to_rfc3339();
+        let current_ids: HashSet<&str> = models.iter().map(|model| model.id.as_str()).collect();
+        let mut conn = self.conn.lock().await;
+        let tx = conn.transaction()?;
+
+        for model in models {
+            tx.execute(
+                "INSERT INTO model_catalog
+                    (id, display_name, family, enabled, managed, created_at)
+                 VALUES (?1, ?2, ?3, 1, 1, ?4)
+                 ON CONFLICT(id) DO UPDATE SET
+                    display_name = excluded.display_name,
+                    family = excluded.family,
+                    enabled = 1
+                 WHERE model_catalog.managed = 1",
+                params![&model.id, &model.display_name, &model.family, &now],
+            )?;
+            tx.execute(
+                "INSERT INTO managed_model_sources
+                    (model_id, provider_account_id, source_kind, upstream_model_id,
+                     display_name, family, wire_api, supported_in_api, last_seen_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+                 ON CONFLICT(model_id, provider_account_id, source_kind) DO UPDATE SET
+                    upstream_model_id = excluded.upstream_model_id,
+                    display_name = excluded.display_name,
+                    family = excluded.family,
+                    wire_api = excluded.wire_api,
+                    supported_in_api = excluded.supported_in_api,
+                    last_seen_at = excluded.last_seen_at",
+                params![
+                    &model.id,
+                    provider_account_id,
+                    source_kind,
+                    &model.upstream_model_id,
+                    &model.display_name,
+                    &model.family,
+                    &model.wire_api,
+                    bool_to_i64(model.supported_in_api),
+                    &now,
+                ],
+            )?;
+
+            let managed: bool = tx.query_row(
+                "SELECT managed FROM model_catalog WHERE id = ?1",
+                params![&model.id],
+                |row| Ok(row.get::<_, i64>(0)? == 1),
+            )?;
+            if !managed {
+                continue;
+            }
+            if model.supported_in_api {
+                let updated = tx.execute(
+                    "UPDATE provider_model_routes
+                     SET upstream_model_id = ?1, wire_api = ?2, enabled = 1,
+                         status = 'healthy', last_error = NULL, last_status_code = NULL,
+                         cooldown_until = NULL
+                     WHERE public_model_id = ?3
+                       AND provider_account_id = ?4
+                       AND managed = 1",
+                    params![
+                        &model.upstream_model_id,
+                        &model.wire_api,
+                        &model.id,
+                        provider_account_id,
+                    ],
+                )?;
+                if updated == 0 {
+                    tx.execute(
+                        "INSERT INTO provider_model_routes
+                            (id, public_model_id, provider_account_id, upstream_model_id,
+                             wire_api, role, enabled, managed, weight, status,
+                             strip_params, created_at)
+                         VALUES (?1, ?2, ?3, ?4, ?5, 'primary', 1, 1, 100,
+                                 'healthy', '[]', ?6)",
+                        params![
+                            Uuid::new_v4().to_string(),
+                            &model.id,
+                            provider_account_id,
+                            &model.upstream_model_id,
+                            &model.wire_api,
+                            &now,
+                        ],
+                    )?;
+                }
+            } else {
+                tx.execute(
+                    "DELETE FROM provider_model_routes
+                     WHERE public_model_id = ?1
+                       AND provider_account_id = ?2
+                       AND managed = 1",
+                    params![&model.id, provider_account_id],
+                )?;
+            }
+        }
+
+        let stale_ids: Vec<String> = {
+            let mut stmt = tx.prepare(
+                "SELECT model_id
+                 FROM managed_model_sources
+                 WHERE provider_account_id = ?1 AND source_kind = ?2",
+            )?;
+            stmt.query_map(params![provider_account_id, source_kind], |row| {
+                row.get::<_, String>(0)
+            })?
+            .filter_map(Result::ok)
+            .filter(|id| !current_ids.contains(id.as_str()))
+            .collect()
+        };
+        for model_id in stale_ids {
+            tx.execute(
+                "DELETE FROM managed_model_sources
+                 WHERE model_id = ?1 AND provider_account_id = ?2 AND source_kind = ?3",
+                params![&model_id, provider_account_id, source_kind],
+            )?;
+            tx.execute(
+                "DELETE FROM provider_model_routes
+                 WHERE public_model_id = ?1 AND provider_account_id = ?2 AND managed = 1",
+                params![&model_id, provider_account_id],
+            )?;
+        }
+        tx.execute(
+            "UPDATE model_catalog
+             SET enabled = 0
+             WHERE managed = 1
+               AND NOT EXISTS (
+                   SELECT 1 FROM managed_model_sources s WHERE s.model_id = model_catalog.id
+               )",
+            [],
+        )?;
+        tx.commit()
     }
 
     pub async fn create_model_catalog_entry(
@@ -584,17 +759,19 @@ impl Db {
             display_name,
             family: normalize_family(&input.family),
             enabled: input.enabled,
+            managed: false,
             created_at: now,
         };
         let conn = self.conn.lock().await;
         conn.execute(
-            "INSERT INTO model_catalog (id, display_name, family, enabled, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
+            "INSERT INTO model_catalog (id, display_name, family, enabled, managed, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![
                 &entry.id,
                 &entry.display_name,
                 &entry.family,
                 bool_to_i64(entry.enabled),
+                bool_to_i64(entry.managed),
                 entry.created_at.to_rfc3339(),
             ],
         )?;
@@ -621,6 +798,7 @@ impl Db {
                 .map(|value| normalize_family(&value))
                 .unwrap_or(current.family),
             enabled: input.enabled.unwrap_or(current.enabled),
+            managed: current.managed,
             created_at: current.created_at,
         };
         let conn = self.conn.lock().await;
@@ -644,7 +822,7 @@ impl Db {
     ) -> Result<Option<ModelCatalogEntry>, rusqlite::Error> {
         let conn = self.conn.lock().await;
         let mut stmt = conn.prepare(
-            "SELECT id, display_name, family, enabled, created_at
+            "SELECT id, display_name, family, enabled, managed, created_at
              FROM model_catalog
              WHERE id = ?1",
         )?;
@@ -658,7 +836,7 @@ impl Db {
         let conn = self.conn.lock().await;
         let mut stmt = conn.prepare(
             "SELECT id, public_model_id, provider_account_id, upstream_model_id, wire_api,
-                    role, enabled, weight, status, last_error, last_status_code, cooldown_until,
+                     role, enabled, managed, weight, status, last_error, last_status_code, cooldown_until,
                     last_used_at, strip_params, created_at
              FROM provider_model_routes
              ORDER BY public_model_id ASC,
@@ -682,6 +860,7 @@ impl Db {
             wire_api: normalize_wire_api(&input.wire_api, ""),
             role: normalize_route_role(&input.role),
             enabled: input.enabled,
+            managed: false,
             weight: input.weight,
             status: "healthy".to_string(),
             last_error: None,
@@ -695,8 +874,8 @@ impl Db {
         conn.execute(
             "INSERT INTO provider_model_routes
              (id, public_model_id, provider_account_id, upstream_model_id, wire_api, role,
-              enabled, weight, status, strip_params, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+              enabled, managed, weight, status, strip_params, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
             params![
                 &route.id,
                 &route.public_model_id,
@@ -705,6 +884,7 @@ impl Db {
                 &route.wire_api,
                 &route.role,
                 bool_to_i64(route.enabled),
+                bool_to_i64(route.managed),
                 route.weight,
                 &route.status,
                 serde_json::to_string(&route.strip_params).unwrap_or_else(|_| "[]".into()),
@@ -746,6 +926,7 @@ impl Db {
                 .map(|value| normalize_route_role(&value))
                 .unwrap_or(current.role),
             enabled: input.enabled.unwrap_or(current.enabled),
+            managed: current.managed,
             weight: input.weight.unwrap_or(current.weight),
             status: current.status,
             last_error: current.last_error,
@@ -786,7 +967,7 @@ impl Db {
         let conn = self.conn.lock().await;
         let mut stmt = conn.prepare(
             "SELECT id, public_model_id, provider_account_id, upstream_model_id, wire_api,
-                    role, enabled, weight, status, last_error, last_status_code, cooldown_until,
+                     role, enabled, managed, weight, status, last_error, last_status_code, cooldown_until,
                     last_used_at, strip_params, created_at
              FROM provider_model_routes
              WHERE id = ?1",
@@ -1601,14 +1782,59 @@ fn model_catalog_from_row(row: &rusqlite::Row<'_>) -> Result<ModelCatalogEntry, 
         display_name: row.get(1)?,
         family: row.get(2)?,
         enabled: row.get::<_, i64>(3)? == 1,
-        created_at: parse_time(row.get::<_, String>(4)?.as_str()),
+        managed: row.get::<_, i64>(4)? == 1,
+        created_at: parse_time(row.get::<_, String>(5)?.as_str()),
     })
+}
+
+/// Existing Codex subscription routes identify models that can be owned by the
+/// provider-catalog synchronizer. This intentionally includes public aliases
+/// and every route owned by a Codex subscription account: the route itself is
+/// the durable evidence that the model belongs to that provider catalog. Models
+/// on other provider types remain manual.
+fn migrate_legacy_managed_models(conn: &Connection) -> Result<(), rusqlite::Error> {
+    conn.execute(
+        "UPDATE model_catalog
+         SET managed = 1
+         WHERE managed = 0
+           AND EXISTS (
+               SELECT 1
+               FROM provider_model_routes r
+               JOIN provider_accounts a ON a.id = r.provider_account_id
+               WHERE r.public_model_id = model_catalog.id
+                 AND (
+                     a.auth_mode = 'codex-oauth'
+                     OR a.auth_mode = 'codex-manual-refresh'
+                     OR a.auth_mode = 'codex-device-oauth'
+                 )
+           )",
+        [],
+    )?;
+    conn.execute(
+        "UPDATE provider_model_routes
+         SET managed = 1
+         WHERE managed = 0
+           AND EXISTS (
+               SELECT 1
+               FROM model_catalog m
+               JOIN provider_accounts a ON a.id = provider_model_routes.provider_account_id
+               WHERE m.id = provider_model_routes.public_model_id
+                 AND m.managed = 1
+                 AND (
+                     a.auth_mode = 'codex-oauth'
+                     OR a.auth_mode = 'codex-manual-refresh'
+                     OR a.auth_mode = 'codex-device-oauth'
+                 )
+           )",
+        [],
+    )?;
+    Ok(())
 }
 
 fn provider_model_route_from_row(
     row: &rusqlite::Row<'_>,
 ) -> Result<ProviderModelRoute, rusqlite::Error> {
-    let strip_params: String = row.get(13)?;
+    let strip_params: String = row.get(14)?;
     Ok(ProviderModelRoute {
         id: row.get(0)?,
         public_model_id: row.get(1)?,
@@ -1617,14 +1843,15 @@ fn provider_model_route_from_row(
         wire_api: row.get(4)?,
         role: row.get(5)?,
         enabled: row.get::<_, i64>(6)? == 1,
-        weight: row.get::<_, i64>(7)? as u32,
-        status: row.get(8)?,
-        last_error: row.get(9)?,
-        last_status_code: row.get::<_, Option<i64>>(10)?.map(|value| value as u16),
-        cooldown_until: parse_time_opt(row.get::<_, Option<String>>(11)?.as_deref()),
-        last_used_at: parse_time_opt(row.get::<_, Option<String>>(12)?.as_deref()),
+        managed: row.get::<_, i64>(7)? == 1,
+        weight: row.get::<_, i64>(8)? as u32,
+        status: row.get(9)?,
+        last_error: row.get(10)?,
+        last_status_code: row.get::<_, Option<i64>>(11)?.map(|value| value as u16),
+        cooldown_until: parse_time_opt(row.get::<_, Option<String>>(12)?.as_deref()),
+        last_used_at: parse_time_opt(row.get::<_, Option<String>>(13)?.as_deref()),
         strip_params: serde_json::from_str(&strip_params).unwrap_or_default(),
-        created_at: parse_time(row.get::<_, String>(14)?.as_str()),
+        created_at: parse_time(row.get::<_, String>(15)?.as_str()),
     })
 }
 
@@ -1907,6 +2134,122 @@ fn default_display_name(value: String, fallback: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn migrates_existing_codex_routes_to_managed_catalog_entries() {
+        let conn = Connection::open_in_memory().expect("open in-memory database");
+        conn.execute_batch(
+            "
+            CREATE TABLE model_catalog (
+                id TEXT PRIMARY KEY,
+                managed INTEGER NOT NULL DEFAULT 0
+            );
+            CREATE TABLE provider_accounts (
+                id TEXT PRIMARY KEY,
+                auth_mode TEXT NOT NULL
+            );
+            CREATE TABLE provider_model_routes (
+                public_model_id TEXT NOT NULL,
+                provider_account_id TEXT NOT NULL,
+                upstream_model_id TEXT NOT NULL,
+                wire_api TEXT NOT NULL,
+                managed INTEGER NOT NULL DEFAULT 0
+            );
+            INSERT INTO model_catalog (id) VALUES ('gpt-6.1-sol');
+            INSERT INTO model_catalog (id) VALUES ('gpt-custom-alias');
+            INSERT INTO model_catalog (id) VALUES ('custom-codex-alias');
+            INSERT INTO model_catalog (id) VALUES ('deepseek-v4-pro');
+            INSERT INTO provider_accounts (id, auth_mode) VALUES ('codex', 'codex-device-oauth');
+            INSERT INTO provider_accounts (id, auth_mode) VALUES ('openai', 'bearer');
+            INSERT INTO provider_model_routes
+                (public_model_id, provider_account_id, upstream_model_id, wire_api)
+                VALUES ('gpt-6.1-sol', 'codex', 'gpt-6.1-sol', 'openai-responses');
+            INSERT INTO provider_model_routes
+                (public_model_id, provider_account_id, upstream_model_id, wire_api)
+                VALUES ('gpt-custom-alias', 'openai', 'gpt-custom-alias', 'openai-responses');
+            INSERT INTO provider_model_routes
+                (public_model_id, provider_account_id, upstream_model_id, wire_api)
+                VALUES ('custom-codex-alias', 'codex', 'gpt-6.1-sol', 'openai-responses');
+            INSERT INTO provider_model_routes
+                (public_model_id, provider_account_id, upstream_model_id, wire_api)
+                VALUES ('deepseek-v4-pro', 'openai', 'deepseek-v4-pro', 'openai-chat');
+            ",
+        )
+        .expect("seed legacy catalog");
+
+        migrate_legacy_managed_models(&conn).expect("migrate legacy managed models");
+
+        let managed: Vec<(String, i64)> = conn
+            .prepare("SELECT id, managed FROM model_catalog ORDER BY id")
+            .expect("prepare catalog query")
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+            .expect("query catalog")
+            .collect::<Result<_, _>>()
+            .expect("collect catalog");
+        assert_eq!(
+            managed,
+            vec![
+                ("custom-codex-alias".to_string(), 1),
+                ("deepseek-v4-pro".to_string(), 0),
+                ("gpt-6.1-sol".to_string(), 1),
+                ("gpt-custom-alias".to_string(), 0),
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn reconciles_managed_models_and_removes_stale_account_routes() {
+        let path =
+            std::env::temp_dir().join(format!("token-toxication-{}.sqlite3", Uuid::new_v4()));
+        let db = Db::open(&path).await.expect("open test database");
+        let account = db
+            .create_provider_account(CreateProviderAccountRequest {
+                name: "Codex".to_string(),
+                provider: "codex-subscription".to_string(),
+                base_url: "https://chatgpt.com/backend-api".to_string(),
+                auth_mode: "codex-device-oauth".to_string(),
+                wire_api: "openai-responses".to_string(),
+                api_key: "refresh-token".to_string(),
+                is_active: true,
+                max_running_requests: 0,
+            })
+            .await
+            .expect("create Codex account");
+        let model = ManagedCatalogModel {
+            id: "gpt-managed".to_string(),
+            display_name: "GPT Managed".to_string(),
+            family: "openai".to_string(),
+            upstream_model_id: "gpt-managed".to_string(),
+            wire_api: "openai-responses".to_string(),
+            supported_in_api: true,
+        };
+
+        db.reconcile_managed_catalog(&account.id, "provider_catalog", &[model])
+            .await
+            .expect("reconcile managed catalog");
+        let entry = db
+            .get_model_catalog_entry("gpt-managed")
+            .await
+            .expect("read managed model")
+            .expect("managed model exists");
+        assert!(entry.managed);
+        assert!(entry.enabled);
+        assert_eq!(db.list_provider_model_routes().await.unwrap().len(), 1);
+
+        db.reconcile_managed_catalog(&account.id, "provider_catalog", &[])
+            .await
+            .expect("remove stale managed catalog");
+        let entry = db
+            .get_model_catalog_entry("gpt-managed")
+            .await
+            .expect("read stale managed model")
+            .expect("managed model is retained for history");
+        assert!(entry.managed);
+        assert!(!entry.enabled);
+        assert!(db.list_provider_model_routes().await.unwrap().is_empty());
+
+        let _ = std::fs::remove_file(path);
+    }
 
     #[tokio::test]
     async fn usage_summary_tracks_cached_input_tokens_today() {

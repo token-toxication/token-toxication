@@ -12,6 +12,7 @@ const route: ProviderModelRoute = {
   wireApi: "openai-responses",
   role: "backup",
   enabled: false,
+  managed: false,
   weight: 25,
   status: "healthy",
   stripParams: ["temperature", "top_p"],
