@@ -75,7 +75,8 @@ the client the whole catalog:
 The served body is also kept below the client's 1 MiB cap on an explicitly
 configured catalog; if upstream ever exceeds it, entries are dropped from the
 end until it fits. The endpoint answers `503` when no Codex subscription account
-is configured.
+is configured. The JSON response is pretty-printed so the downloaded catalog is
+readable without an additional formatting step.
 
 Two upstream constraints are handled for the client. `/codex/models` **requires**
 a `client_version` query parameter, and the backend answers `400` without one, so

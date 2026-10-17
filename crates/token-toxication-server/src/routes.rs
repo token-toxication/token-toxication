@@ -683,6 +683,11 @@ async fn relay_json_endpoint(
         };
         let mut request_json = original_request_json.clone();
         request_json["model"] = Value::String(upstream_model_id);
+        crate::codex_catalog::alias::apply_service_tier_alias(
+            &mut request_json,
+            &model,
+            attempt.selection().public_model_id.as_str(),
+        );
         enable_stream_usage_if_supported(&mut request_json, wire_api, &account.account.provider);
         let stripped_params = strip_upstream_params(
             &mut request_json,
@@ -5416,18 +5421,20 @@ mod tests {
     }
 
     #[test]
-    fn codex_subscription_responses_preserve_service_tier() {
-        let mut body = json!({
-            "model": "gpt-6.1-sol",
-            "service_tier": "priority",
-            "input": "hello"
-        });
+    fn codex_subscription_responses_preserve_service_tiers() {
+        for tier in ["priority", "ultrafast"] {
+            let mut body = json!({
+                "model": "gpt-6.1-sol",
+                "service_tier": tier,
+                "input": "hello"
+            });
 
-        let stripped =
-            strip_upstream_params(&mut body, &[], WireApi::OpenAiResponses, "codex-oauth");
+            let stripped =
+                strip_upstream_params(&mut body, &[], WireApi::OpenAiResponses, "codex-oauth");
 
-        assert_eq!(body["service_tier"], "priority");
-        assert!(stripped.is_empty());
+            assert_eq!(body["service_tier"], tier);
+            assert!(stripped.is_empty());
+        }
     }
 
     #[test]

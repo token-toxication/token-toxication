@@ -280,6 +280,29 @@ describe("Codex provider configuration snippet", () => {
   });
 });
 
+describe("harness service-tier model aliases", () => {
+  it("generates Fast and Ultrafast model ids for GPT routes", () => {
+    const snippets = buildClientSetupSnippets({
+      apiKey: "tokentoxication-test",
+      serviceOrigin: "http://relay.example:3000",
+      opencodeModels: [
+        { id: "gpt-chat", displayName: "GPT Chat", wireApi: "openai-chat" },
+        { id: "gpt-responses", displayName: "GPT Responses", wireApi: "openai-responses" },
+      ],
+      piModels: [],
+      dshModels: [],
+    });
+    const config = JSON.parse(snippets.opencode.split("<<'JSON'\n")[1].split("\nJSON")[0]);
+    const models = config.provider["token-toxication"].models;
+
+    expect(models).toHaveProperty("gpt-chat-fast");
+    expect(models).toHaveProperty("gpt-chat-ultrafast");
+    expect(models).toHaveProperty("gpt-responses-fast");
+    expect(models).toHaveProperty("gpt-responses-ultrafast");
+    expect(models["gpt-chat-fast"].provider).toEqual(models["gpt-chat"].provider);
+  });
+});
+
 describe("client model selection", () => {
   it("leaves default model choice with Claude Code, opencode, and DeepSeek Harness", () => {
     const snippets = buildClientSetupSnippets({

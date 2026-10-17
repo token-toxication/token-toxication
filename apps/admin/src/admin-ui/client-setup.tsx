@@ -44,6 +44,27 @@ const dshWireApis: Record<DshProtocol, string> = {
   anthropic: "anthropic-messages",
 };
 
+function withSpeedTierAliases<T extends ClientModelOption>(models: T[]): T[] {
+  return models.flatMap((model) => {
+    if (
+      !model.id.startsWith("gpt-") ||
+      model.id.endsWith("-fast") ||
+      model.id.endsWith("-ultrafast")
+    ) {
+      return [model];
+    }
+    return [
+      model,
+      { ...model, id: `${model.id}-fast`, displayName: `${model.displayName || model.id} (Fast)` },
+      {
+        ...model,
+        id: `${model.id}-ultrafast`,
+        displayName: `${model.displayName || model.id} (Ultrafast)`,
+      },
+    ];
+  });
+}
+
 export function dshModelEntryYaml(model: DshModelOption, protocol: DshProtocol) {
   const entryIndent = "          ";
   const lines = [`- id: ${JSON.stringify(model.id)}`];
@@ -423,7 +444,7 @@ export function buildClientSetupSnippets({
             apiKey: "{env:TOKEN_TOXICATION_API_KEY}",
           },
           models: Object.fromEntries(
-            opencodeModels.map((model) => [
+            withSpeedTierAliases(opencodeModels).map((model) => [
               model.id,
               {
                 name: model.displayName,
@@ -450,7 +471,7 @@ export function buildClientSetupSnippets({
           baseUrl: openaiBaseUrl,
           api: "openai-responses",
           apiKey: "$TOKEN_TOXICATION_API_KEY",
-          models: piModels.map((model) => ({
+          models: withSpeedTierAliases(piModels).map((model) => ({
             id: model.id,
             name: model.displayName,
             reasoning: true,
@@ -465,7 +486,9 @@ export function buildClientSetupSnippets({
     .map((protocol) =>
       dshProviderYaml(
         protocol,
-        dshModels.filter((model) => model.protocols[protocol]),
+        (protocol === "anthropic" ? dshModels : withSpeedTierAliases(dshModels)).filter(
+          (model) => model.protocols[protocol],
+        ),
         openaiBaseUrl,
         anthropicBaseUrl,
       ),
@@ -490,7 +513,7 @@ export function buildClientSetupSnippets({
       `curl --fail --silent --show-error --location \\
   --header "Authorization: Bearer $TOKEN_TOXICATION_API_KEY" \\
   ${shellQuote(`${openaiBaseUrl}/codex/models`)} \\
-  --output ~/.codex/token-toxication-model-catalog.json`,
+  > ~/.codex/token-toxication-model-catalog.json`,
     ].join("\n"),
     codexConfig: [
       "# Set TOKEN_TOXICATION_API_KEY in the Codex process environment.",

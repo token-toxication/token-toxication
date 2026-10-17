@@ -343,10 +343,9 @@ impl AuthenticatedRelayAttempt {
         affinity: Option<&SessionAffinity>,
         excluded_account_ids: &HashSet<String>,
     ) -> Result<RelayAttempt, AppError> {
-        // A Codex `-fast` variant is a client-facing alias for its base model:
-        // TT derives the variants into the catalog, and OpenCode resolves the
-        // same aliases before sending. No upstream accepts the suffix, so route
-        // selection uses the base id while logs keep the requested id.
+        // Speed-tier aliases are client-facing ids. No upstream accepts the
+        // suffix, so route selection uses the base id while logs keep the
+        // requested id.
         let requested_model = model.to_string();
         let model = self.routing_model(wire_api, model).await?;
         let model = model.as_ref();
@@ -433,7 +432,7 @@ impl AuthenticatedRelayAttempt {
 
     /// Resolve a client-facing model id to the id used for route selection.
     ///
-    /// Only `-fast` aliases are resolved, and an exact catalog entry always
+    /// Speed-tier aliases are resolved, and an exact catalog entry always
     /// wins, so a route an operator declares for a `-fast` id keeps serving it.
     async fn routing_model<'a>(
         &self,
@@ -463,10 +462,11 @@ impl AuthenticatedRelayAttempt {
         affinity: Option<&SessionAffinity>,
         account_id: &str,
     ) -> Result<RelayAttempt, AppError> {
+        let model = self.routing_model(wire_api, model).await?;
         let candidates = self
             .state
             .db
-            .list_provider_route_candidates(wire_api, model)
+            .list_provider_route_candidates(wire_api, model.as_ref())
             .await?;
         if !candidates
             .iter()
@@ -481,7 +481,7 @@ impl AuthenticatedRelayAttempt {
             .filter(|candidate| candidate.account.account.id != account_id)
             .map(|candidate| candidate.account.account.id)
             .collect();
-        self.select_excluding(wire_api, model, affinity, &excluded)
+        self.select_excluding(wire_api, model.as_ref(), affinity, &excluded)
             .await
     }
 

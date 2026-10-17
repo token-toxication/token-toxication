@@ -10,7 +10,7 @@ The admin **Client Setup** page generates copy-ready configuration from enabled,
 | --- | --- | --- |
 | Codex | OpenAI Responses | Provider base URL and API-key environment reference; Codex owns model selection |
 | Claude Code | Anthropic Messages | Anthropic-compatible relay settings and native model discovery |
-| opencode | OpenAI Chat or Responses | The matching AI SDK and routed models, without a default override |
+| opencode | OpenAI Chat or Responses | The matching AI SDK and routed GPT models, including `-fast`/`-ultrafast` aliases |
 | Pi | OpenAI Responses | A complete `~/.pi/agent/models.json` file |
 | DeepSeek Harness | Chat, Responses, and Anthropic Messages | `llm-pi-ai` routes for `$DSH_HOME/settings.yaml`, without changing the agent default |
 
@@ -140,6 +140,21 @@ run `just codex-compat /absolute/path/to/matching/codex`. The installed
 relay-served account catalog, a Fast turn on a catalog model, and a `-fast`
 request resolved to its base model. The test does not use production credentials
 or prove a live upstream's Lite eligibility.
+
+## Harness Fast and Ultrafast
+
+For GPT routes that support service tiers, Client Setup generates independent
+model ids for every harness:
+
+```text
+gpt-6.1-sol
+gpt-6.1-sol-fast
+gpt-6.1-sol-ultrafast
+```
+
+TT routes the suffixed ids to `gpt-6.1-sol` and sends the native
+`service_tier` value (`priority` for `-fast`, `ultrafast` for `-ultrafast`).
+This keeps the configuration usable by clients that only select models by id.
 
 ## DeepSeek Harness
 

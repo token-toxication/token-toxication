@@ -172,9 +172,11 @@ pub fn render_catalog(models: &[Value]) -> RenderedCatalog {
     }
 }
 
-/// A `Value` always serializes, so encoding cannot fail.
+/// A `Value` always serializes, so encoding cannot fail. Keep the catalog
+/// human-readable because this endpoint is also used as a downloaded local
+/// compatibility catalog.
 fn encode(models: &[Value]) -> Vec<u8> {
-    serde_json::to_vec(&json!({ "models": models })).expect("a JSON value always serializes")
+    serde_json::to_vec_pretty(&json!({ "models": models })).expect("a JSON value always serializes")
 }
 
 #[cfg(test)]
