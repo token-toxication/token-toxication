@@ -1787,26 +1787,41 @@ fn model_catalog_from_row(row: &rusqlite::Row<'_>) -> Result<ModelCatalogEntry, 
     })
 }
 
-/// Existing Codex subscription routes identify models that can be owned by the
-/// provider-catalog synchronizer. This intentionally includes public aliases
-/// and every route owned by a Codex subscription account: the route itself is
-/// the durable evidence that the model belongs to that provider catalog. Models
-/// on other provider types remain manual.
+/// Migrate legacy Codex subscription models that predate provider-catalog
+/// sources. Most legacy entries are identified by their Codex route. The
+/// GPT-5.6 subscription entries are also migrated by their stable model IDs
+/// because older installations exposed them before a route was created; those
+/// rows otherwise remain permanently manual and can never be reconciled.
 fn migrate_legacy_managed_models(conn: &Connection) -> Result<(), rusqlite::Error> {
     conn.execute(
         "UPDATE model_catalog
-         SET managed = 1
+         SET managed = 1, enabled = 1
          WHERE managed = 0
-           AND EXISTS (
-               SELECT 1
-               FROM provider_model_routes r
-               JOIN provider_accounts a ON a.id = r.provider_account_id
-               WHERE r.public_model_id = model_catalog.id
-                 AND (
-                     a.auth_mode = 'codex-oauth'
-                     OR a.auth_mode = 'codex-manual-refresh'
-                     OR a.auth_mode = 'codex-device-oauth'
-                 )
+           AND (
+               EXISTS (
+                   SELECT 1
+                   FROM provider_model_routes r
+                   JOIN provider_accounts a ON a.id = r.provider_account_id
+                   WHERE r.public_model_id = model_catalog.id
+                     AND (
+                         a.auth_mode = 'codex-oauth'
+                         OR a.auth_mode = 'codex-manual-refresh'
+                         OR a.auth_mode = 'codex-device-oauth'
+                     )
+               )
+               OR (
+                   model_catalog.id IN ('gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna')
+                   AND NOT EXISTS (
+                       SELECT 1 FROM provider_model_routes r
+                       WHERE r.public_model_id = model_catalog.id
+                   )
+                   AND EXISTS (
+                       SELECT 1 FROM provider_accounts a
+                       WHERE a.auth_mode = 'codex-oauth'
+                          OR a.auth_mode = 'codex-manual-refresh'
+                          OR a.auth_mode = 'codex-device-oauth'
+                   )
+               )
            )",
         [],
     )?;
@@ -2142,6 +2157,7 @@ mod tests {
             "
             CREATE TABLE model_catalog (
                 id TEXT PRIMARY KEY,
+                enabled INTEGER NOT NULL DEFAULT 0,
                 managed INTEGER NOT NULL DEFAULT 0
             );
             CREATE TABLE provider_accounts (
@@ -2156,6 +2172,7 @@ mod tests {
                 managed INTEGER NOT NULL DEFAULT 0
             );
             INSERT INTO model_catalog (id) VALUES ('gpt-6.1-sol');
+            INSERT INTO model_catalog (id) VALUES ('gpt-5.6-luna');
             INSERT INTO model_catalog (id) VALUES ('gpt-custom-alias');
             INSERT INTO model_catalog (id) VALUES ('custom-codex-alias');
             INSERT INTO model_catalog (id) VALUES ('deepseek-v4-pro');
@@ -2179,20 +2196,21 @@ mod tests {
 
         migrate_legacy_managed_models(&conn).expect("migrate legacy managed models");
 
-        let managed: Vec<(String, i64)> = conn
-            .prepare("SELECT id, managed FROM model_catalog ORDER BY id")
+        let managed: Vec<(String, i64, i64)> = conn
+            .prepare("SELECT id, managed, enabled FROM model_catalog ORDER BY id")
             .expect("prepare catalog query")
-            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
             .expect("query catalog")
             .collect::<Result<_, _>>()
             .expect("collect catalog");
         assert_eq!(
             managed,
             vec![
-                ("custom-codex-alias".to_string(), 1),
-                ("deepseek-v4-pro".to_string(), 0),
-                ("gpt-6.1-sol".to_string(), 1),
-                ("gpt-custom-alias".to_string(), 0),
+                ("custom-codex-alias".to_string(), 1, 1),
+                ("deepseek-v4-pro".to_string(), 0, 0),
+                ("gpt-5.6-luna".to_string(), 1, 1),
+                ("gpt-6.1-sol".to_string(), 1, 1),
+                ("gpt-custom-alias".to_string(), 0, 0),
             ]
         );
     }
