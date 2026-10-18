@@ -263,6 +263,7 @@ async fn coding_models_preserve_payloads_and_auth_boundaries() {
                 transport: "http_sse".into(),
                 status_code: 200,
                 outcome: "success".into(),
+                retry_count: 0,
                 count: 1,
             }]
         );

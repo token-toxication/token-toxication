@@ -4,6 +4,8 @@ use std::{
     time::{Duration, Instant},
 };
 
+use serde_json::Value;
+
 use crate::models::{
     RequestOutcomeMetric, RouteSelectionMetric, SelectionFailureMetric, SessionAffinityMetric,
 };
@@ -19,7 +21,7 @@ pub struct RelayMetrics {
 struct RelayMetricsInner {
     affinity: BTreeMap<(String, String, String), u64>,
     selections: BTreeMap<(String, String, String), u64>,
-    requests: BTreeMap<(String, u16, String), u64>,
+    requests: BTreeMap<(String, u16, String, u8), u64>,
     selection_failures: BTreeMap<(String, String, u16, String), u64>,
     last_missing_warning: BTreeMap<(String, String), Instant>,
 }
@@ -58,13 +60,62 @@ impl RelayMetrics {
             .or_default() += 1;
     }
 
-    pub fn record_request(&self, transport: &str, status_code: u16, error: Option<&str>) {
+    pub fn record_request(
+        &self,
+        transport: &str,
+        status_code: u16,
+        error: Option<&str>,
+        retry_count: u8,
+    ) {
         let outcome = request_outcome(status_code, error);
         let mut inner = self.inner.lock().expect("relay metrics lock poisoned");
         *inner
             .requests
-            .entry((transport.to_string(), status_code, outcome.to_string()))
+            .entry((
+                transport.to_string(),
+                status_code,
+                outcome.to_string(),
+                retry_count,
+            ))
             .or_default() += 1;
+    }
+
+    pub fn classify_upstream_error(value: &Value) -> Option<&'static str> {
+        let error = value.get("error").unwrap_or(value);
+        let message = error
+            .get("message")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        if message.contains("items are not persisted")
+            || (message.contains("item with id") && message.contains("not found"))
+        {
+            return Some("replay_missing_item");
+        }
+        if message.contains("turn state")
+            || message.contains("turn_state")
+            || message.contains("x-codex-turn-state")
+        {
+            return Some("turn_state");
+        }
+        let code = error
+            .get("code")
+            .or_else(|| error.get("type"))
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        if code.contains("previous_response_not_found") {
+            return Some("replay_missing_item");
+        }
+        if code.contains("invalid_request") {
+            return Some("invalid_request");
+        }
+        None
+    }
+
+    pub fn classify_upstream_error_body(body: &[u8]) -> Option<&'static str> {
+        let value = serde_json::from_slice::<Value>(body).ok()?;
+        Self::classify_upstream_error(&value)
     }
 
     pub fn record_selection_failure(&self, wire_api: &str, model: &str, reason: &str) {
@@ -110,10 +161,11 @@ impl RelayMetrics {
             .requests
             .iter()
             .map(
-                |((transport, status_code, outcome), count)| RequestOutcomeMetric {
+                |((transport, status_code, outcome, retry_count), count)| RequestOutcomeMetric {
                     transport: transport.clone(),
                     status_code: *status_code,
                     outcome: outcome.clone(),
+                    retry_count: *retry_count,
                     count: *count,
                 },
             )
@@ -146,6 +198,15 @@ pub fn request_outcome(status_code: u16, error: Option<&str>) -> &'static str {
         return "client_disconnect";
     }
     let error = error.unwrap_or_default().to_ascii_lowercase();
+    if error.contains("replay_missing_item") {
+        return "replay_missing_item";
+    }
+    if error.contains("turn_state") {
+        return "turn_state";
+    }
+    if error.contains("invalid_request") {
+        return "invalid_request";
+    }
     if status_code == 429
         || error.contains("rate limit")
         || error.contains("quota")
@@ -185,9 +246,9 @@ mod tests {
     #[test]
     fn records_transport_and_outcome_dimensions() {
         let metrics = RelayMetrics::default();
-        metrics.record_request("http_sse", 200, None);
-        metrics.record_request("websocket", 502, Some("upstream stream failed"));
-        metrics.record_request("websocket", 502, Some("upstream stream failed"));
+        metrics.record_request("http_sse", 200, None, 0);
+        metrics.record_request("websocket", 502, Some("upstream stream failed"), 1);
+        metrics.record_request("websocket", 502, Some("upstream stream failed"), 1);
         let (_, _, requests, _) = metrics.snapshot();
         assert_eq!(
             requests,
@@ -196,16 +257,28 @@ mod tests {
                     transport: "http_sse".into(),
                     status_code: 200,
                     outcome: "success".into(),
+                    retry_count: 0,
                     count: 1,
                 },
                 RequestOutcomeMetric {
                     transport: "websocket".into(),
                     status_code: 502,
                     outcome: "upstream_error".into(),
+                    retry_count: 1,
                     count: 2,
                 },
             ]
         );
+    }
+
+    #[test]
+    fn records_generic_retry_count_for_failover_attempts() {
+        let metrics = RelayMetrics::default();
+        metrics.record_request("http", 429, Some("upstream returned 429"), 2);
+
+        let (_, _, requests, _) = metrics.snapshot();
+        assert_eq!(requests[0].retry_count, 2);
+        assert_eq!(requests[0].outcome, "rate_limited");
     }
 
     #[test]
@@ -227,6 +300,42 @@ mod tests {
             "overload"
         );
         assert_eq!(request_outcome(401, None), "authorization");
+        assert_eq!(
+            request_outcome(400, Some("upstream replay_missing_item")),
+            "replay_missing_item"
+        );
+        assert_eq!(
+            request_outcome(400, Some("upstream turn_state")),
+            "turn_state"
+        );
+    }
+
+    #[test]
+    fn classifies_only_bounded_upstream_metadata() {
+        assert_eq!(
+            RelayMetrics::classify_upstream_error(&serde_json::json!({
+                "message": "Item with id 'rs_secret' not found. Items are not persisted when store is set to false."
+            })),
+            Some("replay_missing_item")
+        );
+        assert_eq!(
+            RelayMetrics::classify_upstream_error(&serde_json::json!({
+                "message": "invalid x-codex-turn-state continuation"
+            })),
+            Some("turn_state")
+        );
+        assert_eq!(
+            RelayMetrics::classify_upstream_error(&serde_json::json!({
+                "message": "prompt and credentials must not be logged"
+            })),
+            None
+        );
+        assert_eq!(
+            RelayMetrics::classify_upstream_error(&serde_json::json!({
+                "code": "previous_response_not_found"
+            })),
+            Some("replay_missing_item")
+        );
     }
 
     #[test]

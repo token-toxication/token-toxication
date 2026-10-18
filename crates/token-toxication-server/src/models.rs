@@ -639,6 +639,24 @@ pub struct RequestSummary {
     pub body_bytes: u64,
     pub stream: bool,
     pub stripped_params: Vec<String>,
+    #[serde(default)]
+    pub responses: Option<ResponsesRequestMetadata>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ResponsesRequestMetadata {
+    /// The client's requested store mode, before Codex compatibility normalization.
+    pub client_store_mode: String,
+    /// The store mode present on the bounded request forwarded upstream.
+    pub forwarded_store_mode: String,
+    pub input_item_count: u32,
+    pub reasoning_item_count: u32,
+    pub reasoning_id_count: u32,
+    pub reasoning_encrypted_content_count: u32,
+    pub item_reference_count: u32,
+    pub previous_response_id_present: bool,
+    pub turn_state_header_present: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -746,6 +764,7 @@ pub struct RequestOutcomeMetric {
     pub transport: String,
     pub status_code: u16,
     pub outcome: String,
+    pub retry_count: u8,
     pub count: u64,
 }
 

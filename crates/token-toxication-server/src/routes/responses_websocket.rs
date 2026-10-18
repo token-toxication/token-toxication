@@ -301,6 +301,7 @@ async fn relay_connection(
         first_permit,
         &mut first,
         &base_endpoint,
+        headers.contains_key("x-codex-turn-state"),
     ));
     let auth = if is_codex_subscription_auth(&account.account.auth_mode) {
         match resolve_codex_authorization(state, account).await {
@@ -431,7 +432,13 @@ async fn relay_connection(
                             upstream_response_headers = connection.headers;
                             upstream = Some(connection.socket);
                         }
-                        *active = Some(start_response(&binding, permit, &mut value, &endpoint));
+                        *active = Some(start_response(
+                            &binding,
+                            permit,
+                            &mut value,
+                            &endpoint,
+                            headers.contains_key("x-codex-turn-state"),
+                        ));
                         let Some(upstream_socket) = upstream.as_mut().map(|socket| &mut *socket) else {
                             return Stop::Upstream;
                         };
@@ -601,10 +608,24 @@ async fn relay_connection(
                                         }
                                         .to_string(),
                                     );
-                                }
-                                let result = if let Some(status) = wrapped_status {
-                                    current.attempt.record_response(&current.log, status, &HeaderMap::new(), b"{}", current.tokens()).await
-                                } else if let Some(failure) = openai_responses_stream_failure(&value) {
+                                 }
+                                 let result = if let Some(status) = wrapped_status {
+                                     let error = stream_failure
+                                         .as_ref()
+                                         .and_then(|failure| failure.class)
+                                         .map(|class| format!("upstream stream failed ({class})"));
+                                     current
+                                         .attempt
+                                         .record_response_with_error(
+                                             &current.log,
+                                             status,
+                                             &HeaderMap::new(),
+                                             b"{}",
+                                             current.tokens(),
+                                             error,
+                                         )
+                                         .await
+                                 } else if let Some(failure) = openai_responses_stream_failure(&value) {
                                     let error = failure.log_error();
                                     if let Some(failure) = classify_upstream_application_failure(failure.code.as_deref(), error.clone(), Utc::now()) {
                                         current.attempt.record_failure_with_usage(&current.log, failure, current.tokens()).await
@@ -694,7 +715,9 @@ fn start_response(
     permit: QueuedPermit,
     value: &mut Value,
     endpoint: &str,
+    turn_state_header_present: bool,
 ) -> ActiveResponse {
+    let client_request = value.clone();
     value["model"] = json!(binding.selection().upstream_model_id);
     let stripped = strip_upstream_params(
         value,
@@ -702,6 +725,13 @@ fn start_response(
         WireApi::OpenAiResponses,
         &binding.selection().account.account.auth_mode,
     );
+    let mut request_summary =
+        build_request_summary(value, value.to_string().len() as u64, stripped);
+    request_summary.responses = Some(responses_request_metadata(
+        &client_request,
+        value,
+        turn_state_header_present,
+    ));
     ActiveResponse {
         attempt: binding.continuation(permit),
         log: RelayAttemptLog {
@@ -709,11 +739,7 @@ fn start_response(
             path: "/openai/v1/responses".into(),
             transport: WEBSOCKET_TRANSPORT,
             upstream_url: Some(endpoint.into()),
-            request_summary: Some(build_request_summary(
-                value,
-                value.to_string().len() as u64,
-                stripped,
-            )),
+            request_summary: Some(request_summary),
             overload_retry_count: 0,
             overload_retry_started: false,
             overload_retry_exhausted: false,

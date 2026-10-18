@@ -57,8 +57,8 @@ use crate::{
         OpenAiModelListResponse, ProviderAccount, ProviderAccountListResponse,
         ProviderAccountResponse, ProviderModelRouteListResponse, ProviderModelRouteResponse,
         ProviderPresetListResponse, RequestLogListResponse, RequestSummary,
-        RoutableModelCatalogEntry, RoutableModelCatalogListResponse, UpdateApiKeyRequest,
-        UpdateModelCatalogEntryRequest, UpdateProviderAccountRequest,
+        ResponsesRequestMetadata, RoutableModelCatalogEntry, RoutableModelCatalogListResponse,
+        UpdateApiKeyRequest, UpdateModelCatalogEntryRequest, UpdateProviderAccountRequest,
         UpdateProviderModelRouteRequest,
     },
     provider_catalog::provider_presets,
@@ -821,8 +821,15 @@ async fn relay_json_endpoint(
         );
         let body = serde_json::to_vec(&request_json)
             .map_err(|error| AppError::Internal(format!("serialize upstream request: {error}")))?;
-        let request_summary =
+        let mut request_summary =
             build_request_summary(&request_json, body.len() as u64, stripped_params);
+        if wire_api == WireApi::OpenAiResponses {
+            request_summary.responses = Some(responses_request_metadata(
+                &original_request_json,
+                &request_json,
+                headers.contains_key("x-codex-turn-state"),
+            ));
+        }
         let base_upstream_url = upstream_url(&account.account.base_url, wire_api.upstream_path());
         let mut log = RelayAttemptLog {
             request_id: request_id.clone(),
@@ -2446,6 +2453,75 @@ fn build_request_summary(
             .and_then(Value::as_bool)
             .unwrap_or(false),
         stripped_params,
+        responses: None,
+    }
+}
+
+const MAX_OBSERVED_RESPONSES_ITEMS: u32 = 4096;
+
+fn responses_request_metadata(
+    client_request: &Value,
+    forwarded_request: &Value,
+    turn_state_header_present: bool,
+) -> ResponsesRequestMetadata {
+    let input_items = client_request
+        .get("input")
+        .and_then(Value::as_array)
+        .map(|items| items.iter().take(MAX_OBSERVED_RESPONSES_ITEMS as usize))
+        .into_iter()
+        .flatten();
+    let mut input_item_count = 0;
+    let mut reasoning_item_count = 0;
+    let mut reasoning_id_count = 0;
+    let mut reasoning_encrypted_content_count = 0;
+    let mut item_reference_count = 0;
+    for item in input_items {
+        input_item_count += 1;
+        match item.get("type").and_then(Value::as_str) {
+            Some("reasoning") => {
+                reasoning_item_count += 1;
+                if item.get("id").and_then(Value::as_str).is_some() {
+                    reasoning_id_count += 1;
+                }
+                if item
+                    .get("encrypted_content")
+                    .and_then(Value::as_str)
+                    .is_some()
+                {
+                    reasoning_encrypted_content_count += 1;
+                }
+            }
+            Some("item_reference") => item_reference_count += 1,
+            _ => {}
+        }
+    }
+
+    ResponsesRequestMetadata {
+        client_store_mode: responses_store_mode(client_request),
+        forwarded_store_mode: responses_store_mode(forwarded_request),
+        input_item_count,
+        reasoning_item_count,
+        reasoning_id_count,
+        reasoning_encrypted_content_count,
+        item_reference_count,
+        previous_response_id_present: client_request
+            .get("previous_response_id")
+            .is_some_and(|value| !value.is_null()),
+        turn_state_header_present: turn_state_header_present
+            || client_request
+                .pointer("/client_metadata/x-codex-turn-state")
+                .and_then(Value::as_str)
+                .is_some(),
+    }
+}
+
+fn responses_store_mode(value: &Value) -> String {
+    match value.get("store") {
+        None => "omitted".to_string(),
+        Some(Value::Bool(false)) => "false".to_string(),
+        Some(Value::Bool(true)) => "true".to_string(),
+        Some(Value::Null) => "null".to_string(),
+        Some(_) => "invalid".to_string(),
     }
 }
 
@@ -2942,12 +3018,16 @@ impl StreamingResponseObservation {
 struct StreamingApplicationFailure {
     event_type: &'static str,
     code: Option<String>,
+    class: Option<&'static str>,
     retryable: bool,
     retry_after: Option<Duration>,
 }
 
 impl StreamingApplicationFailure {
     fn log_error(&self) -> String {
+        if let Some(class) = self.class {
+            return format!("upstream stream failed ({class})");
+        }
         self.code.as_ref().map_or_else(
             || "upstream stream failed".to_string(),
             |code| format!("upstream stream failed ({code})"),
@@ -2966,6 +3046,7 @@ fn openai_responses_stream_failure(value: &Value) -> Option<StreamingApplication
     };
 
     let code = normalized_stream_error_code(error);
+    let class = crate::relay_metrics::RelayMetrics::classify_upstream_error(error);
     let disabled = error
         .get("message")
         .and_then(Value::as_str)
@@ -2974,6 +3055,7 @@ fn openai_responses_stream_failure(value: &Value) -> Option<StreamingApplication
         event_type,
         retryable: relay_retry::retryable_provider_code(code.as_deref()) && !disabled,
         code,
+        class,
         retry_after: retry_after_from_event(value),
     })
 }
@@ -5628,6 +5710,46 @@ mod tests {
     }
 
     #[test]
+    fn responses_summary_records_replay_shape_without_request_content() {
+        let client = json!({
+            "model": "gpt-6-astra",
+            "input": [
+                {
+                    "type": "reasoning",
+                    "id": "rs_secret",
+                    "encrypted_content": "encrypted-secret"
+                },
+                {"type": "item_reference", "id": "ref_secret"},
+                {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "prompt-secret"}]}
+            ],
+            "previous_response_id": "resp_secret"
+        });
+        let mut forwarded = client.clone();
+        strip_upstream_params(&mut forwarded, &[], WireApi::OpenAiResponses, "codex-oauth");
+
+        let metadata = responses_request_metadata(&client, &forwarded, false);
+        assert_eq!(metadata.client_store_mode, "omitted");
+        assert_eq!(metadata.forwarded_store_mode, "false");
+        assert_eq!(metadata.input_item_count, 3);
+        assert_eq!(metadata.reasoning_item_count, 1);
+        assert_eq!(metadata.reasoning_id_count, 1);
+        assert_eq!(metadata.reasoning_encrypted_content_count, 1);
+        assert_eq!(metadata.item_reference_count, 1);
+        assert!(metadata.previous_response_id_present);
+        assert!(!metadata.turn_state_header_present);
+
+        let serialized = serde_json::to_string(&metadata).expect("serialize metadata");
+        for private_value in [
+            "rs_secret",
+            "encrypted-secret",
+            "ref_secret",
+            "prompt-secret",
+        ] {
+            assert!(!serialized.contains(private_value));
+        }
+    }
+
+    #[test]
     fn official_openai_chat_streams_request_usage_without_overriding_clients() {
         let mut official = json!({"stream": true});
         enable_stream_usage_if_supported(&mut official, WireApi::OpenAiChat, "openai");
@@ -5990,6 +6112,24 @@ mod tests {
 
         assert_eq!(failure.code, None);
         assert_eq!(failure.log_error(), "upstream stream failed");
+    }
+
+    #[test]
+    fn streaming_replay_failure_is_logged_as_a_bounded_class() {
+        let failure = openai_responses_stream_failure(&json!({
+            "type": "error",
+            "error": {
+                "type": "invalid_request_error",
+                "message": "Item with id 'rs_secret' not found. Items are not persisted when store is set to false."
+            }
+        }))
+        .expect("application failure");
+
+        assert_eq!(failure.class, Some("replay_missing_item"));
+        assert_eq!(
+            failure.log_error(),
+            "upstream stream failed (replay_missing_item)"
+        );
     }
 
     #[test]

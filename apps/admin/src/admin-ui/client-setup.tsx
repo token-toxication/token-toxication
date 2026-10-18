@@ -82,6 +82,7 @@ function opencodeCatalogPluginSource(openaiBaseUrl: string, fallbackModels: Open
       id: model.id,
       name: model.displayName || model.id,
       wireApi: model.wireApi,
+      reasoningEfforts: model.reasoningEfforts,
     })),
   );
   return `import { Plugin } from "@opencode/plugin";
@@ -128,6 +129,12 @@ async function fetchCatalog() {
         .map((entry) => {
           const id = wireApi === "openai-responses" ? entry.slug : entry.id;
           const contextWindow = entry.context_window;
+          const reasoningEfforts =
+            wireApi === "openai-responses" && Array.isArray(entry.supported_reasoning_levels)
+              ? entry.supported_reasoning_levels
+                  .map((level) => level?.effort)
+                  .filter((effort) => typeof effort === "string" && effort.length > 0)
+              : undefined;
           return {
             id,
             name:
@@ -141,6 +148,7 @@ async function fetchCatalog() {
               typeof contextWindow === "number" && Number.isFinite(contextWindow) && contextWindow > 0
                 ? contextWindow
                 : undefined,
+            reasoningEfforts,
           };
         });
     }),
@@ -156,8 +164,8 @@ async function fetchCatalog() {
 function modelDefinition(entry, template) {
   const packageName =
     entry.wireApi === "openai-responses"
-      ? "aisdk:@ai-sdk/openai"
-      : "aisdk:@ai-sdk/openai-compatible";
+      ? "@opencode/ai/providers/openai"
+      : "@opencode/ai/providers/openai-compatible";
   const base =
     template ||
     {
@@ -167,12 +175,12 @@ function modelDefinition(entry, template) {
       name: entry.name,
       package: packageName,
       capabilities: { tools: true, input: ["text", "image"], output: ["text"] },
-      variants: [],
       time: { released: 0 },
       cost: [],
       status: "active",
       enabled: true,
       limit: { context: 200000, output: 32000 },
+      variants: [],
     };
   const limit =
     entry.contextWindow || base.limit
@@ -181,7 +189,7 @@ function modelDefinition(entry, template) {
           ...(entry.contextWindow ? { context: entry.contextWindow } : {}),
         }
       : undefined;
-  return {
+  const model = {
     ...structuredClone(base),
     id: entry.id,
     modelID: entry.id,
@@ -191,6 +199,19 @@ function modelDefinition(entry, template) {
     ...(limit ? { limit } : {}),
     settings: { ...(base.settings || {}), baseURL: OPENAI_BASE_URL },
   };
+  if (entry.wireApi === "openai-responses") {
+    model.variants = (entry.reasoningEfforts ?? ["none", "minimal", "low", "medium", "high", "xhigh"]).map(
+      (effort) => ({
+        id: effort,
+        settings: {
+          reasoningEffort: effort,
+          reasoningSummary: "auto",
+          include: ["reasoning.encrypted_content"],
+        },
+      }),
+    );
+  }
+  return model;
 }
 
 function modelDefinitions(entries, provider) {

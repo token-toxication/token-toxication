@@ -225,9 +225,27 @@ impl RelayAttempt {
         body: &[u8],
         usage: TokenUsage,
     ) -> Result<(), AppError> {
-        let error =
-            record_upstream_response_result(&self.state, &self.selection, status, headers, body)
-                .await?;
+        self.record_response_with_error(log, status, headers, body, usage, None)
+            .await
+    }
+
+    pub(crate) async fn record_response_with_error(
+        &self,
+        log: &RelayAttemptLog,
+        status: StatusCode,
+        headers: &HeaderMap,
+        body: &[u8],
+        usage: TokenUsage,
+        error_override: Option<String>,
+    ) -> Result<(), AppError> {
+        let error = error_override.or(record_upstream_response_result(
+            &self.state,
+            &self.selection,
+            status,
+            headers,
+            body,
+        )
+        .await?);
         self.insert_request_log(log, status.as_u16(), usage, error)
             .await?;
         Ok(())
@@ -269,9 +287,12 @@ impl RelayAttempt {
         error: Option<String>,
     ) -> Result<(), AppError> {
         let outcome = crate::relay_metrics::request_outcome(status_code, error.as_deref());
-        self.state
-            .relay_metrics
-            .record_request(log.transport, status_code, error.as_deref());
+        self.state.relay_metrics.record_request(
+            log.transport,
+            status_code,
+            error.as_deref(),
+            log.attempt_index,
+        );
         if status_code >= 400 {
             tracing::warn!(
                 request_id = %log.request_id,
@@ -279,6 +300,7 @@ impl RelayAttempt {
                 status_code,
                 outcome,
                 error_present = error.is_some(),
+                retry_count = log.attempt_index,
                 overload_retry_count = log.overload_retry_count,
                 "relay request completed with non-success status"
             );
@@ -647,7 +669,9 @@ async fn record_upstream_response_result(
         body,
         Utc::now(),
     );
-    let error = failure.error.clone();
+    let error = crate::relay_metrics::RelayMetrics::classify_upstream_error_body(body)
+        .map(|class| format!("upstream {class}"))
+        .unwrap_or(failure.error.clone());
     record_route_failure_state(
         state,
         &selection.account.account.id,

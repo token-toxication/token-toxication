@@ -47,6 +47,7 @@ export type OpencodeWireApi = "openai-chat" | "openai-responses";
 
 export type OpencodeModelOption = ClientModelOption & {
   wireApi: OpencodeWireApi;
+  reasoningEfforts?: string[];
 };
 
 export type DshProtocol = "chat" | "responses" | "anthropic";

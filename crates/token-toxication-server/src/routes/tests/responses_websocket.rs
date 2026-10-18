@@ -23,6 +23,8 @@ async fn websocket_failures_preserve_status_health_and_privacy() {
         ("wrapped", 429),
         ("wrapped_alias", 403),
         ("wrapped_code", 429),
+        ("wrapped_replay", 400),
+        ("wrapped_turn_state", 400),
     ] {
         let upstream = Router::new()
             .route("/oauth/token", post(move || async move {
@@ -34,9 +36,18 @@ async fn websocket_failures_preserve_status_health_and_privacy() {
                 }
                 ws.on_upgrade(move |mut socket| async move {
                     let _ = socket.next().await;
-                    let code = if status == 429 { "rate_limit_exceeded" } else { "server_error" };
-                    let event = if mode.starts_with("wrapped") {
-                        let mut event = json!({"type":"error","error":{"code":code,"message":"synthetic-private-error"}});
+                     let code = match mode {
+                         "wrapped_replay" => "previous_response_not_found",
+                         "wrapped_turn_state" => "invalid_request_error",
+                         _ if status == 429 => "rate_limit_exceeded",
+                         _ => "server_error",
+                     };
+                     let message = match mode {
+                         "wrapped_turn_state" => "invalid x-codex-turn-state continuation",
+                         _ => "synthetic-private-error",
+                     };
+                     let event = if mode.starts_with("wrapped") {
+                         let mut event = json!({"type":"error","error":{"code":code,"message":message}});
                         if mode != "wrapped_code" {
                             event[if mode == "wrapped_alias" { "status_code" } else { "status" }] = json!(status);
                         }
@@ -143,11 +154,30 @@ async fn websocket_failures_preserve_status_health_and_privacy() {
         if matches!(expected, 401 | 403) {
             assert_eq!(account.status, "blocked", "{mode}/{status}");
             assert_eq!(route.status, "degraded");
+        } else if expected == 400 {
+            assert_ne!(account.status, "blocked", "{mode}/{status}");
+            assert_eq!(route.status, "degraded", "{mode}/{status}");
         } else {
             assert_eq!(route.status, "cooling_down", "{mode}/{status}");
             assert!(route.cooldown_until.is_some());
         }
         assert_eq!(route.last_status_code, Some(expected));
+        if mode == "wrapped_replay" || mode == "wrapped_turn_state" {
+            let expected_class = if mode == "wrapped_replay" {
+                "replay_missing_item"
+            } else {
+                "turn_state"
+            };
+            let expected_error = format!("upstream stream failed ({expected_class})");
+            assert_eq!(logs[0].error.as_deref(), Some(expected_error.as_str()));
+            let (_, _, outcomes, _) = state.relay_metrics.snapshot();
+            assert!(outcomes.iter().any(|metric| {
+                metric.transport == "websocket"
+                    && metric.status_code == 400
+                    && metric.outcome == expected_class
+                    && metric.retry_count == 0
+            }));
+        }
         assert_eq!(events.len(), 1, "one terminal error: {mode}/{status}");
         if matches!(mode, "handshake" | "refresh") {
             assert_eq!(events[0]["status"], expected);
@@ -723,6 +753,7 @@ async fn websocket_binds_account_and_preserves_tool_and_steering_continuations()
                 transport: "websocket".into(),
                 status_code: 200,
                 outcome: "success".into(),
+                retry_count: 0,
                 count: 3,
             }]
         );

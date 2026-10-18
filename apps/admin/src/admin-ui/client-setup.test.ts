@@ -344,6 +344,9 @@ describe("dynamic model catalog setup", () => {
     expect(pluginSource).toContain("wire_api=openai-chat");
     expect(pluginSource).toContain("/openai/v1/codex/models");
     expect(pluginSource).toContain("process.env.TOKEN_TOXICATION_API_KEY");
+    expect(pluginSource).toContain('"@opencode/ai/providers/openai"');
+    expect(pluginSource).toContain('"reasoning.encrypted_content"');
+    expect(pluginSource).toContain('"xhigh"');
   });
 
   it("loads Responses context limits from the Codex catalog", () => {
@@ -364,6 +367,33 @@ describe("dynamic model catalog setup", () => {
     );
     expect(pluginSource).toContain("entry.context_window");
     expect(pluginSource).toContain("context: entry.contextWindow");
+  });
+
+  it("preserves catalog reasoning levels and initializes Chat variants", () => {
+    const snippets = buildClientSetupSnippets({
+      apiKey: "test-key",
+      serviceOrigin: "https://relay.example",
+      opencodeModels: [
+        { id: "chat-model", displayName: "Chat", wireApi: "openai-chat" },
+        {
+          id: "responses-model",
+          displayName: "Responses",
+          wireApi: "openai-responses",
+          reasoningEfforts: ["low", "high"],
+        },
+      ],
+      piModels: [],
+      dshModels: [],
+    });
+    const pluginSource = opencodePluginSource(snippets.opencode);
+
+    expect(pluginSource).toContain("supported_reasoning_levels");
+    expect(pluginSource).toContain("reasoningEfforts");
+    expect(pluginSource).toContain("variants: [],");
+    expect(pluginSource).toContain(
+      'entry.reasoningEfforts ?? ["none", "minimal", "low", "medium", "high", "xhigh"]',
+    );
+    expect(pluginSource).toContain('"reasoningEfforts":["low","high"]');
   });
 
   it("writes the encoded OpenCode plugin without shell rewriting", () => {
