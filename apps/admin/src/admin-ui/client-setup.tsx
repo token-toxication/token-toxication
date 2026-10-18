@@ -65,6 +65,15 @@ function withSpeedTierAliases<T extends ClientModelOption>(models: T[]): T[] {
   });
 }
 
+function base64Encode(value: string) {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+  }
+  return btoa(binary);
+}
+
 function opencodeCatalogPluginSource(openaiBaseUrl: string, fallbackModels: OpencodeModelOption[]) {
   const chatUrl = `${openaiBaseUrl}/models?wire_api=openai-chat`;
   const responsesUrl = `${openaiBaseUrl}/models?wire_api=openai-responses`;
@@ -661,6 +670,7 @@ export function buildClientSetupSnippets({
   const anthropicBaseUrl = `${origin}/anthropic`;
   const opencodeProvider = "token-toxication";
   const opencodeCatalogPlugin = opencodeCatalogPluginSource(openaiBaseUrl, opencodeModels);
+  const opencodeCatalogPluginBase64 = base64Encode(opencodeCatalogPlugin);
   const piCatalogExtension = piCatalogExtensionSource(openaiBaseUrl);
   const opencodeConfig = JSON.stringify(
     {
@@ -756,9 +766,13 @@ export function buildClientSetupSnippets({
       `export TOKEN_TOXICATION_API_KEY=${shellQuote(relayApiKey)}`,
       'opencode_config_dir="${OPENCODE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/opencode}"',
       'mkdir -p "$opencode_config_dir/plugins"',
-      "cat > \"$opencode_config_dir/plugins/token-toxication-models.ts\" <<'TS'",
-      opencodeCatalogPlugin,
-      "TS",
+      `opencode_plugin_base64=${shellQuote(opencodeCatalogPluginBase64)}`,
+      "if base64 --decode </dev/null >/dev/null 2>&1; then",
+      '  printf "%s" "$opencode_plugin_base64" | base64 --decode > "$opencode_config_dir/plugins/token-toxication-models.ts"',
+      "else",
+      '  printf "%s" "$opencode_plugin_base64" | base64 -D > "$opencode_config_dir/plugins/token-toxication-models.ts"',
+      "fi",
+      "unset opencode_plugin_base64",
       "cat > \"$opencode_config_dir/opencode.jsonc\" <<'JSON'",
       opencodeConfig,
       "JSON",

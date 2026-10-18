@@ -164,7 +164,9 @@ The generated global `~/.config/opencode/opencode.jsonc` configures the relay
 endpoint and writes `~/.config/opencode/plugins/token-toxication-models.ts`.
 The shell snippet uses `OPENCODE_CONFIG_DIR` when it is already set, otherwise
 it follows `XDG_CONFIG_HOME` and defaults to `~/.config/opencode`. Back up an
-existing global OpenCode config before running it. The plugin embeds the
+existing global OpenCode config before running it. The plugin source is carried
+as a base64 payload and decoded locally so shell copy/paste handling cannot
+rewrite TypeScript punctuation. The plugin embeds the
 current model map as a fallback, uses the relay key from
 `TOKEN_TOXICATION_API_KEY`, fetches the Chat and Responses model lists,
 preserves the `-fast`/`-ultrafast` aliases, and refreshes every five minutes.
