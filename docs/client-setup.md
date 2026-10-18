@@ -10,7 +10,7 @@ The admin **Client Setup** page generates copy-ready configuration from enabled,
 | --- | --- | --- |
 | Codex | OpenAI Responses | Provider base URL and API-key environment reference; Codex owns model selection |
 | Claude Code | Anthropic Messages | Anthropic-compatible relay settings and native model discovery |
-| opencode | OpenAI Chat or Responses | Static fallback plus a project plugin that refreshes `/openai/v1/models` every five minutes |
+| opencode | OpenAI Chat or Responses | Global config and plugin with a static fallback that refreshes `/openai/v1/models` every five minutes |
 | Pi | OpenAI Responses | Static fallback plus a provider extension that refreshes `/openai/v1/models` every five minutes |
 | DeepSeek Harness | Chat, Responses, and Anthropic Messages | `llm-pi-ai` routes for `$DSH_HOME/settings.yaml`, without changing the agent default |
 
@@ -21,7 +21,7 @@ before applying the generated content and review the extension before enabling i
 Client Setup does not choose a model for Codex, Claude Code, opencode, or
 DeepSeek Harness. Select a routable model in the client after adding its
 provider. For Claude Code, keep an eligible route for its native default or
-select a model using its own picker. opencode's generated project file lists
+select a model using its own picker. opencode's generated global config lists
 the routed models but leaves its `model` and `small_model` preferences unset.
 The DeepSeek Harness fragment preserves any existing `agent-default-model`;
 select a new default in the harness if needed. Existing client configuration
@@ -160,15 +160,18 @@ This keeps the configuration usable by clients that only select models by id.
 
 ## opencode
 
-The generated `opencode.json` configures the relay endpoint and writes
-`.opencode/plugins/token-toxication-models.ts`. The plugin embeds the current
-model map as a fallback, uses the relay key from `TOKEN_TOXICATION_API_KEY`,
-fetches the Chat and Responses model lists, preserves the
-`-fast`/`-ultrafast` aliases, and refreshes every five minutes. If a refresh
-fails, the last successful list (or the generated fallback on first launch)
-remains available.
+The generated global `~/.config/opencode/opencode.jsonc` configures the relay
+endpoint and writes `~/.config/opencode/plugins/token-toxication-models.ts`.
+The shell snippet uses `OPENCODE_CONFIG_DIR` when it is already set, otherwise
+it follows `XDG_CONFIG_HOME` and defaults to `~/.config/opencode`. Back up an
+existing global OpenCode config before running it. The plugin embeds the
+current model map as a fallback, uses the relay key from
+`TOKEN_TOXICATION_API_KEY`, fetches the Chat and Responses model lists,
+preserves the `-fast`/`-ultrafast` aliases, and refreshes every five minutes.
+If a refresh fails, the last successful list (or the generated fallback on
+first launch) remains available.
 
-The plugin is loaded through opencode's automatic `.opencode/plugins/` discovery.
+The plugin is loaded through opencode's automatic global plugin discovery.
 This setup targets the inspected opencode reference at commit
 `8ffbcc2c81d1ff558618137204c36954797d7a6f` (`vscode-v1.0.0-5-g8ffbcc2c81`).
 

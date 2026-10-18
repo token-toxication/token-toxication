@@ -550,8 +550,8 @@ export function ClientSetupView({
           <TabsContent value="opencode">
             {opencodeModels.length > 0 ? (
               <ClientSnippetCard
-                title={t`opencode project config`}
-                description={t`Installs a project plugin that refreshes the relay model catalog, with the generated list as a fallback.`}
+                title={t`opencode global config`}
+                description={t`Installs a global plugin and config that refresh the relay model catalog, with the generated list as a fallback. Back up your existing OpenCode config first.`}
                 endpoint="/openai/v1"
                 model={t`Chosen in opencode`}
                 snippet={snippets.opencode}
@@ -754,11 +754,12 @@ export function buildClientSetupSnippets({
     ].join("\n"),
     opencode: [
       `export TOKEN_TOXICATION_API_KEY=${shellQuote(relayApiKey)}`,
-      "mkdir -p .opencode/plugins",
-      "cat > .opencode/plugins/token-toxication-models.ts <<'TS'",
+      'opencode_config_dir="${OPENCODE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/opencode}"',
+      'mkdir -p "$opencode_config_dir/plugins"',
+      "cat > \"$opencode_config_dir/plugins/token-toxication-models.ts\" <<'TS'",
       opencodeCatalogPlugin,
       "TS",
-      "cat > opencode.json <<'JSON'",
+      "cat > \"$opencode_config_dir/opencode.jsonc\" <<'JSON'",
       opencodeConfig,
       "JSON",
       "",

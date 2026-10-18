@@ -313,12 +313,20 @@ describe("dynamic model catalog setup", () => {
       dshModels: [],
     });
 
-    expect(snippets.opencode).toContain(".opencode/plugins/token-toxication-models.ts");
+    expect(snippets.opencode).toContain(
+      'opencode_config_dir="${OPENCODE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/opencode}"',
+    );
+    expect(snippets.opencode).toContain(
+      "cat > \"$opencode_config_dir/plugins/token-toxication-models.ts\" <<'TS'",
+    );
+    expect(snippets.opencode).toContain("cat > \"$opencode_config_dir/opencode.jsonc\" <<'JSON'");
+    expect(snippets.opencode).not.toContain(".opencode/plugins/token-toxication-models.ts");
+    expect(snippets.opencode).not.toContain("opencode.json <<");
     expect(snippets.opencode).toContain("wire_api=openai-chat");
     expect(snippets.opencode).toContain("wire_api=openai-responses");
     expect(snippets.opencode).toContain("process.env.TOKEN_TOXICATION_API_KEY");
     const plugin = snippets.opencode.split(
-      "cat > .opencode/plugins/token-toxication-models.ts <<'TS'\n",
+      "cat > \"$opencode_config_dir/plugins/token-toxication-models.ts\" <<'TS'\n",
     )[1];
     expect(plugin?.split("\nTS")[0]).not.toContain("tokentoxication-test");
   });
