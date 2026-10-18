@@ -20,7 +20,7 @@ http-body-util.workspace = true
 instant-acme.workspace = true
 mime_guess.workspace = true
 rand.workspace = true
-rusqlite.workspace = true
+rusqlite = { workspace = true, features = ["hooks"] }
 rust-embed.workspace = true
 serde.workspace = true
 serde_json.workspace = true

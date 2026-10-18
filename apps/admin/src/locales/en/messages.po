@@ -28,17 +28,6 @@ msgstr "{0, plural, one {# route} other {# routes}}"
 msgid "{0, plural, one {# routed model} other {# routed models}}"
 msgstr "{0, plural, one {# routed model} other {# routed models}}"
 
-#. placeholder {0}: formatNumber(dashboard.usage.cachedInputTokensToday)
-#. placeholder {1}: formatNumber(dashboard.usage.inputTokensToday)
-#: src/admin-ui/dashboard.tsx:68
-msgid "{0} / {1} input tokens"
-msgstr "{0} / {1} input tokens"
-
-#. placeholder {0}: values.length
-#: src/admin-ui/dashboard.tsx:250
-msgid "{0} × {intervalMinutes} min"
-msgstr "{0} × {intervalMinutes} min"
-
 #. placeholder {0}: formatNumber(summary.bodyBytes)
 #: src/admin-ui/helpers.tsx:149
 msgid "{0} bytes · {stream} · keys {keys}{stripped}"
@@ -90,10 +79,28 @@ msgstr "{0} in · {1} out"
 msgid "{0} input · {1} cached · {2} output"
 msgstr "{0} input · {1} cached · {2} output"
 
+#. placeholder {0}: percent(ratio(stats.classifiedInputTokens, stats.inputTokens))
+#. placeholder {1}: stats.cacheSamples
+#: src/admin-ui/analytics-panel.tsx:460
+msgid "{0} input coverage; {1} samples"
+msgstr "{0} input coverage; {1} samples"
+
+#. placeholder {0}: stats.completeUsageSamples
+#. placeholder {1}: stats.attempts
+#: src/admin-ui/analytics-panel.tsx:455
+msgid "{0} of {1} usage records complete"
+msgstr "{0} of {1} usage records complete"
+
 #. placeholder {0}: limit.remaining
 #: src/admin-ui/helpers.tsx:567
 msgid "{0} remaining"
 msgstr "{0} remaining"
+
+#. placeholder {0}: stats.retryAttempts
+#. placeholder {1}: stats.overloadRetries
+#: src/admin-ui/analytics-panel.tsx:440
+msgid "{0} retry attempts; {1} internal overload retries"
+msgstr "{0} retry attempts; {1} internal overload retries"
 
 #. placeholder {0}: key.rateLimitPerMinute
 #. placeholder {0}: selectedKey.rateLimitPerMinute
@@ -103,12 +110,10 @@ msgstr "{0} remaining"
 msgid "{0} rpm"
 msgstr "{0} rpm"
 
-#. placeholder {0}: formatNumber(dashboard.usage.totalRequests)
-#. placeholder {0}: formatNumber(dashboard.usage.totalTokens)
-#: src/admin-ui/dashboard.tsx:53
-#: src/admin-ui/dashboard.tsx:59
-msgid "{0} total"
-msgstr "{0} total"
+#. placeholder {0}: stats.ttft.samples
+#: src/admin-ui/analytics-panel.tsx:450
+msgid "{0} successful samples"
+msgstr "{0} successful samples"
 
 #. placeholder {0}: formatNumber(log.inputTokens + log.outputTokens)
 #. placeholder {1}: formatCacheHitRate(log.cachedInputTokens, log.inputTokens)
@@ -116,11 +121,13 @@ msgstr "{0} total"
 msgid "{0} total · {1} cache hit"
 msgstr "{0} total · {1} cache hit"
 
-#. placeholder {0}: formatChartInterval(bucket.startedAt, trend.bucketDurationSeconds)
-#. placeholder {1}: formatRequestCount(value)
-#: src/admin-ui/dashboard.tsx:308
-msgid "{0}: {1}"
-msgstr "{0}: {1}"
+#. placeholder {0}: dashboard.healthyAccounts
+#. placeholder {1}: dashboard.totalAccounts
+#. placeholder {2}: dashboard.activeApiKeys
+#. placeholder {3}: dashboard.totalApiKeys
+#: src/admin-ui/dashboard.tsx:42
+msgid "{0}/{1} healthy accounts · {2}/{3} active API keys"
+msgstr "{0}/{1} healthy accounts · {2}/{3} active API keys"
 
 #. placeholder {0}: log.latencyMs
 #. placeholder {0}: log.queueWaitMs
@@ -144,6 +151,11 @@ msgstr "{days, plural, one {# day} other {# days}}"
 msgid "{hours, plural, one {# hour} other {# hours}}"
 msgstr "{hours, plural, one {# hour} other {# hours}}"
 
+#. placeholder {0}: stats.attempts
+#: src/admin-ui/analytics-panel.tsx:445
+msgid "{known} of {0} results classified; cancellations included"
+msgstr "{known} of {0} results classified; cancellations included"
+
 #: src/admin-ui/helpers.tsx:482
 msgid "{minutes, plural, one {# minute} other {# minutes}}"
 msgstr "{minutes, plural, one {# minute} other {# minutes}}"
@@ -166,9 +178,14 @@ msgstr "{value, plural, one {# request} other {# requests}}"
 
 #: src/admin-ui/accounts.tsx:598
 #: src/admin-ui/accounts.tsx:1164
-#: src/admin-ui/dashboard.tsx:118
+#: src/admin-ui/analytics-panel.tsx:132
+#: src/admin-ui/dashboard.tsx:51
 msgid "Account"
 msgstr "Account"
+
+#: src/admin-ui/analytics-panel.tsx:670
+msgid "Accounts"
+msgstr "Accounts"
 
 #: src/admin-ui/api-keys.tsx:88
 msgid "Actions"
@@ -180,15 +197,7 @@ msgstr "Actions"
 msgid "Active"
 msgstr "Active"
 
-#: src/admin-ui/dashboard.tsx:72
-msgid "Active API keys"
-msgstr "Active API keys"
-
-#: src/admin-ui/dashboard.tsx:80
-msgid "active upstream accounts"
-msgstr "active upstream accounts"
-
-#: src/admin-ui/dashboard.tsx:125
+#: src/admin-ui/dashboard.tsx:63
 msgid "Add a provider account to relay traffic."
 msgstr "Add a provider account to relay traffic."
 
@@ -293,6 +302,7 @@ msgstr "Advertise when routed"
 msgid "all"
 msgstr "all"
 
+#: src/admin-ui/analytics-panel.tsx:139
 #: src/admin-ui/api-keys.tsx:110
 msgid "All"
 msgstr "All"
@@ -306,6 +316,10 @@ msgstr "All services"
 #: src/admin-ui/use-admin-workspace.ts:451
 msgid "Allow popups to sign in with Antigravity"
 msgstr "Allow popups to sign in with Antigravity"
+
+#: src/admin-ui/analytics-panel.tsx:399
+msgid "Analytics unavailable"
+msgstr "Analytics unavailable"
 
 #: src/admin-ui/client-setup.tsx:516
 msgid "Anthropic base"
@@ -333,7 +347,7 @@ msgstr "API key"
 
 #: src/admin-routes.tsx:10
 #: src/admin-ui/api-keys.tsx:249
-#: src/admin-ui/dashboard.tsx:98
+#: src/admin-ui/dashboard.tsx:55
 msgid "API Key"
 msgstr "API Key"
 
@@ -379,6 +393,18 @@ msgstr "At the same model, tier and token mix"
 #: src/admin-ui/logs.tsx:574
 msgid "Attempt"
 msgstr "Attempt"
+
+#: src/admin-ui/analytics-panel.tsx:533
+msgid "Attempt duration · ms"
+msgstr "Attempt duration · ms"
+
+#: src/admin-ui/analytics-panel.tsx:486
+msgid "Attempt outcomes"
+msgstr "Attempt outcomes"
+
+#: src/admin-ui/analytics-panel.tsx:649
+msgid "Attempts"
+msgstr "Attempts"
 
 #: src/admin-ui/accounts.tsx:642
 #: src/admin-ui/accounts.tsx:962
@@ -458,13 +484,27 @@ msgstr "Bindings that make this Catalog Model reachable."
 msgid "blocked"
 msgstr "blocked"
 
-#: src/admin-ui/dashboard.tsx:63
+#: src/admin-ui/analytics-panel.tsx:487
+msgid "By completion time. The last interval is still in progress."
+msgstr "By completion time. The last interval is still in progress."
+
+#: src/admin-ui/analytics-panel.tsx:458
+#: src/admin-ui/analytics-panel.tsx:593
 msgid "Cache hit rate"
 msgstr "Cache hit rate"
 
+#: src/admin-ui/analytics-panel.tsx:588
+msgid "Cache hit rate · %"
+msgstr "Cache hit rate · %"
+
+#: src/admin-ui/analytics-panel.tsx:562
 #: src/admin-ui/quota-capacity.tsx:57
 msgid "Cached input"
 msgstr "Cached input"
+
+#: src/admin-ui/analytics-panel.tsx:558
+msgid "Cached input is part of input, not extra usage. Unclassified input has incomplete cache metadata."
+msgstr "Cached input is part of input, not extra usage. Unclassified input has incomplete cache metadata."
 
 #: src/admin-ui/accounts.tsx:856
 msgid "Cancel sign-in"
@@ -518,6 +558,10 @@ msgstr "Chosen in DeepSeek Harness"
 msgid "Chosen in opencode"
 msgstr "Chosen in opencode"
 
+#: src/admin-ui/analytics-panel.tsx:280
+msgid "Classification"
+msgstr "Classification"
+
 #: src/admin-ui/client-setup.tsx:599
 msgid "Claude Code environment"
 msgstr "Claude Code environment"
@@ -525,6 +569,14 @@ msgstr "Claude Code environment"
 #: src/admin-ui/api-keys.tsx:414
 msgid "Claude only"
 msgstr "Claude only"
+
+#: src/admin-ui/analytics-panel.tsx:161
+msgid "Clear filter"
+msgstr "Clear filter"
+
+#: src/admin-ui/analytics-panel.tsx:504
+msgid "Client cancellation"
+msgstr "Client cancellation"
 
 #: src/admin-ui/api-keys.tsx:59
 msgid "Client credentials, limits, and service permissions."
@@ -613,13 +665,14 @@ msgstr "Collecting data. At least 10 percentage points of consumption are needed
 msgid "Complete metering: {0} / {1} attempts"
 msgstr "Complete metering: {0} / {1} attempts"
 
-#: src/admin-ui/dashboard.tsx:356
-msgid "Completed avg / {intervalMinutes} min"
-msgstr "Completed avg / {intervalMinutes} min"
+#: src/admin-ui/analytics-panel.tsx:328
+#: src/admin-ui/analytics-panel.tsx:438
+msgid "Completed attempts"
+msgstr "Completed attempts"
 
-#: src/admin-ui/dashboard.tsx:93
-msgid "Completed relay requests across clock-aligned intervals."
-msgstr "Completed relay requests across clock-aligned intervals."
+#: src/admin-ui/analytics-panel.tsx:337
+msgid "Completed upstream attempts, not user requests or live concurrency."
+msgstr "Completed upstream attempts, not user requests or live concurrency."
 
 #: src/admin-ui/api-keys.tsx:434
 msgid "Concurrency"
@@ -668,6 +721,14 @@ msgstr "Copy code"
 #: src/App.tsx:484
 msgid "Copy secret"
 msgstr "Copy secret"
+
+#: src/admin-ui/analytics-panel.tsx:165
+msgid "Could not load filter options. Change the search to retry."
+msgstr "Could not load filter options. Change the search to retry."
+
+#: src/admin-ui/analytics-panel.tsx:283
+msgid "Count"
+msgstr "Count"
 
 #: src/admin-ui/api-keys.tsx:64
 msgid "Create"
@@ -745,6 +806,11 @@ msgstr "Defaults to model ID"
 msgid "Delete"
 msgstr "Delete"
 
+#. placeholder {0}: group.id?.slice(0, 8)
+#: src/admin-ui/analytics-panel.tsx:87
+msgid "Deleted account ({0})"
+msgstr "Deleted account ({0})"
+
 #: src/admin-ui/helpers.tsx:340
 msgid "Deprecated"
 msgstr "Deprecated"
@@ -785,10 +851,6 @@ msgstr "Display name"
 #: src/admin-ui/models.tsx:141
 msgid "Display Name"
 msgstr "Display Name"
-
-#: src/admin-ui/dashboard.tsx:244
-msgid "Each point counts completed requests in one interval. Hover or focus for details."
-msgstr "Each point counts completed requests in one interval. Hover or focus for details."
 
 #: src/admin-ui/accounts.tsx:379
 msgid "Edit"
@@ -838,6 +900,10 @@ msgstr "Every exact model name clients may send."
 msgid "Exact upstream model ID"
 msgstr "Exact upstream model ID"
 
+#: src/admin-ui/analytics-panel.tsx:534
+msgid "Excludes queue wait and earlier attempts; not end-to-end user latency."
+msgstr "Excludes queue wait and earlier attempts; not end-to-end user latency."
+
 #: src/admin-ui/accounts.tsx:1013
 #: src/admin-ui/api-keys.tsx:345
 msgid "Expires"
@@ -852,9 +918,18 @@ msgstr "Expires {0}"
 msgid "Extra requests overflow to other accounts in the same tier, then wait in a queue. Leave blank or 0 for unlimited."
 msgstr "Extra requests overflow to other accounts in the same tier, then wait in a queue. Leave blank or 0 for unlimited."
 
+#: src/admin-ui/analytics-panel.tsx:327
+#: src/admin-ui/analytics-panel.tsx:497
+msgid "Failed attempts"
+msgstr "Failed attempts"
+
 #: src/admin-ui/use-admin-workspace.ts:162
 msgid "Failed to load dashboard"
 msgstr "Failed to load dashboard"
+
+#: src/admin-ui/analytics-panel.tsx:655
+msgid "Failures"
+msgstr "Failures"
 
 #: src/admin-ui/models.tsx:144
 #: src/admin-ui/models.tsx:419
@@ -910,9 +985,9 @@ msgstr "Headers preserved or supplied by the Rust relay."
 msgid "healthy"
 msgstr "healthy"
 
-#: src/admin-ui/dashboard.tsx:78
-msgid "Healthy accounts"
-msgstr "Healthy accounts"
+#: src/admin-ui/analytics-panel.tsx:604
+msgid "Historical classifications"
+msgstr "Historical classifications"
 
 #: src/admin-ui/models.tsx:634
 msgid "How this Catalog Model reaches its upstream model."
@@ -922,6 +997,14 @@ msgstr "How this Catalog Model reaches its upstream model."
 msgid "Identify the upstream account and connection endpoint."
 msgstr "Identify the upstream account and connection endpoint."
 
+#: src/admin-ui/analytics-panel.tsx:312
+msgid "in progress"
+msgstr "in progress"
+
+#: src/admin-ui/analytics-panel.tsx:158
+msgid "Includes deleted accounts observed in this time range."
+msgstr "Includes deleted accounts observed in this time range."
+
 #: src/admin-ui/quota-capacity.tsx:17
 msgid "Incomplete token metering or a request crossed the baseline. Estimate withheld."
 msgstr "Incomplete token metering or a request crossed the baseline. Estimate withheld."
@@ -930,9 +1013,14 @@ msgstr "Incomplete token metering or a request crossed the baseline. Estimate wi
 msgid "Installs a global plugin and config that refresh the relay model catalog, with the generated list as a fallback. Back up your existing OpenCode config first."
 msgstr "Installs a global plugin and config that refresh the relay model catalog, with the generated list as a fallback. Back up your existing OpenCode config first."
 
-#: src/admin-ui/dashboard.tsx:346
-msgid "Intervals align to local {intervalMinutes}-minute boundaries. The rightmost interval is still in progress, so its count is excluded from the average."
-msgstr "Intervals align to local {intervalMinutes}-minute boundaries. The rightmost interval is still in progress, so its count is excluded from the average."
+#. placeholder {0}: runtime.overloadRetries
+#: src/admin-ui/analytics-panel.tsx:698
+msgid "Internal overload retries: {0}"
+msgstr "Internal overload retries: {0}"
+
+#: src/admin-ui/analytics-panel.tsx:249
+msgid "Interval / group"
+msgstr "Interval / group"
 
 #: src/admin-ui/api-keys.tsx:379
 msgid "Issue a client key with optional routing limits."
@@ -951,9 +1039,21 @@ msgstr "Language"
 msgid "Language: {0}"
 msgstr "Language: {0}"
 
+#: src/admin-ui/analytics-panel.tsx:357
+msgid "Last 24 hours"
+msgstr "Last 24 hours"
+
+#: src/admin-ui/analytics-panel.tsx:360
+msgid "Last 7 days"
+msgstr "Last 7 days"
+
 #: src/admin-ui/models.tsx:728
 msgid "Last error"
 msgstr "Last error"
+
+#: src/admin-ui/analytics-panel.tsx:354
+msgid "Last hour"
+msgstr "Last hour"
 
 #: src/admin-ui/api-keys.tsx:85
 #: src/admin-ui/api-keys.tsx:339
@@ -999,10 +1099,6 @@ msgstr "Limits"
 msgid "Local"
 msgstr "Local"
 
-#: src/admin-ui/dashboard.tsx:341
-msgid "Local time"
-msgstr "Local time"
-
 #: src/admin-ui/helpers.tsx:343
 msgid "Managed"
 msgstr "Managed"
@@ -1031,6 +1127,15 @@ msgstr "Manual refresh tokens are deprecated. New accounts should use Codex devi
 msgid "Max running requests"
 msgstr "Max running requests"
 
+#: src/admin-ui/analytics-panel.tsx:554
+msgid "Median"
+msgstr "Median"
+
+#. placeholder {0}: stats?.otps.samples ?? 0
+#: src/admin-ui/analytics-panel.tsx:552
+msgid "Median after the first token; excludes TTFT. {0} measured successful attempts."
+msgstr "Median after the first token; excludes TTFT. {0} measured successful attempts."
+
 #: src/admin-ui/client-setup.tsx:583
 msgid "Merge this TOML into ~/.codex/config.toml. It uses TT's dynamic catalog while the downloaded file keeps the Desktop picker populated."
 msgstr "Merge this TOML into ~/.codex/config.toml. It uses TT's dynamic catalog while the downloaded file keeps the Desktop picker populated."
@@ -1040,6 +1145,7 @@ msgid "Messages routed"
 msgstr "Messages routed"
 
 #: src/admin-ui/accounts.tsx:738
+#: src/admin-ui/analytics-panel.tsx:132
 #: src/admin-ui/client-setup.tsx:697
 #: src/admin-ui/logs.tsx:296
 #: src/admin-ui/models.tsx:138
@@ -1049,6 +1155,10 @@ msgstr "Model"
 #: src/admin-ui/use-admin-workspace.ts:530
 msgid "Model added"
 msgstr "Model added"
+
+#: src/admin-ui/analytics-panel.tsx:634
+msgid "Model and account comparison"
+msgstr "Model and account comparison"
 
 #: src/admin-routes.tsx:13
 #: src/admin-ui/models.tsx:95
@@ -1078,6 +1188,10 @@ msgstr "Model ID"
 msgid "Model updated"
 msgstr "Model updated"
 
+#: src/admin-ui/analytics-panel.tsx:663
+msgid "Models"
+msgstr "Models"
+
 #: src/admin-ui/accounts.tsx:241
 #: src/admin-ui/accounts.tsx:248
 #: src/admin-ui/accounts.tsx:365
@@ -1094,6 +1208,10 @@ msgstr "Models and quota reported by this Google account."
 msgid "Name"
 msgstr "Name"
 
+#: src/admin-ui/analytics-panel.tsx:525
+msgid "Nearest-rank percentiles of successful, measured attempts. Missing samples leave gaps."
+msgstr "Nearest-rank percentiles of successful, measured attempts. Missing samples leave gaps."
+
 #: src/admin-ui/helpers.tsx:583
 msgid "never"
 msgstr "never"
@@ -1109,6 +1227,10 @@ msgstr "New baseline after incomplete metering"
 #: src/admin-ui/client-setup.tsx:487
 msgid "Newly created keys are prefilled here once. Existing rows only show previews, so paste the original tokentoxication-* value before copying a setup block."
 msgstr "Newly created keys are prefilled here once. Existing rows only show previews, so paste the original tokentoxication-* value before copying a setup block."
+
+#: src/admin-ui/analytics-panel.tsx:208
+msgid "Next"
+msgstr "Next"
 
 #: src/admin-ui/accounts.tsx:782
 msgid "No account models returned"
@@ -1142,6 +1264,10 @@ msgstr "No Claude Code routes"
 msgid "No Codex routes"
 msgstr "No Codex routes"
 
+#: src/admin-ui/analytics-panel.tsx:474
+msgid "No completed attempts in this window"
+msgstr "No completed attempts in this window"
+
 #: src/admin-ui/api-keys.tsx:125
 #: src/admin-ui/api-keys.tsx:192
 msgid "No concurrent"
@@ -1168,6 +1294,10 @@ msgstr "no keys"
 msgid "No limit"
 msgstr "No limit"
 
+#: src/admin-ui/analytics-panel.tsx:188
+msgid "No matching history"
+msgstr "No matching history"
+
 #: src/admin-ui/client-setup.tsx:623
 msgid "No opencode routes"
 msgstr "No opencode routes"
@@ -1177,7 +1307,7 @@ msgid "No Pi routes"
 msgstr "No Pi routes"
 
 #: src/admin-ui/accounts.tsx:166
-#: src/admin-ui/dashboard.tsx:124
+#: src/admin-ui/dashboard.tsx:62
 msgid "No provider accounts"
 msgstr "No provider accounts"
 
@@ -1200,10 +1330,6 @@ msgstr "No relay traffic"
 #: src/admin-ui/helpers.tsx:143
 msgid "No request summary"
 msgstr "No request summary"
-
-#: src/admin-ui/dashboard.tsx:325
-msgid "No requests in this window"
-msgstr "No requests in this window"
 
 #: src/admin-ui/api-keys.tsx:118
 #: src/admin-ui/api-keys.tsx:185
@@ -1231,10 +1357,6 @@ msgstr "Not found"
 msgid "not set"
 msgstr "not set"
 
-#: src/admin-ui/dashboard.tsx:336
-msgid "Now"
-msgstr "Now"
-
 #: src/admin-ui/helpers.tsx:359
 msgid "OAuth tokens are exchanged and managed by the relay."
 msgstr "OAuth tokens are exchanged and managed by the relay."
@@ -1247,6 +1369,10 @@ msgstr "Observation details"
 #: src/admin-ui/quota-capacity.tsx:165
 msgid "Observed token capacity"
 msgstr "Observed token capacity"
+
+#: src/admin-ui/analytics-panel.tsx:607
+msgid "Old records without persisted metadata remain unknown. Routing rejections before an attempt are excluded."
+msgstr "Old records without persisted metadata remain unknown. Routing rejections before an attempt are excluded."
 
 #: src/admin-ui/accounts.tsx:838
 msgid "Open Codex verification page"
@@ -1268,6 +1394,10 @@ msgstr "OpenAI-compatible only"
 msgid "opencode global config"
 msgstr "opencode global config"
 
+#: src/admin-ui/analytics-panel.tsx:85
+msgid "Other"
+msgstr "Other"
+
 #: src/admin-ui/logs.tsx:190
 #: src/admin-ui/logs.tsx:629
 msgid "OTPS"
@@ -1279,13 +1409,30 @@ msgstr "OTPS"
 msgid "OTPS {0}"
 msgstr "OTPS {0}"
 
+#: src/admin-ui/analytics-panel.tsx:580
 #: src/admin-ui/quota-capacity.tsx:57
 msgid "Output"
 msgstr "Output"
 
+#: src/admin-ui/analytics-panel.tsx:551
+msgid "Output speed · token/s"
+msgstr "Output speed · token/s"
+
 #: src/admin-routes.tsx:8
 msgid "Overview"
 msgstr "Overview"
+
+#: src/admin-ui/analytics-panel.tsx:528
+#: src/admin-ui/analytics-panel.tsx:537
+#: src/admin-ui/analytics-panel.tsx:546
+msgid "P50"
+msgstr "P50"
+
+#: src/admin-ui/analytics-panel.tsx:529
+#: src/admin-ui/analytics-panel.tsx:538
+#: src/admin-ui/analytics-panel.tsx:547
+msgid "P95"
+msgstr "P95"
 
 #: src/admin-ui/shared.tsx:42
 msgid "Page not found"
@@ -1316,10 +1463,6 @@ msgstr "paused"
 #: src/admin-ui/api-keys.tsx:297
 msgid "Paused"
 msgstr "Paused"
-
-#: src/admin-ui/dashboard.tsx:354
-msgid "Peak / {intervalMinutes} min"
-msgstr "Peak / {intervalMinutes} min"
 
 #: src/admin-ui/logs.tsx:302
 #: src/admin-ui/logs.tsx:409
@@ -1360,6 +1503,10 @@ msgstr "Preset"
 #: src/admin-ui/api-keys.tsx:76
 msgid "Preview"
 msgstr "Preview"
+
+#: src/admin-ui/analytics-panel.tsx:199
+msgid "Previous"
+msgstr "Previous"
 
 #: src/admin-ui/helpers.tsx:82
 msgid "primary"
@@ -1451,7 +1598,7 @@ msgstr "Provider Model Routes"
 msgid "Provider paused"
 msgstr "Provider paused"
 
-#: src/admin-ui/dashboard.tsx:110
+#: src/admin-ui/dashboard.tsx:39
 msgid "Provider pool"
 msgstr "Provider pool"
 
@@ -1482,6 +1629,10 @@ msgstr "Public model identity and client-facing metadata."
 #: src/admin-ui/logs.tsx:170
 msgid "Queue wait"
 msgstr "Queue wait"
+
+#: src/admin-ui/analytics-panel.tsx:542
+msgid "Queue wait · ms"
+msgstr "Queue wait · ms"
 
 #: src/admin-ui/accounts.tsx:359
 msgid "Quota"
@@ -1523,6 +1674,10 @@ msgstr "Quota window reset"
 msgid "Quota windows are measured independently; do not add their token totals. Reopen this dialog to see the latest data."
 msgstr "Quota windows are measured independently; do not add their token totals. Reopen this dialog to see the latest data."
 
+#: src/admin-ui/analytics-panel.tsx:643
+msgid "Rank by"
+msgstr "Rank by"
+
 #: src/admin-ui/api-keys.tsx:301
 msgid "Rate limit"
 msgstr "Rate limit"
@@ -1556,6 +1711,12 @@ msgstr "Reconnect"
 msgid "Reconnect Antigravity"
 msgstr "Reconnect Antigravity"
 
+#: src/admin-ui/analytics-panel.tsx:557
+msgid "Recorded token usage"
+msgstr "Recorded token usage"
+
+#: src/admin-ui/analytics-panel.tsx:325
+#: src/admin-ui/analytics-panel.tsx:453
 #: src/admin-ui/quota-capacity.tsx:88
 msgid "Recorded tokens"
 msgstr "Recorded tokens"
@@ -1576,13 +1737,26 @@ msgstr "Redeemed"
 msgid "Redeeming"
 msgstr "Redeeming"
 
+#: src/admin-ui/analytics-panel.tsx:372
 #: src/App.tsx:298
 msgid "Refresh"
 msgstr "Refresh"
 
+#: src/admin-ui/analytics-panel.tsx:369
+msgid "Refresh analytics"
+msgstr "Refresh analytics"
+
 #: src/App.tsx:335
 msgid "Refresh the admin data to load the overview."
 msgstr "Refresh the admin data to load the overview."
+
+#: src/admin-ui/analytics-panel.tsx:402
+msgid "Refresh to retry, or select a shorter range. No data from a different filter is shown."
+msgstr "Refresh to retry, or select a shorter range. No data from a different filter is shown."
+
+#: src/admin-ui/analytics-panel.tsx:431
+msgid "Refreshes every 15 seconds while visible"
+msgstr "Refreshes every 15 seconds while visible"
 
 #: src/admin-ui/models.tsx:762
 msgid "Register an exact public model name clients may send."
@@ -1591,6 +1765,11 @@ msgstr "Register an exact public model name clients may send."
 #: src/admin-ui/accounts.tsx:1157
 msgid "Register an upstream credential for relay scheduling."
 msgstr "Register an upstream credential for relay scheduling."
+
+#: src/admin-ui/analytics-panel.tsx:330
+#: src/admin-ui/analytics-panel.tsx:334
+msgid "Relay analytics"
+msgstr "Relay analytics"
 
 #: src/admin-ui/client-setup.tsx:504
 msgid "Relay API key"
@@ -1631,19 +1810,6 @@ msgstr "Remaining · consumed {consumedPoints} percentage points"
 msgid "Request"
 msgstr "Request"
 
-#: src/admin-ui/dashboard.tsx:265
-msgid "Request count by local time"
-msgstr "Request count by local time"
-
-#. placeholder {0}: values.length
-#: src/admin-ui/dashboard.tsx:271
-msgid "Request counts across {0} clock-aligned {intervalMinutes}-minute intervals"
-msgstr "Request counts across {0} clock-aligned {intervalMinutes}-minute intervals"
-
-#: src/admin-ui/dashboard.tsx:90
-msgid "Request flow"
-msgstr "Request flow"
-
 #: src/admin-routes.tsx:17
 #: src/admin-routes.tsx:18
 #: src/admin-ui/logs.tsx:121
@@ -1670,18 +1836,6 @@ msgstr "Request summary"
 msgid "Requests appear here after clients call the relay."
 msgstr "Requests appear here after clients call the relay."
 
-#: src/admin-ui/dashboard.tsx:241
-msgid "Requests per {intervalMinutes} minutes"
-msgstr "Requests per {intervalMinutes} minutes"
-
-#: src/admin-ui/dashboard.tsx:156
-msgid "Requests rejected before an upstream account could be selected."
-msgstr "Requests rejected before an upstream account could be selected."
-
-#: src/admin-ui/dashboard.tsx:51
-msgid "Requests today"
-msgstr "Requests today"
-
 #: src/admin-ui/accounts.tsx:685
 #: src/admin-ui/accounts.tsx:747
 #: src/admin-ui/accounts.tsx:1051
@@ -1703,6 +1857,10 @@ msgstr "Reset credits"
 #: src/admin-ui/client-setup.tsx:520
 msgid "Responses routed"
 msgstr "Responses routed"
+
+#: src/admin-ui/analytics-panel.tsx:706
+msgid "retry index"
+msgstr "retry index"
 
 #: src/admin-ui/logs.tsx:587
 msgid "Retry-After"
@@ -1749,13 +1907,9 @@ msgstr "Routing and limits"
 msgid "Routing details"
 msgstr "Routing details"
 
-#: src/admin-ui/dashboard.tsx:113
-msgid "Routing health and availability."
-msgstr "Routing health and availability."
-
-#: src/admin-ui/dashboard.tsx:153
-msgid "Routing warnings"
-msgstr "Routing warnings"
+#: src/admin-ui/analytics-panel.tsx:730
+msgid "Routing rejections"
+msgstr "Routing rejections"
 
 #: src/admin-ui/api-keys.tsx:424
 msgid "RPM"
@@ -1789,6 +1943,10 @@ msgstr "Save changes"
 msgid "Schedulable"
 msgstr "Schedulable"
 
+#: src/admin-ui/analytics-panel.tsx:144
+msgid "Search historical names or IDs"
+msgstr "Search historical names or IDs"
+
 #: src/admin-ui/models.tsx:117
 msgid "Search model, display name, or family"
 msgstr "Search model, display name, or family"
@@ -1810,6 +1968,14 @@ msgstr "Select model"
 msgid "Server restarted"
 msgstr "Server restarted"
 
+#: src/admin-ui/analytics-panel.tsx:510
+msgid "Server shutdown"
+msgstr "Server shutdown"
+
+#: src/admin-ui/analytics-panel.tsx:713
+msgid "Session affinity and route selections"
+msgstr "Session affinity and route selections"
+
 #: src/admin-ui/client-setup.tsx:576
 msgid "Set the relay key and download the Desktop compatibility catalog before starting Codex."
 msgstr "Set the relay key and download the Desktop compatibility catalog before starting Codex."
@@ -1825,6 +1991,10 @@ msgstr "Settings"
 #: src/admin-ui/quota-capacity.tsx:48
 msgid "Settled baseline"
 msgstr "Settled baseline"
+
+#: src/admin-ui/analytics-panel.tsx:399
+msgid "Showing an older snapshot"
+msgstr "Showing an older snapshot"
 
 #: src/App.tsx:224
 msgid "Sign in"
@@ -1854,6 +2024,10 @@ msgstr "Signed in"
 #: src/admin-ui/use-admin-workspace.ts:251
 msgid "Signed out"
 msgstr "Signed out"
+
+#: src/admin-ui/analytics-panel.tsx:683
+msgid "Since service startup"
+msgstr "Since service startup"
 
 #: src/admin-ui/accounts.tsx:992
 msgid "Spending limit"
@@ -1905,6 +2079,18 @@ msgstr "Strip request params"
 #: src/admin-ui/accounts.tsx:941
 msgid "Subscription quota reported by this Codex account."
 msgstr "Subscription quota reported by this Codex account."
+
+#: src/admin-ui/analytics-panel.tsx:491
+msgid "Success"
+msgstr "Success"
+
+#: src/admin-ui/analytics-panel.tsx:443
+msgid "Successful attempts"
+msgstr "Successful attempts"
+
+#: src/admin-ui/analytics-panel.tsx:543
+msgid "Successful attempts with queue measurements."
+msgstr "Successful attempts with queue measurements."
 
 #: src/components/theme-toggle.tsx:19
 msgid "System"
@@ -1979,6 +2165,15 @@ msgstr "Tier is the requested service tier. Retries count as separate attempts."
 msgid "Time"
 msgstr "Time"
 
+#: src/admin-ui/analytics-panel.tsx:348
+msgid "Time range"
+msgstr "Time range"
+
+#: src/admin-ui/analytics-panel.tsx:524
+msgid "Time to first token · ms"
+msgstr "Time to first token · ms"
+
+#: src/admin-ui/analytics-panel.tsx:652
 #: src/admin-ui/logs.tsx:179
 #: src/admin-ui/logs.tsx:618
 msgid "Tokens"
@@ -1988,9 +2183,22 @@ msgstr "Tokens"
 msgid "Tokens cannot be attributed to this quota pool."
 msgstr "Tokens cannot be attributed to this quota pool."
 
-#: src/admin-ui/dashboard.tsx:57
-msgid "Tokens today"
-msgstr "Tokens today"
+#: src/admin-ui/analytics-panel.tsx:664
+#: src/admin-ui/analytics-panel.tsx:671
+msgid "Top 10 + other · {rankTitle}"
+msgstr "Top 10 + other · {rankTitle}"
+
+#: src/admin-ui/analytics-panel.tsx:617
+msgid "Transport and status codes"
+msgstr "Transport and status codes"
+
+#: src/admin-ui/analytics-panel.tsx:702
+msgid "Transport, outcomes and retries"
+msgstr "Transport, outcomes and retries"
+
+#: src/admin-ui/analytics-panel.tsx:477
+msgid "Try a longer range or clear the model and account filters. Missing measurements are not plotted as zero."
+msgstr "Try a longer range or clear the model and account filters. Missing measurements are not plotted as zero."
 
 #: src/admin-ui/logs.tsx:157
 #: src/admin-ui/logs.tsx:580
@@ -2002,6 +2210,10 @@ msgstr "TTFT"
 #: src/admin-ui/logs.tsx:456
 msgid "TTFT {0}"
 msgstr "TTFT {0}"
+
+#: src/admin-ui/analytics-panel.tsx:448
+msgid "TTFT P95"
+msgstr "TTFT P95"
 
 #: src/admin-ui/use-admin-workspace.ts:426
 msgid "Unable to connect Codex account"
@@ -2027,13 +2239,26 @@ msgstr "Unable to load quota"
 msgid "Unable to start Antigravity sign-in"
 msgstr "Unable to start Antigravity sign-in"
 
+#: src/admin-ui/analytics-panel.tsx:88
+msgid "Unassigned"
+msgstr "Unassigned"
+
+#: src/admin-ui/analytics-panel.tsx:568
 #: src/admin-ui/quota-capacity.tsx:57
 msgid "Uncached input"
 msgstr "Uncached input"
 
+#: src/admin-ui/analytics-panel.tsx:574
+msgid "Unclassified input"
+msgstr "Unclassified input"
+
 #: src/admin-ui/client-setup.tsx:497
 msgid "Unexpected key prefix"
 msgstr "Unexpected key prefix"
+
+#: src/admin-ui/analytics-panel.tsx:686
+msgid "Unfiltered process counters. Not affected by the history range, model or account filters; resets on restart."
+msgstr "Unfiltered process counters. Not affected by the history range, model or account filters; resets on restart."
 
 #: src/admin-ui/accounts.tsx:639
 #: src/admin-ui/accounts.tsx:643
@@ -2055,6 +2280,7 @@ msgstr "Unexpected key prefix"
 msgid "unknown"
 msgstr "unknown"
 
+#: src/admin-ui/analytics-panel.tsx:516
 #: src/admin-ui/helpers.tsx:348
 #: src/admin-ui/helpers.tsx:541
 #: src/admin-ui/helpers.tsx:578
@@ -2078,6 +2304,11 @@ msgstr "until {0}"
 #: src/admin-ui/accounts.tsx:1156
 msgid "Update routing details or replace the upstream credential."
 msgstr "Update routing details or replace the upstream credential."
+
+#. placeholder {0}: new Date(history.generatedAt).toLocaleTimeString()
+#: src/admin-ui/analytics-panel.tsx:428
+msgid "Updated {0}"
+msgstr "Updated {0}"
 
 #: src/admin-ui/logs.tsx:609
 msgid "Upstream"
@@ -2110,10 +2341,6 @@ msgstr "Upstream model ID"
 msgid "Upstream path"
 msgstr "Upstream path"
 
-#: src/admin-ui/dashboard.tsx:74
-msgid "usable client credentials"
-msgstr "usable client credentials"
-
 #: src/admin-ui/logs.tsx:305
 #: src/admin-ui/logs.tsx:412
 msgid "Usage"
@@ -2139,6 +2366,10 @@ msgstr "Use this account for relay traffic"
 msgid "Username"
 msgstr "Username"
 
+#: src/admin-ui/analytics-panel.tsx:242
+msgid "View data table"
+msgstr "View data table"
+
 #: src/admin-ui/accounts.tsx:844
 msgid "Waiting for Codex sign-in to complete…"
 msgstr "Waiting for Codex sign-in to complete…"
@@ -2162,14 +2393,14 @@ msgstr "Weight"
 msgid "Weight applies among healthy routes with the same role. Primary routes are preferred over backups."
 msgstr "Weight applies among healthy routes with the same role. Primary routes are preferred over backups."
 
+#: src/admin-ui/analytics-panel.tsx:589
+msgid "Weighted by valid input tokens, not an average of request percentages. Missing cache metadata is excluded."
+msgstr "Weighted by valid input tokens, not an average of request percentages. Missing cache metadata is excluded."
+
 #: src/admin-ui/accounts.tsx:679
 #: src/admin-ui/accounts.tsx:1045
 msgid "Window"
 msgstr "Window"
-
-#: src/admin-ui/dashboard.tsx:353
-msgid "Window total"
-msgstr "Window total"
 
 #: src/admin-ui/client-setup.tsx:632
 msgid "Writes a fallback models.json file and a provider extension that refreshes the relay catalog. Back up existing Pi configuration first."

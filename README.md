@@ -80,6 +80,7 @@ Open **Client Setup** to generate configuration for a supported client. See the 
 | [Relay API](docs/relay-api.md) | Endpoints, authentication, model discovery, and request examples |
 | [Routing and providers](docs/routing-and-providers.md) | Routing records, selection policy, wire protocols, and provider-specific setup |
 | [Operations](docs/operations.md) | Reliability, request-log privacy, usage accounting, configuration, and TLS |
+| [Relay analytics](docs/metrics.md) | ECharts dashboard, historical filters, metric definitions, and query limits |
 | [Development](docs/development.md) | Repository layout, prerequisites, generation, tests, and build commands |
 
 The OpenAPI document is served at `/openapi.json` and can also be regenerated locally with `just openapi-generate`.

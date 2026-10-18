@@ -28,6 +28,10 @@ import type {
   UpdateProviderModelRouteRequest,
 } from "./types";
 import type { ErrorResponse } from "./generated/token-toxication";
+import type {
+  ApiAdminAnalyticsRequest,
+  ApiAdminAnalyticsOptionsRequest,
+} from "./generated/token-toxication/apis/AdminApi";
 
 const TOKEN_KEY = "token-toxication.admin-token";
 
@@ -97,6 +101,13 @@ function isErrorResponse(payload: unknown): payload is ErrorResponse {
 }
 
 export const api = {
+  async analytics(query: ApiAdminAnalyticsRequest, signal?: AbortSignal) {
+    return callApi(adminApi.adminAnalytics(query, { signal }));
+  },
+
+  async analyticsOptions(query: ApiAdminAnalyticsOptionsRequest, signal?: AbortSignal) {
+    return callApi(adminApi.adminAnalyticsOptions(query, { signal }));
+  },
   async login(username: string, password: string): Promise<LoginResponse> {
     const response = await callApi(adminApi.adminLogin({ body: { username, password } }));
     return unwrapResult(response);

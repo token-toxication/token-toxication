@@ -1015,6 +1015,20 @@ async fn codex_overload_reconnects_with_bounded_random_delay() {
         assert_eq!(logs[0].overload_retry_count, if recover { 5 } else { 10 });
         assert!(logs[0].overload_retry_started);
         assert_eq!(logs[0].overload_retry_exhausted, !recover);
+        let history = state
+            .db
+            .analytics
+            .history(Default::default())
+            .await
+            .unwrap();
+        assert_eq!(
+            history.summary.overload_retries,
+            if recover { 5 } else { 10 }
+        );
+        assert_eq!(
+            state.relay_metrics.overload_retries(),
+            if recover { 5 } else { 10 }
+        );
         let route = state
             .db
             .get_provider_model_route(&seed.route_id)

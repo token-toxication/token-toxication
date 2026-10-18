@@ -542,6 +542,7 @@ async fn relay_connection(
                                     }
                                     current.overload_retries += 1;
                                     current.log.overload_retry_count = current.overload_retries;
+                                    current.log.is_overload_retry = true;
                                     current.log.overload_retry_started = true;
                                     current.log.attempt_index = current.overload_retries;
                                     let delay = crate::relay_retry::delay(
@@ -741,6 +742,7 @@ fn start_response(
             upstream_url: Some(endpoint.into()),
             request_summary: Some(request_summary),
             overload_retry_count: 0,
+            is_overload_retry: false,
             overload_retry_started: false,
             overload_retry_exhausted: false,
             overload_retry_skip_reason: None,

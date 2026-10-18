@@ -267,6 +267,15 @@ async fn coding_models_preserve_payloads_and_auth_boundaries() {
                 count: 1,
             }]
         );
+        let history = state
+            .db
+            .analytics
+            .history(Default::default())
+            .await
+            .expect("durable analytics");
+        assert_eq!(history.summary.success, 1);
+        assert_eq!(history.transports[0].name, "http_sse");
+        let serialized_analytics = serde_json::to_string(&history).unwrap();
         let serialized_logs = serde_json::to_string(&logs).expect("serialize logs");
         for private_value in [
             "synthetic-private",
@@ -280,6 +289,10 @@ async fn coding_models_preserve_payloads_and_auth_boundaries() {
             assert!(
                 !serialized_logs.contains(private_value),
                 "logs leaked {private_value}"
+            );
+            assert!(
+                !serialized_analytics.contains(private_value),
+                "analytics leaked {private_value}"
             );
         }
         server.abort();
@@ -421,6 +434,21 @@ async fn codex_http_overload_retries_same_account_before_output() {
             "{mode}"
         );
         assert_eq!(logs[0].overload_retry_started, retries, "{mode}");
+        let history = state
+            .db
+            .analytics
+            .history(Default::default())
+            .await
+            .unwrap();
+        let expected = if mode == "generic" {
+            1
+        } else if retries {
+            5
+        } else {
+            0
+        };
+        assert_eq!(history.summary.overload_retries, expected, "{mode}");
+        assert_eq!(state.relay_metrics.overload_retries(), expected, "{mode}");
         let expected_skip_reason = match mode {
             "continuation" => Some("request_not_replay_safe"),
             _ => None,

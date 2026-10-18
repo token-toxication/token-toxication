@@ -293,7 +293,7 @@ function App() {
                 <div className="flex items-center gap-2">
                   <LocaleToggle />
                   <ThemeToggle />
-                  <Button type="button" variant="outline" onClick={refresh}>
+                  <Button type="button" variant="outline" onClick={refresh} disabled={isLoading}>
                     <RefreshCcwIcon data-icon="inline-start" />
                     <Trans>Refresh</Trans>
                   </Button>
@@ -316,7 +316,7 @@ function App() {
             </header>
 
             <div className="flex flex-col gap-5 p-5">
-              {isLoading ? (
+              {isLoading && !dashboard ? (
                 <LoadingState />
               ) : (
                 <AdminRoutes

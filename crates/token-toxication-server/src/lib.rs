@@ -1,5 +1,6 @@
 pub mod account_concurrency;
 pub mod acme;
+pub mod analytics;
 pub mod antigravity_oauth;
 pub mod auth;
 pub mod codex_catalog;

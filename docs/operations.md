@@ -65,7 +65,11 @@ attempt, while the attempt index makes the retry boundary explicit.
 cache hit rate = cached input tokens / input tokens
 ```
 
-The dashboard shows today's aggregate cache hit rate and the rate for each request. Older records and providers without cached-token reporting display `0%`.
+The Overview shows a weighted cache hit rate for the selected hour, 24 hours, or
+seven days. Only complete usage records with a valid cache split enter its
+denominator; other recorded input remains unclassified. With no valid input
+denominator it displays `—`, not `0%`. Per-request logs retain their recorded
+usage values. See [Relay analytics](metrics.md) for coverage and metric definitions.
 
 Failed streams retain provider-reported usage when present. If the provider sends no usage, the token fields remain zero and the request status and error identify the failed attempt.
 

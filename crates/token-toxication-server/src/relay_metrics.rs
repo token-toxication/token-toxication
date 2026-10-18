@@ -19,6 +19,7 @@ pub struct RelayMetrics {
 
 #[derive(Default)]
 struct RelayMetricsInner {
+    overload_retries: u64,
     affinity: BTreeMap<(String, String, String), u64>,
     selections: BTreeMap<(String, String, String), u64>,
     requests: BTreeMap<(String, u16, String, u8), u64>,
@@ -27,6 +28,19 @@ struct RelayMetricsInner {
 }
 
 impl RelayMetrics {
+    pub(crate) fn record_overload_retry(&self) {
+        self.inner
+            .lock()
+            .expect("relay metrics lock poisoned")
+            .overload_retries += 1;
+    }
+
+    pub(crate) fn overload_retries(&self) -> u64 {
+        self.inner
+            .lock()
+            .expect("relay metrics lock poisoned")
+            .overload_retries
+    }
     pub fn record_affinity(&self, client: &str, wire_api: &str, status: &str) {
         let mut inner = self.inner.lock().expect("relay metrics lock poisoned");
         *inner

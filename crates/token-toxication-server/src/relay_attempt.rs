@@ -36,6 +36,8 @@ pub(crate) struct RelayAttemptLog {
     pub upstream_url: Option<String>,
     pub request_summary: Option<RequestSummary>,
     pub overload_retry_count: u8,
+    /// This completed attempt was an internal overload retry, not a failover.
+    pub is_overload_retry: bool,
     pub overload_retry_started: bool,
     pub overload_retry_exhausted: bool,
     pub overload_retry_skip_reason: Option<String>,
@@ -293,6 +295,9 @@ impl RelayAttempt {
             error.as_deref(),
             log.attempt_index,
         );
+        if log.is_overload_retry {
+            self.state.relay_metrics.record_overload_retry();
+        }
         if status_code >= 400 {
             tracing::warn!(
                 request_id = %log.request_id,
@@ -307,45 +312,50 @@ impl RelayAttempt {
         }
         self.state
             .db
-            .insert_request_log(RequestLog {
-                id: Uuid::new_v4().to_string(),
-                api_key_id: self.api_key_id.clone(),
-                provider_account_id: Some(self.selection.account.account.id.clone()),
-                method: "POST".to_string(),
-                path: log.path.clone(),
-                model: Some(self.requested_model.clone()),
-                upstream_model: Some(self.selection.upstream_model_id.clone()),
-                upstream_url: log.upstream_url.as_deref().map(sanitize_upstream_url),
-                request_summary: log.request_summary.clone().map(|mut summary| {
-                    summary.usage_complete = Some(usage.complete);
-                    summary.attempt_started_at = Some(
-                        Utc::now()
-                            - chrono::Duration::from_std(self.started.elapsed())
-                                .unwrap_or_default(),
-                    );
-                    summary
-                }),
-                status_code,
-                latency_ms: self.started.elapsed().as_millis() as u64,
-                ttft_ms: log.ttft_ms,
-                queue_wait_ms: self.queue_wait.as_millis() as u64,
-                overload_retry_count: log.overload_retry_count,
-                overload_retry_started: log.overload_retry_started,
-                overload_retry_exhausted: log.overload_retry_exhausted,
-                overload_retry_skip_reason: log.overload_retry_skip_reason.clone(),
-                client_retry_advice_injected: log.client_retry_advice_injected,
-                input_tokens: usage.input_tokens,
-                cached_input_tokens: usage.cached_input_tokens,
-                output_tokens: usage.output_tokens,
-                otps: output_tokens_per_second(usage.output_tokens, usage.generation_ms),
-                cost_usd: 0.0,
-                created_at: Utc::now(),
-                error,
-                attempt_index: log.attempt_index,
-                output_started: log.output_started,
-                retry_after_ms: log.retry_after_ms,
-                logical_request_id: log.request_id.clone(),
-            })
+            .insert_request_log_with_dimensions(
+                RequestLog {
+                    id: Uuid::new_v4().to_string(),
+                    api_key_id: self.api_key_id.clone(),
+                    provider_account_id: Some(self.selection.account.account.id.clone()),
+                    method: "POST".to_string(),
+                    path: log.path.clone(),
+                    model: Some(self.requested_model.clone()),
+                    upstream_model: Some(self.selection.upstream_model_id.clone()),
+                    upstream_url: log.upstream_url.as_deref().map(sanitize_upstream_url),
+                    request_summary: log.request_summary.clone().map(|mut summary| {
+                        summary.usage_complete = Some(usage.complete);
+                        summary.attempt_started_at = Some(
+                            Utc::now()
+                                - chrono::Duration::from_std(self.started.elapsed())
+                                    .unwrap_or_default(),
+                        );
+                        summary
+                    }),
+                    status_code,
+                    latency_ms: self.started.elapsed().as_millis() as u64,
+                    ttft_ms: log.ttft_ms,
+                    queue_wait_ms: self.queue_wait.as_millis() as u64,
+                    overload_retry_count: log.overload_retry_count,
+                    overload_retry_started: log.overload_retry_started,
+                    overload_retry_exhausted: log.overload_retry_exhausted,
+                    overload_retry_skip_reason: log.overload_retry_skip_reason.clone(),
+                    client_retry_advice_injected: log.client_retry_advice_injected,
+                    input_tokens: usage.input_tokens,
+                    cached_input_tokens: usage.cached_input_tokens,
+                    output_tokens: usage.output_tokens,
+                    otps: output_tokens_per_second(usage.output_tokens, usage.generation_ms),
+                    cost_usd: 0.0,
+                    created_at: Utc::now(),
+                    error,
+                    attempt_index: log.attempt_index,
+                    output_started: log.output_started,
+                    retry_after_ms: log.retry_after_ms,
+                    logical_request_id: log.request_id.clone(),
+                },
+                Some(log.transport),
+                Some(outcome),
+                Some(log.is_overload_retry),
+            )
             .await?;
         Ok(())
     }

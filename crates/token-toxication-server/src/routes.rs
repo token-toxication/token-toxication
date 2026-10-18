@@ -83,6 +83,8 @@ pub fn admin_routes(state: AppState) -> Router<AppState> {
         .route("/auth/me", get(me))
         .route("/auth/logout", post(logout))
         .route("/dashboard", get(admin_dashboard))
+        .route("/analytics", get(admin_analytics))
+        .route("/analytics/options", get(admin_analytics_options))
         .route("/api-keys", get(list_api_keys).post(create_api_key))
         .route(
             "/api-keys/{id}",
@@ -167,6 +169,24 @@ pub async fn metrics(State(state): State<AppState>) -> Result<Json<MetricsRespon
         selection_failures,
         timestamp: Utc::now(),
     }))
+}
+
+pub async fn admin_analytics(
+    State(state): State<AppState>,
+    Query(query): Query<crate::analytics::AnalyticsQuery>,
+) -> Result<Json<crate::analytics::AnalyticsResponse>, AppError> {
+    let history = state.db.analytics.history(query).await?;
+    Ok(Json(crate::analytics::AnalyticsResponse {
+        history,
+        runtime: crate::analytics::AnalyticsRuntime::snapshot(&state),
+    }))
+}
+
+pub async fn admin_analytics_options(
+    State(state): State<AppState>,
+    Query(query): Query<crate::analytics::AnalyticsOptionsQuery>,
+) -> Result<Json<crate::analytics::AnalyticsOptions>, AppError> {
+    Ok(Json(state.db.analytics.options(query).await?))
 }
 
 pub async fn relay_messages(
@@ -842,6 +862,7 @@ async fn relay_json_endpoint(
                 HTTP_TRANSPORT
             },
             overload_retry_count,
+            is_overload_retry: retry_account_id.is_some(),
             overload_retry_started: overload_retry_count > 0,
             overload_retry_exhausted: false,
             overload_retry_skip_reason: None,
@@ -1423,6 +1444,7 @@ async fn relay_gemini_endpoint(
         request_summary: None,
         transport: HTTP_TRANSPORT,
         overload_retry_count: 0,
+        is_overload_retry: false,
         overload_retry_started: false,
         overload_retry_exhausted: false,
         overload_retry_skip_reason: None,
@@ -3697,6 +3719,91 @@ mod tests {
 
         server.abort();
         let _ = server.await;
+        remove_test_database(&database_path);
+    }
+
+    #[tokio::test]
+    async fn analytics_require_admin_and_separate_cached_history_from_runtime() {
+        let database_path = test_database_path();
+        let db = Db::open(&database_path).await.unwrap();
+        let state = test_state(db, database_path.clone());
+        state
+            .db
+            .create_admin_session(
+                "analytics-test-session",
+                "admin",
+                Utc::now() + chrono::Duration::hours(1),
+            )
+            .await
+            .unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let app_state = state.clone();
+        let server = tokio::spawn(async move {
+            axum::serve(
+                listener,
+                crate::app(app_state, PathBuf::from("missing-admin-assets")),
+            )
+            .await
+            .unwrap();
+        });
+        let client = test_http_client();
+        for path in ["analytics?range=24h", "analytics/options?dimension=account"] {
+            let response = client
+                .get(&format!("http://{address}/admin/api/{path}"))
+                .unwrap()
+                .send()
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        }
+        for path in [
+            "analytics?range=30d",
+            "analytics?extra=oops",
+            "analytics/options?dimension=account&page=1001",
+        ] {
+            let response = client
+                .get(&format!("http://{address}/admin/api/{path}"))
+                .unwrap()
+                .bearer_auth("analytics-test-session")
+                .send()
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        }
+        let endpoint = format!("http://{address}/admin/api/analytics?range=24h&model=missing");
+        let response = client
+            .get(&endpoint)
+            .unwrap()
+            .bearer_auth("analytics-test-session")
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let first: Value = serde_json::from_slice(&response.bytes().await.unwrap()).unwrap();
+        state.relay_metrics.record_request(
+            "websocket",
+            400,
+            Some("upstream replay_missing_item"),
+            1,
+        );
+        let response = client
+            .get(&endpoint)
+            .unwrap()
+            .bearer_auth("analytics-test-session")
+            .send()
+            .await
+            .unwrap();
+        let second: Value = serde_json::from_slice(&response.bytes().await.unwrap()).unwrap();
+        assert_eq!(first["history"], second["history"]);
+        assert_eq!(
+            second["runtime"]["requestOutcomes"][0]["outcome"],
+            "replay_missing_item"
+        );
+        assert_eq!(second["history"]["summary"]["attempts"], 0);
+        server.abort();
+        let _ = server.await;
+        drop(state);
         remove_test_database(&database_path);
     }
 

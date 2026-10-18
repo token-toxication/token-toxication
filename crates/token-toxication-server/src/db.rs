@@ -45,6 +45,7 @@ pub struct ProviderRouteSelection {
 #[derive(Clone)]
 pub struct Db {
     conn: Arc<Mutex<Connection>>,
+    pub(crate) analytics: crate::analytics::AnalyticsReader,
 }
 
 impl Db {
@@ -54,7 +55,14 @@ impl Db {
                 .map_err(|err| rusqlite::Error::ToSqlConversionFailure(Box::new(err)))?;
         }
 
-        let mut conn = Connection::open(path)?;
+        // Named shared memory keeps the analytics reader on the same database in tests.
+        let database_path = if path == Path::new(":memory:") {
+            format!("file:tt-{}?mode=memory&cache=shared", Uuid::new_v4()).into()
+        } else {
+            std::path::absolute(path)
+                .map_err(|err| rusqlite::Error::ToSqlConversionFailure(Box::new(err)))?
+        };
+        let mut conn = Connection::open(&database_path)?;
         conn.execute_batch(
             r#"
             PRAGMA journal_mode = WAL;
@@ -258,6 +266,9 @@ impl Db {
             "TEXT NOT NULL DEFAULT ''",
         )?;
         ensure_column(&conn, "request_logs", "ttft_ms", "INTEGER")?;
+        ensure_column(&conn, "request_logs", "transport", "TEXT")?;
+        ensure_column(&conn, "request_logs", "outcome", "TEXT")?;
+        ensure_column(&conn, "request_logs", "is_overload_retry", "INTEGER")?;
         ensure_column(
             &conn,
             "provider_model_routes",
@@ -327,6 +338,7 @@ impl Db {
 
         Ok(Self {
             conn: Arc::new(Mutex::new(conn)),
+            analytics: crate::analytics::AnalyticsReader::new(database_path),
         })
     }
 
@@ -1527,6 +1539,17 @@ impl Db {
     }
 
     pub async fn insert_request_log(&self, log: RequestLog) -> Result<(), rusqlite::Error> {
+        self.insert_request_log_with_dimensions(log, None, None, None)
+            .await
+    }
+
+    pub(crate) async fn insert_request_log_with_dimensions(
+        &self,
+        log: RequestLog,
+        transport: Option<&str>,
+        outcome: Option<&str>,
+        is_overload_retry: Option<bool>,
+    ) -> Result<(), rusqlite::Error> {
         let conn = self.conn.lock().await;
         conn.execute(
             "INSERT INTO request_logs
@@ -1535,8 +1558,8 @@ impl Db {
               cached_input_tokens, output_tokens, otps, cost_usd, created_at, error, queue_wait_ms,
                overload_retry_count, overload_retry_started, overload_retry_exhausted, overload_retry_skip_reason,
                 client_retry_advice_injected, attempt_index, output_started, retry_after_ms,
-                logical_request_id, ttft_ms)
-               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29)",
+                  logical_request_id, ttft_ms, transport, outcome, is_overload_retry)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32)",
             params![
                 log.id,
                 log.api_key_id,
@@ -1571,6 +1594,9 @@ impl Db {
                 log.retry_after_ms,
                 log.logical_request_id,
                 log.ttft_ms,
+                transport,
+                outcome,
+                is_overload_retry,
             ],
         )?;
         Ok(())
@@ -2151,6 +2177,20 @@ fn default_display_name(value: String, fallback: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[tokio::test]
+    async fn analytics_reads_do_not_wait_for_the_relay_connection_mutex() {
+        let db = super::Db::open(std::path::Path::new(":memory:"))
+            .await
+            .unwrap();
+        let _guard = db.conn.lock().await;
+        let result = tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            db.analytics.history(Default::default()),
+        )
+        .await;
+        assert!(result.unwrap().is_ok());
+    }
+
     use super::*;
 
     #[test]

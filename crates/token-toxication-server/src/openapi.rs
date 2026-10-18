@@ -1,3 +1,8 @@
+use crate::analytics::{
+    AnalyticsBucket, AnalyticsCount, AnalyticsDimension, AnalyticsGroup, AnalyticsHistory,
+    AnalyticsOptions, AnalyticsOptionsQuery, AnalyticsPercentiles, AnalyticsQuery, AnalyticsRange,
+    AnalyticsRankBy, AnalyticsResponse, AnalyticsRuntime, AnalyticsStats,
+};
 use axum::Json;
 use utoipa::OpenApi;
 
@@ -39,6 +44,8 @@ use crate::models::{
         admin_logout,
         admin_me,
         admin_dashboard,
+        admin_analytics,
+        admin_analytics_options,
         list_api_keys,
         create_api_key,
         update_api_key,
@@ -103,6 +110,9 @@ use crate::models::{
         CreateModelCatalogEntryRequest,
         CreateProviderModelRouteRequest,
         Dashboard,
+        AnalyticsResponse, AnalyticsHistory, AnalyticsRuntime, AnalyticsStats,
+        AnalyticsPercentiles, AnalyticsBucket, AnalyticsGroup, AnalyticsCount, AnalyticsOptions,
+        AnalyticsRange, AnalyticsRankBy, AnalyticsDimension,
         ErrorDetail,
         ErrorResponse,
         GeminiAccountModel,
@@ -221,6 +231,22 @@ pub fn admin_me() {}
     ),
 )]
 pub fn admin_dashboard() {}
+
+#[utoipa::path(get, path = "/admin/api/analytics", tag = "Admin",
+    params(AnalyticsQuery),
+    responses((status=200, description="Historical completed-attempt analytics and unfiltered runtime diagnostics", body=AnalyticsResponse),
+              (status=400, description="Invalid filter", body=ErrorResponse),
+              (status=401, description="Admin session required", body=ErrorResponse),
+              (status=503, description="Analytics busy or timed out", body=ErrorResponse)))]
+pub fn admin_analytics() {}
+
+#[utoipa::path(get, path = "/admin/api/analytics/options", tag = "Admin",
+    params(AnalyticsOptionsQuery),
+    responses((status=200, description="Searchable historical filter options, 50 per page", body=AnalyticsOptions),
+              (status=400, description="Invalid query", body=ErrorResponse),
+              (status=401, description="Admin session required", body=ErrorResponse),
+              (status=503, description="Analytics busy or timed out", body=ErrorResponse)))]
+pub fn admin_analytics_options() {}
 
 #[utoipa::path(
     get,

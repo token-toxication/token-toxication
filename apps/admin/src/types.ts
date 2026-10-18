@@ -1,4 +1,12 @@
 export type {
+  AnalyticsResponse,
+  AnalyticsHistory,
+  AnalyticsStats,
+  AnalyticsRange,
+  AnalyticsRankBy,
+  AnalyticsGroup,
+  AnalyticsDimension,
+  AnalyticsOptions,
   CapacityReport,
   AntigravityOAuthStartRequest,
   AntigravityOAuthStartResponse,

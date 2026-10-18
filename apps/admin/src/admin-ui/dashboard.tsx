@@ -1,33 +1,17 @@
-import type React from "react";
+import { lazy, Suspense } from "react";
 import { Link } from "react-router";
-import {
-  ActivityIcon,
-  CableIcon,
-  GaugeIcon,
-  KeyRoundIcon,
-  PlusIcon,
-  TerminalSquareIcon,
-} from "lucide-react";
+import { PlusIcon } from "lucide-react";
 import { Trans, useLingui } from "@lingui/react/macro";
 
 import { adminPaths } from "../admin-routes";
-import {
-  formatCacheHitRate,
-  formatChartInterval,
-  formatChartTime,
-  formatNumber,
-  formatRequestCount,
-  niceChartMaximum,
-  statusBadge,
-  wireApiLabel,
-} from "./helpers";
+import { statusBadge, wireApiLabel } from "./helpers";
 import { RequestLogsView } from "./logs";
-import { EmptyNotice } from "./shared";
-import type { ApiKey, ProviderAccount, Dashboard, RequestTrend } from "../types";
-import { Badge } from "@/components/ui/badge";
+import { EmptyNotice, LoadingState } from "./shared";
+import type { ApiKey, ProviderAccount, Dashboard } from "../types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+
+const AnalyticsPanel = lazy(() => import("./analytics-panel"));
 
 export function Overview({
   dashboard,
@@ -43,329 +27,67 @@ export function Overview({
   onCreateAccount: () => void;
 }) {
   const { t } = useLingui();
-
   return (
-    <div className="flex flex-col gap-5">
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <MetricCard
-          title={t`Requests today`}
-          value={formatNumber(dashboard.usage.requestsToday)}
-          detail={t`${formatNumber(dashboard.usage.totalRequests)} total`}
-          icon={ActivityIcon}
-        />
-        <MetricCard
-          title={t`Tokens today`}
-          value={formatNumber(dashboard.usage.tokensToday)}
-          detail={t`${formatNumber(dashboard.usage.totalTokens)} total`}
-          icon={TerminalSquareIcon}
-        />
-        <MetricCard
-          title={t`Cache hit rate`}
-          value={formatCacheHitRate(
-            dashboard.usage.cachedInputTokensToday,
-            dashboard.usage.inputTokensToday,
-          )}
-          detail={t`${formatNumber(dashboard.usage.cachedInputTokensToday)} / ${formatNumber(dashboard.usage.inputTokensToday)} input tokens`}
-          icon={GaugeIcon}
-        />
-        <MetricCard
-          title={t`Active API keys`}
-          value={`${dashboard.activeApiKeys}/${dashboard.totalApiKeys}`}
-          detail={t`usable client credentials`}
-          icon={KeyRoundIcon}
-        />
-        <MetricCard
-          title={t`Healthy accounts`}
-          value={`${dashboard.healthyAccounts}/${dashboard.totalAccounts}`}
-          detail={t`active upstream accounts`}
-          icon={CableIcon}
-        />
-      </section>
-
-      <section className="grid gap-5 xl:grid-cols-[1.25fr_0.75fr]">
-        <Card>
-          <CardHeader className="flex-row items-start justify-between gap-4">
-            <div className="flex flex-col gap-1">
-              <CardTitle>
-                <Trans>Request flow</Trans>
-              </CardTitle>
-              <CardDescription>
-                <Trans>Completed relay requests across clock-aligned intervals.</Trans>
-              </CardDescription>
-            </div>
-            <Button type="button" onClick={onCreateKey}>
-              <PlusIcon data-icon="inline-start" />
-              <Trans>API Key</Trans>
-            </Button>
-          </CardHeader>
-          <CardContent>
-            <TrendChart trend={dashboard.requestTrend} />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex-row items-start justify-between gap-4">
-            <div className="flex flex-col gap-1">
-              <CardTitle>
-                <Trans>Provider pool</Trans>
-              </CardTitle>
-              <CardDescription>
-                <Trans>Routing health and availability.</Trans>
-              </CardDescription>
-            </div>
-            <Button type="button" variant="outline" onClick={onCreateAccount}>
+    <div className="flex min-w-0 flex-col gap-5">
+      <Suspense fallback={<LoadingState />}>
+        <AnalyticsPanel />
+      </Suspense>
+      <Card>
+        <CardHeader className="flex-row flex-wrap items-start justify-between gap-4">
+          <div className="flex flex-col gap-1">
+            <CardTitle>
+              <Trans>Provider pool</Trans>
+            </CardTitle>
+            <CardDescription>
+              <Trans>
+                {dashboard.healthyAccounts}/{dashboard.totalAccounts} healthy accounts ·{" "}
+                {dashboard.activeApiKeys}/{dashboard.totalApiKeys} active API keys
+              </Trans>
+            </CardDescription>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={onCreateAccount}>
               <PlusIcon data-icon="inline-start" />
               <Trans>Account</Trans>
             </Button>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            {dashboard.accounts.length === 0 ? (
-              <EmptyNotice
-                title={t`No provider accounts`}
-                body={t`Add a provider account to relay traffic.`}
-              />
-            ) : (
-              dashboard.accounts.slice(0, 5).map((account) => (
-                <div key={account.id} className="flex items-center justify-between gap-4">
-                  <div className="min-w-0">
-                    <Link
-                      to={adminPaths.account(account.id)}
-                      className="block truncate text-sm font-medium underline-offset-4 hover:underline"
-                    >
-                      {account.name}
-                    </Link>
-                    <div className="truncate text-xs text-muted-foreground">
-                      {account.provider} · {wireApiLabel(account.wireApi)}
-                    </div>
+            <Button onClick={onCreateKey}>
+              <PlusIcon data-icon="inline-start" />
+              <Trans>API Key</Trans>
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {dashboard.accounts.length === 0 ? (
+            <EmptyNotice
+              title={t`No provider accounts`}
+              body={t`Add a provider account to relay traffic.`}
+            />
+          ) : (
+            dashboard.accounts.map((account) => (
+              <div key={account.id} className="flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <Link
+                    to={adminPaths.account(account.id)}
+                    className="block truncate text-sm font-medium underline-offset-4 hover:underline"
+                  >
+                    {account.name}
+                  </Link>
+                  <div className="truncate text-xs text-muted-foreground">
+                    {account.provider} · {wireApiLabel(account.wireApi)}
                   </div>
-                  {statusBadge(account.status, account.isActive)}
                 </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
-      </section>
-
-      {(dashboard.selectionFailures ?? []).length > 0 ? (
-        <Card className="border-amber-500/30 bg-amber-500/5">
-          <CardHeader>
-            <CardTitle>
-              <Trans>Routing warnings</Trans>
-            </CardTitle>
-            <CardDescription>
-              <Trans>Requests rejected before an upstream account could be selected.</Trans>
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-2 text-sm">
-            {(dashboard.selectionFailures ?? []).map((failure) => (
-              <div
-                key={`${failure.wireApi}-${failure.model}-${failure.reason}`}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-amber-500/20 bg-background/50 px-3 py-2"
-              >
-                <span className="min-w-0 truncate font-mono text-xs">
-                  {failure.model} · {failure.reason}
-                </span>
-                <span className="text-xs tabular-nums text-muted-foreground">
-                  {failure.count} × {failure.statusCode}
-                </span>
+                {statusBadge(account.status, account.isActive)}
               </div>
-            ))}
-          </CardContent>
-        </Card>
-      ) : null}
-
+            ))
+          )}
+        </CardContent>
+      </Card>
       <RequestLogsView
         logs={dashboard.recentRequests}
         apiKeys={apiKeys}
         accounts={accounts}
         compact
       />
-    </div>
-  );
-}
-
-function MetricCard({
-  title,
-  value,
-  detail,
-  icon: Icon,
-}: {
-  title: string;
-  value: string;
-  detail: string;
-  icon: React.ComponentType<{ className?: string }>;
-}) {
-  return (
-    <Card>
-      <CardHeader className="flex-row items-center justify-between gap-3 pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
-        <Icon className="size-4 text-muted-foreground" />
-      </CardHeader>
-      <CardContent className="flex flex-col gap-2">
-        <div className="text-2xl font-semibold">{value}</div>
-        <div className="text-xs text-muted-foreground">{detail}</div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function TrendChart({ trend }: { trend: RequestTrend }) {
-  const { t } = useLingui();
-  const values = trend.buckets.map((bucket) => bucket.requestCount);
-  const peak = Math.max(...values, 0);
-  const max = niceChartMaximum(peak);
-  const chartTop = 4;
-  const chartBottom = 96;
-  const pointPositions = values.map((value, index) => {
-    const x = (index / Math.max(values.length - 1, 1)) * 100;
-    const y = chartBottom - (value / max) * (chartBottom - chartTop);
-    return { x, y, value, bucket: trend.buckets[index] };
-  });
-  const points = pointPositions.map(({ x, y }) => `${x},${y}`).join(" ");
-  const total = values.reduce((sum, value) => sum + value, 0);
-  const completedValues = values.slice(0, -1);
-  const completedAverage =
-    completedValues.length > 0
-      ? completedValues.reduce((sum, value) => sum + value, 0) / completedValues.length
-      : 0;
-  const intervalMinutes = Math.round(trend.bucketDurationSeconds / 60);
-  const firstBucket = trend.buckets[0];
-  const middleBucket = trend.buckets[Math.floor((trend.buckets.length - 1) / 2)];
-
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="rounded-lg border bg-muted/10 p-4">
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <div>
-            <div className="text-sm font-medium">
-              <Trans>Requests per {intervalMinutes} minutes</Trans>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              <Trans>
-                Each point counts completed requests in one interval. Hover or focus for details.
-              </Trans>
-            </p>
-          </div>
-          <Badge variant="outline">
-            <Trans>
-              {values.length} × {intervalMinutes} min
-            </Trans>
-          </Badge>
-        </div>
-
-        <div className="mt-4 grid grid-cols-[2.5rem_minmax(0,1fr)] gap-x-2">
-          <div className="relative h-40 text-right text-[11px] tabular-nums text-muted-foreground">
-            <span className="absolute top-[4%] right-0 -translate-y-1/2">{formatNumber(max)}</span>
-            <span className="absolute top-1/2 right-0 -translate-y-1/2">
-              {formatNumber(max / 2)}
-            </span>
-            <span className="absolute right-0 bottom-[4%] translate-y-1/2">0</span>
-          </div>
-
-          <div className="relative h-40" aria-label={t`Request count by local time`}>
-            <svg
-              viewBox="0 0 100 100"
-              preserveAspectRatio="none"
-              className="pointer-events-none absolute inset-0 h-full w-full text-foreground/70"
-              role="img"
-              aria-label={t`Request counts across ${values.length} clock-aligned ${intervalMinutes}-minute intervals`}
-            >
-              {[chartTop, 50, chartBottom].map((y) => (
-                <line
-                  key={y}
-                  x1="0"
-                  x2="100"
-                  y1={y}
-                  y2={y}
-                  className="stroke-border"
-                  strokeWidth="1"
-                  strokeDasharray={y === chartBottom ? undefined : "3 3"}
-                  vectorEffect="non-scaling-stroke"
-                />
-              ))}
-              <polygon
-                points={`0,${chartBottom} ${points} 100,${chartBottom}`}
-                className="fill-primary/5"
-              />
-              <polyline
-                points={points}
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                vectorEffect="non-scaling-stroke"
-              />
-            </svg>
-
-            {pointPositions.map(({ x, y, value, bucket }) => (
-              <Tooltip key={bucket.startedAt}>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    className="group absolute z-10 flex size-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    style={{ left: `${x}%`, top: `${y}%` }}
-                    aria-label={t`${formatChartInterval(bucket.startedAt, trend.bucketDurationSeconds)}: ${formatRequestCount(value)}`}
-                  >
-                    <span className="size-2.5 rounded-full border-2 border-background bg-foreground shadow-sm transition-transform group-hover:scale-125 group-focus-visible:scale-125" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="top" sideOffset={4}>
-                  <span className="font-medium">
-                    {formatChartInterval(bucket.startedAt, trend.bucketDurationSeconds)}
-                  </span>
-                  <span>{formatRequestCount(value)}</span>
-                </TooltipContent>
-              </Tooltip>
-            ))}
-
-            {total === 0 ? (
-              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                <span className="rounded-md border bg-background/90 px-2 py-1 text-xs text-muted-foreground shadow-sm">
-                  <Trans>No requests in this window</Trans>
-                </span>
-              </div>
-            ) : null}
-          </div>
-
-          <div />
-          <div className="mt-2 flex justify-between text-[11px] tabular-nums text-muted-foreground">
-            <span>{firstBucket ? formatChartTime(firstBucket.startedAt) : ""}</span>
-            <span>{middleBucket ? formatChartTime(middleBucket.startedAt) : ""}</span>
-            <span>
-              <Trans>Now</Trans>
-            </span>
-          </div>
-          <div />
-          <div className="mt-1 text-center text-[11px] text-muted-foreground">
-            <Trans>Local time</Trans>
-          </div>
-        </div>
-
-        <p className="mt-3 text-xs text-muted-foreground">
-          <Trans>
-            Intervals align to local {intervalMinutes}-minute boundaries. The rightmost interval is
-            still in progress, so its count is excluded from the average.
-          </Trans>
-        </p>
-      </div>
-      <div className="grid gap-3 md:grid-cols-3">
-        <ChartStat label={t`Window total`} value={formatNumber(total)} />
-        <ChartStat label={t`Peak / ${intervalMinutes} min`} value={formatNumber(peak)} />
-        <ChartStat
-          label={t`Completed avg / ${intervalMinutes} min`}
-          value={completedAverage.toLocaleString(undefined, { maximumFractionDigits: 1 })}
-        />
-      </div>
-    </div>
-  );
-}
-
-function ChartStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex flex-col gap-1 rounded-md border p-3">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <span className="text-sm font-semibold">{value}</span>
     </div>
   );
 }
