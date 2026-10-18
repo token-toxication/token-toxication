@@ -2401,6 +2401,12 @@ fn strip_upstream_params(
     let Some(object) = value.as_object_mut() else {
         return stripped;
     };
+    // ChatGPT Codex Responses is stateless and rejects both an omitted store
+    // field and store=true. Normalize every client to the upstream contract;
+    // this keeps older OpenCode clients compatible with the relay setup.
+    if object.get("store").and_then(Value::as_bool) != Some(false) {
+        object.insert("store".to_string(), Value::Bool(false));
+    }
     if object.remove("max_output_tokens").is_some() {
         stripped.push("max_output_tokens".to_string());
     }
@@ -5636,6 +5642,27 @@ mod tests {
     }
 
     #[test]
+    fn codex_subscription_responses_force_stateless_store() {
+        for auth_mode in ["codex-oauth", "codex-device-oauth"] {
+            for initial_store in [None, Some(true), Some(false)] {
+                let mut body = json!({
+                    "model": "gpt-5",
+                    "input": "hello"
+                });
+                if let Some(store) = initial_store {
+                    body["store"] = json!(store);
+                }
+
+                let stripped =
+                    strip_upstream_params(&mut body, &[], WireApi::OpenAiResponses, auth_mode);
+
+                assert_eq!(body["store"], false);
+                assert!(stripped.is_empty());
+            }
+        }
+    }
+
+    #[test]
     fn codex_subscription_responses_preserve_service_tiers() {
         for tier in ["priority", "ultrafast"] {
             let mut body = json!({
@@ -5657,12 +5684,14 @@ mod tests {
         let mut body = json!({
             "model": "gpt-5",
             "max_output_tokens": 32_000,
+            "store": true,
             "input": "hello"
         });
 
         let stripped = strip_upstream_params(&mut body, &[], WireApi::OpenAiResponses, "bearer");
 
         assert_eq!(body["max_output_tokens"], 32_000);
+        assert_eq!(body["store"], true);
         assert!(stripped.is_empty());
     }
 
