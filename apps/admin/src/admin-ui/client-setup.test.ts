@@ -328,7 +328,10 @@ describe("dynamic model catalog setup", () => {
     const plugin = snippets.opencode.split(
       "cat > \"$opencode_config_dir/plugins/token-toxication-models.ts\" <<'TS'\n",
     )[1];
-    expect(plugin?.split("\nTS")[0]).not.toContain("tokentoxication-test");
+    const pluginSource = plugin?.split("\nTS")[0] ?? "";
+    expect(pluginSource).not.toContain("tokentoxication-test");
+    expect(pluginSource).toContain('const OPENAI_BASE_URL = "https://relay.example/openai/v1";');
+    expect(pluginSource).not.toContain("\\;");
   });
 
   it("installs a Pi discovery extension without embedding the relay key", () => {
