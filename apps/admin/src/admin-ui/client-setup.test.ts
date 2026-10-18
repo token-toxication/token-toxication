@@ -342,8 +342,28 @@ describe("dynamic model catalog setup", () => {
     expect(pluginSource).toContain('const OPENAI_BASE_URL = "https://relay.example/openai/v1";');
     expect(pluginSource).not.toContain("\\;");
     expect(pluginSource).toContain("wire_api=openai-chat");
-    expect(pluginSource).toContain("wire_api=openai-responses");
+    expect(pluginSource).toContain("/openai/v1/codex/models");
     expect(pluginSource).toContain("process.env.TOKEN_TOXICATION_API_KEY");
+  });
+
+  it("loads Responses context limits from the Codex catalog", () => {
+    const snippets = buildClientSetupSnippets({
+      apiKey: "tokentoxication-test",
+      serviceOrigin: "https://relay.example",
+      opencodeModels: [{ id: "gpt-6-astra", displayName: "Astra", wireApi: "openai-responses" }],
+      piModels: [],
+      dshModels: [],
+    });
+    const pluginSource = opencodePluginSource(snippets.opencode);
+
+    expect(pluginSource).toContain(
+      '{ wireApi: "openai-responses", url: "https://relay.example/openai/v1/codex/models" }',
+    );
+    expect(pluginSource).toContain(
+      'const entries = wireApi === "openai-responses" ? body.models : body.data;',
+    );
+    expect(pluginSource).toContain("entry.context_window");
+    expect(pluginSource).toContain("context: entry.contextWindow");
   });
 
   it("writes the encoded OpenCode plugin without shell rewriting", () => {
@@ -382,7 +402,8 @@ describe("dynamic model catalog setup", () => {
     });
 
     expect(snippets.pi).toContain("~/.pi/agent/extensions/token-toxication-models.mjs");
-    expect(snippets.pi).toContain("wire_api=openai-responses");
+    expect(snippets.pi).toContain("/openai/v1/codex/models");
+    expect(snippets.pi).toContain("entry.context_window");
     expect(snippets.pi).toContain('pi.on("session_shutdown"');
     const extension = snippets.pi.split(
       "cat > ~/.pi/agent/extensions/token-toxication-models.mjs <<'JS'\n",

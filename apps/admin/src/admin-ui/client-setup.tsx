@@ -76,7 +76,7 @@ function base64Encode(value: string) {
 
 function opencodeCatalogPluginSource(openaiBaseUrl: string, fallbackModels: OpencodeModelOption[]) {
   const chatUrl = `${openaiBaseUrl}/models?wire_api=openai-chat`;
-  const responsesUrl = `${openaiBaseUrl}/models?wire_api=openai-responses`;
+  const responsesUrl = `${openaiBaseUrl}/codex/models`;
   const fallbackEntries = JSON.stringify(
     withSpeedTierAliases(fallbackModels).map((model) => ({
       id: model.id,
@@ -119,9 +119,30 @@ async function fetchCatalog() {
       });
       if (!response.ok) throw new Error("Token Toxication model catalog failed: " + response.status);
       const body = await response.json();
-      return (Array.isArray(body.data) ? body.data : [])
-        .filter((entry) => typeof entry?.id === "string" && entry.id.length > 0)
-        .map((entry) => ({ id: entry.id, name: entry.id, wireApi }));
+      const entries = wireApi === "openai-responses" ? body.models : body.data;
+      return (Array.isArray(entries) ? entries : [])
+        .filter((entry) => {
+          const id = wireApi === "openai-responses" ? entry?.slug : entry?.id;
+          return typeof id === "string" && id.length > 0;
+        })
+        .map((entry) => {
+          const id = wireApi === "openai-responses" ? entry.slug : entry.id;
+          const contextWindow = entry.context_window;
+          return {
+            id,
+            name:
+              wireApi === "openai-responses" &&
+              typeof entry.display_name === "string" &&
+              entry.display_name.length > 0
+                ? entry.display_name
+                : id,
+            wireApi,
+            contextWindow:
+              typeof contextWindow === "number" && Number.isFinite(contextWindow) && contextWindow > 0
+                ? contextWindow
+                : undefined,
+          };
+        });
     }),
   );
   const byId = new Map();
@@ -153,6 +174,13 @@ function modelDefinition(entry, template) {
       enabled: true,
       limit: { context: 200000, output: 32000 },
     };
+  const limit =
+    entry.contextWindow || base.limit
+      ? {
+          ...(base.limit || {}),
+          ...(entry.contextWindow ? { context: entry.contextWindow } : {}),
+        }
+      : undefined;
   return {
     ...structuredClone(base),
     id: entry.id,
@@ -160,6 +188,7 @@ function modelDefinition(entry, template) {
     providerID: PROVIDER_ID,
     name: entry.name,
     package: packageName,
+    ...(limit ? { limit } : {}),
     settings: { ...(base.settings || {}), baseURL: OPENAI_BASE_URL },
   };
 }
@@ -224,7 +253,7 @@ export default Plugin.define({
 }
 
 function piCatalogExtensionSource(openaiBaseUrl: string) {
-  const endpoint = `${openaiBaseUrl}/models?wire_api=openai-responses`;
+  const endpoint = `${openaiBaseUrl}/codex/models`;
   return `const PROVIDER_ID = "token-toxication";
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 const CATALOG_URL = ${JSON.stringify(endpoint)};
@@ -254,14 +283,17 @@ async function fetchCatalog(signal) {
   });
   if (!response.ok) throw new Error("Token Toxication model catalog failed: " + response.status);
   const body = await response.json();
-  const entries = (Array.isArray(body.data) ? body.data : [])
-    .filter((entry) => typeof entry?.id === "string" && entry.id.length > 0)
+  const entries = (Array.isArray(body.models) ? body.models : [])
+    .filter((entry) => typeof entry?.slug === "string" && entry.slug.length > 0)
     .map((entry) => ({
-      id: entry.id,
-      name: entry.id,
+      id: entry.slug,
+      name: typeof entry.display_name === "string" && entry.display_name.length > 0 ? entry.display_name : entry.slug,
       reasoning: true,
       input: ["text"],
-      contextWindow: 200000,
+      contextWindow:
+        typeof entry.context_window === "number" && Number.isFinite(entry.context_window) && entry.context_window > 0
+          ? entry.context_window
+          : 200000,
       maxTokens: 32768,
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     }));

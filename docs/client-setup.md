@@ -10,8 +10,8 @@ The admin **Client Setup** page generates copy-ready configuration from enabled,
 | --- | --- | --- |
 | Codex | OpenAI Responses | Provider base URL and API-key environment reference; Codex owns model selection |
 | Claude Code | Anthropic Messages | Anthropic-compatible relay settings and native model discovery |
-| opencode | OpenAI Chat or Responses | Global config and plugin with a static fallback that refreshes `/openai/v1/models` every five minutes |
-| Pi | OpenAI Responses | Static fallback plus a provider extension that refreshes `/openai/v1/models` every five minutes |
+| opencode | OpenAI Chat or Responses | Global config and plugin with a static fallback that refreshes `/openai/v1/models` and `/openai/v1/codex/models` every five minutes |
+| Pi | OpenAI Responses | Static fallback plus a provider extension that refreshes `/openai/v1/codex/models` every five minutes |
 | DeepSeek Harness | Chat, Responses, and Anthropic Messages | `llm-pi-ai` routes for `$DSH_HOME/settings.yaml`, without changing the agent default |
 
 Pi setup replaces its complete models file and writes a trusted provider extension
@@ -168,8 +168,10 @@ existing global OpenCode config before running it. The plugin source is carried
 as a base64 payload and decoded locally so shell copy/paste handling cannot
 rewrite TypeScript punctuation. The plugin embeds the
 current model map as a fallback, uses the relay key from
-`TOKEN_TOXICATION_API_KEY`, fetches the Chat and Responses model lists,
+`TOKEN_TOXICATION_API_KEY`, fetches the Chat list and Codex Responses catalog,
 preserves the `-fast`/`-ultrafast` aliases, and refreshes every five minutes.
+Responses models use the catalog's `context_window` value for OpenCode's context
+limit instead of a fixed client-side estimate.
 If a refresh fails, the last successful list (or the generated fallback on
 first launch) remains available.
 
@@ -181,7 +183,7 @@ This setup targets the inspected opencode reference at commit
 
 The generated `~/.pi/agent/models.json` remains an offline fallback. The setup
 also writes `~/.pi/agent/extensions/token-toxication-models.mjs`; Pi loads it at
-startup, fetches the Responses model list, refreshes it every five minutes, and
+startup, fetches the Codex Responses catalog, refreshes it every five minutes, and
 keeps the last successful list during transient failures. This setup targets the
 inspected Pi reference at commit `f1b2e77f5b13b2a199b1052cb79c235451afe7d7`
 (`v1.1.0-11-gf1b2e77f5`).
