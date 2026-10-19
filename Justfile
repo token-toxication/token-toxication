@@ -5,6 +5,7 @@ default:
     @just --list
 
 openapi_nexus := env_var_or_default("OPENAPI_NEXUS", "openapi-nexus")
+openapi_nexus_version := "0.2.3"
 
 # ---------- Rust ----------
 
@@ -37,7 +38,7 @@ openapi-generate:
     cargo run -p token-toxication-server --bin token-toxication-server -- generate-openapi --output openapi/token-toxication.openapi.json
 
 # Generate the admin TypeScript SDK from the OpenAPI document
-sdk-generate: openapi-generate
+sdk-generate: sdk-check-generator openapi-generate
     rm -rf apps/admin/src/generated/token-toxication
     {{openapi_nexus}} generate \
         --input openapi/token-toxication.openapi.json \
@@ -46,6 +47,10 @@ sdk-generate: openapi-generate
         --config openapi-nexus.toml \
         --generator-config typescript-fetch.package_name=@token-toxication/admin-api
     cd apps/admin && vp format --no-error-on-unmatched-pattern src/generated/token-toxication
+
+# Keep local SDK generation on the same generator version as CI
+sdk-check-generator:
+    @actual="$({{openapi_nexus}} --version)"; if [ "$actual" != "openapi-nexus {{openapi_nexus_version}}" ]; then echo "Expected openapi-nexus {{openapi_nexus_version}}, found $actual. Install the required version or set OPENAPI_NEXUS to its binary." >&2; exit 1; fi
 
 # ---------- Frontend ----------
 
@@ -97,4 +102,3 @@ package out_dir="dist-deploy": ui-build
     [ -f "target/release/token-toxication-server" ] && cp target/release/token-toxication-server "{{out_dir}}/" || true
     [ -f ".env.example" ] && cp .env.example "{{out_dir}}/.env.example" && cp .env.example "{{out_dir}}/.env" || true
     echo "Package ready in: {{out_dir}}/"
-

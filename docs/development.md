@@ -16,7 +16,12 @@
 - Rust 1.95 or newer
 - [just](https://github.com/casey/just)
 - Vite+ with the `vp` command available
-- `openapi-nexus` 0.1.17 for SDK generation
+- `openapi-nexus` 0.2.3 for SDK generation, matching CI
+
+Install the pinned SDK generator with
+`cargo +1.90.0 install openapi-nexus --version 0.2.3 --locked`.
+`just sdk-generate` checks the generator version before generating output; use
+`OPENAPI_NEXUS=/path/to/openapi-nexus` to select an isolated installation.
 
 ## Common commands
 
