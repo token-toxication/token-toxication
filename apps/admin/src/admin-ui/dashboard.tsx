@@ -1,4 +1,3 @@
-import { lazy, Suspense } from "react";
 import { Link } from "react-router";
 import { PlusIcon } from "lucide-react";
 import { Trans, useLingui } from "@lingui/react/macro";
@@ -6,12 +5,10 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { adminPaths } from "../admin-routes";
 import { statusBadge, wireApiLabel } from "./helpers";
 import { RequestLogsView } from "./logs";
-import { EmptyNotice, LoadingState } from "./shared";
+import { EmptyNotice } from "./shared";
 import type { ApiKey, ProviderAccount, Dashboard } from "../types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-
-const AnalyticsPanel = lazy(() => import("./analytics-panel"));
 
 export function Overview({
   dashboard,
@@ -29,9 +26,6 @@ export function Overview({
   const { t } = useLingui();
   return (
     <div className="flex min-w-0 flex-col gap-5">
-      <Suspense fallback={<LoadingState />}>
-        <AnalyticsPanel />
-      </Suspense>
       <Card>
         <CardHeader className="flex-row flex-wrap items-start justify-between gap-4">
           <div className="flex flex-col gap-1">

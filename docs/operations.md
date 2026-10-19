@@ -65,7 +65,7 @@ attempt, while the attempt index makes the retry boundary explicit.
 cache hit rate = cached input tokens / input tokens
 ```
 
-The Overview shows a weighted cache hit rate for the selected hour, 24 hours, or
+The Metrics page shows a weighted cache hit rate for the selected hour, 24 hours, or
 seven days. Only complete usage records with a valid cache split enter its
 denominator; other recorded input remains unclassified. With no valid input
 denominator it displays `—`, not `0%`. Per-request logs retain their recorded

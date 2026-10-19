@@ -1,8 +1,9 @@
-import type { ComponentType } from "react";
+import { lazy, Suspense, type ComponentType } from "react";
 import { Trans, useLingui } from "@lingui/react/macro";
 import {
   ActivityIcon,
   CableIcon,
+  ChartNoAxesCombinedIcon,
   CheckIcon,
   ClipboardCopyIcon,
   DatabaseIcon,
@@ -74,8 +75,11 @@ import { SettingsView } from "./admin-ui/settings";
 import { useAdminWorkspace } from "./admin-ui/use-admin-workspace";
 import { copyText } from "./admin-ui/helpers";
 
+const AnalyticsPanel = lazy(() => import("./admin-ui/analytics-panel"));
+
 const navigationIcons: Record<AdminRouteId, ComponentType<{ className?: string }>> = {
   overview: LayoutDashboardIcon,
+  metrics: ChartNoAxesCombinedIcon,
   keys: KeyRoundIcon,
   "key-detail": KeyRoundIcon,
   accounts: CableIcon,
@@ -334,6 +338,11 @@ function App() {
                         title={t`Dashboard unavailable`}
                         body={t`Refresh the admin data to load the overview.`}
                       />
+                    ),
+                    metrics: (
+                      <Suspense fallback={<LoadingState />}>
+                        <AnalyticsPanel />
+                      </Suspense>
                     ),
                     keys: (
                       <ApiKeysView

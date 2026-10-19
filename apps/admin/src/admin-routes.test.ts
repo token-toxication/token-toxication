@@ -9,6 +9,7 @@ import { ApiKeyDetailView, ApiKeysView } from "./admin-ui/api-keys";
 import type { ApiKey } from "./types";
 import {
   AdminRoutes,
+  adminNavigation,
   adminPathId,
   adminPathLabel,
   adminPaths,
@@ -31,6 +32,32 @@ const apiKey: ApiKey = {
 };
 
 describe("admin routes", () => {
+  it("gives metrics its own navigation entry without shadowing the runtime JSON endpoint", () => {
+    expect(adminPaths.overview()).toBe("/");
+    expect(adminPaths.metrics()).toBe("/analytics");
+    expect(adminPathId("/analytics")).toBe("metrics");
+    expect(adminPathLabel("/analytics")).toBe("Metrics");
+    expect(adminPaths.metrics()).not.toBe("/metrics");
+    expect(adminNavigation.find((item) => item.id === "metrics")).toEqual({
+      id: "metrics",
+      activeIds: ["metrics"],
+    });
+  });
+
+  it("restores Overview when navigating back from the metrics page", async () => {
+    const router = createMemoryRouter(adminRouteDefinitions, {
+      initialEntries: [adminPaths.overview(), adminPaths.metrics()],
+      initialIndex: 1,
+    });
+    try {
+      expect(router.state.matches.at(-1)?.route.id).toBe("metrics");
+      await router.navigate(-1);
+      expect(router.state.matches.at(-1)?.route.id).toBe("overview");
+    } finally {
+      router.dispose();
+    }
+  });
+
   it("matches an encoded provider account link to its detail route", () => {
     const path = adminPaths.account("account/west asia");
     const match = matchRoutes(adminRouteDefinitions, path)?.at(-1);

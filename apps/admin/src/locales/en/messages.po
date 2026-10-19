@@ -125,7 +125,7 @@ msgstr "{0} total · {1} cache hit"
 #. placeholder {1}: dashboard.totalAccounts
 #. placeholder {2}: dashboard.activeApiKeys
 #. placeholder {3}: dashboard.totalApiKeys
-#: src/admin-ui/dashboard.tsx:42
+#: src/admin-ui/dashboard.tsx:36
 msgid "{0}/{1} healthy accounts · {2}/{3} active API keys"
 msgstr "{0}/{1} healthy accounts · {2}/{3} active API keys"
 
@@ -179,7 +179,7 @@ msgstr "{value, plural, one {# request} other {# requests}}"
 #: src/admin-ui/accounts.tsx:598
 #: src/admin-ui/accounts.tsx:1164
 #: src/admin-ui/analytics-panel.tsx:132
-#: src/admin-ui/dashboard.tsx:51
+#: src/admin-ui/dashboard.tsx:45
 msgid "Account"
 msgstr "Account"
 
@@ -197,7 +197,7 @@ msgstr "Actions"
 msgid "Active"
 msgstr "Active"
 
-#: src/admin-ui/dashboard.tsx:63
+#: src/admin-ui/dashboard.tsx:57
 msgid "Add a provider account to relay traffic."
 msgstr "Add a provider account to relay traffic."
 
@@ -282,7 +282,7 @@ msgstr "Add route"
 msgid "Add Route"
 msgstr "Add Route"
 
-#: src/App.tsx:304
+#: src/App.tsx:308
 msgid "Admin"
 msgstr "Admin"
 
@@ -290,7 +290,7 @@ msgstr "Admin"
 msgid "Admin API"
 msgstr "Admin API"
 
-#: src/App.tsx:191
+#: src/App.tsx:195
 msgid "Admin sign in"
 msgstr "Admin sign in"
 
@@ -345,9 +345,9 @@ msgstr "Antigravity sign-in failed"
 msgid "API key"
 msgstr "API key"
 
-#: src/admin-routes.tsx:10
+#: src/admin-routes.tsx:11
 #: src/admin-ui/api-keys.tsx:249
-#: src/admin-ui/dashboard.tsx:55
+#: src/admin-ui/dashboard.tsx:49
 msgid "API Key"
 msgstr "API Key"
 
@@ -371,11 +371,11 @@ msgstr "API key not found"
 msgid "API key paused"
 msgstr "API key paused"
 
-#: src/App.tsx:466
+#: src/App.tsx:475
 msgid "API key secret"
 msgstr "API key secret"
 
-#: src/admin-routes.tsx:9
+#: src/admin-routes.tsx:10
 #: src/admin-ui/api-keys.tsx:56
 #: src/admin-ui/api-keys.tsx:244
 msgid "API Keys"
@@ -514,7 +514,7 @@ msgstr "Cancel sign-in"
 msgid "Catalog details"
 msgstr "Catalog details"
 
-#: src/admin-routes.tsx:14
+#: src/admin-routes.tsx:15
 #: src/admin-ui/accounts.tsx:512
 #: src/admin-ui/models.tsx:388
 #: src/admin-ui/models.tsx:659
@@ -590,11 +590,11 @@ msgstr "Client key"
 msgid "Client keys should start with tokentoxication-."
 msgstr "Client keys should start with tokentoxication-."
 
-#: src/App.tsx:495
+#: src/App.tsx:504
 msgid "Client setup"
 msgstr "Client setup"
 
-#: src/admin-routes.tsx:16
+#: src/admin-routes.tsx:17
 #: src/admin-ui/client-setup.tsx:474
 msgid "Client Setup"
 msgstr "Client Setup"
@@ -718,7 +718,7 @@ msgstr "Copy"
 msgid "Copy code"
 msgstr "Copy code"
 
-#: src/App.tsx:484
+#: src/App.tsx:493
 msgid "Copy secret"
 msgstr "Copy secret"
 
@@ -788,7 +788,7 @@ msgstr "Daily USD"
 msgid "Dark"
 msgstr "Dark"
 
-#: src/App.tsx:334
+#: src/App.tsx:338
 msgid "Dashboard unavailable"
 msgstr "Dashboard unavailable"
 
@@ -876,7 +876,7 @@ msgstr "Enabled"
 msgid "Enter this code on the official Codex verification page."
 msgstr "Enter this code on the official Codex verification page."
 
-#: src/App.tsx:281
+#: src/App.tsx:285
 msgid "Environment"
 msgstr "Environment"
 
@@ -1095,7 +1095,7 @@ msgstr "limited"
 msgid "Limits"
 msgstr "Limits"
 
-#: src/App.tsx:286
+#: src/App.tsx:290
 msgid "Local"
 msgstr "Local"
 
@@ -1144,6 +1144,10 @@ msgstr "Merge this TOML into ~/.codex/config.toml. It uses TT's dynamic catalog 
 msgid "Messages routed"
 msgstr "Messages routed"
 
+#: src/admin-routes.tsx:9
+msgid "Metrics"
+msgstr "Metrics"
+
 #: src/admin-ui/accounts.tsx:738
 #: src/admin-ui/analytics-panel.tsx:132
 #: src/admin-ui/client-setup.tsx:697
@@ -1160,7 +1164,7 @@ msgstr "Model added"
 msgid "Model and account comparison"
 msgstr "Model and account comparison"
 
-#: src/admin-routes.tsx:13
+#: src/admin-routes.tsx:14
 #: src/admin-ui/models.tsx:95
 #: src/admin-ui/models.tsx:383
 #: src/admin-ui/models.tsx:605
@@ -1307,7 +1311,7 @@ msgid "No Pi routes"
 msgstr "No Pi routes"
 
 #: src/admin-ui/accounts.tsx:166
-#: src/admin-ui/dashboard.tsx:62
+#: src/admin-ui/dashboard.tsx:56
 msgid "No provider accounts"
 msgstr "No provider accounts"
 
@@ -1349,7 +1353,7 @@ msgstr "non-stream"
 msgid "None"
 msgstr "None"
 
-#: src/admin-routes.tsx:20
+#: src/admin-routes.tsx:21
 msgid "Not found"
 msgstr "Not found"
 
@@ -1442,7 +1446,7 @@ msgstr "Page not found"
 msgid "partially limited"
 msgstr "partially limited"
 
-#: src/App.tsx:212
+#: src/App.tsx:216
 msgid "Password"
 msgstr "Password"
 
@@ -1543,7 +1547,7 @@ msgstr "Provider"
 msgid "Provider account"
 msgstr "Provider account"
 
-#: src/admin-routes.tsx:12
+#: src/admin-routes.tsx:13
 #: src/admin-ui/accounts.tsx:349
 #: src/admin-ui/logs.tsx:74
 #: src/admin-ui/logs.tsx:212
@@ -1569,7 +1573,7 @@ msgstr "Provider account not found"
 msgid "Provider account updated"
 msgstr "Provider account updated"
 
-#: src/admin-routes.tsx:11
+#: src/admin-routes.tsx:12
 #: src/admin-ui/accounts.tsx:139
 #: src/admin-ui/accounts.tsx:344
 msgid "Provider Accounts"
@@ -1579,7 +1583,7 @@ msgstr "Provider Accounts"
 msgid "Provider activated"
 msgstr "Provider activated"
 
-#: src/admin-routes.tsx:15
+#: src/admin-routes.tsx:16
 #: src/admin-ui/models.tsx:610
 msgid "Provider Model Route"
 msgstr "Provider Model Route"
@@ -1598,7 +1602,7 @@ msgstr "Provider Model Routes"
 msgid "Provider paused"
 msgstr "Provider paused"
 
-#: src/admin-ui/dashboard.tsx:39
+#: src/admin-ui/dashboard.tsx:33
 msgid "Provider pool"
 msgstr "Provider pool"
 
@@ -1738,7 +1742,7 @@ msgid "Redeeming"
 msgstr "Redeeming"
 
 #: src/admin-ui/analytics-panel.tsx:372
-#: src/App.tsx:298
+#: src/App.tsx:302
 msgid "Refresh"
 msgstr "Refresh"
 
@@ -1746,7 +1750,7 @@ msgstr "Refresh"
 msgid "Refresh analytics"
 msgstr "Refresh analytics"
 
-#: src/App.tsx:335
+#: src/App.tsx:339
 msgid "Refresh the admin data to load the overview."
 msgstr "Refresh the admin data to load the overview."
 
@@ -1775,7 +1779,7 @@ msgstr "Relay analytics"
 msgid "Relay API key"
 msgstr "Relay API key"
 
-#: src/App.tsx:249
+#: src/App.tsx:253
 msgid "Relay control plane"
 msgstr "Relay control plane"
 
@@ -1783,7 +1787,7 @@ msgstr "Relay control plane"
 msgid "Relay endpoint"
 msgstr "Relay endpoint"
 
-#: src/App.tsx:185
+#: src/App.tsx:189
 msgid "Relay operations console"
 msgstr "Relay operations console"
 
@@ -1810,8 +1814,8 @@ msgstr "Remaining · consumed {consumedPoints} percentage points"
 msgid "Request"
 msgstr "Request"
 
-#: src/admin-routes.tsx:17
 #: src/admin-routes.tsx:18
+#: src/admin-routes.tsx:19
 #: src/admin-ui/logs.tsx:121
 #: src/admin-ui/logs.tsx:126
 #: src/admin-ui/logs.tsx:269
@@ -1984,7 +1988,7 @@ msgstr "Set the relay key and download the Desktop compatibility catalog before 
 msgid "Set TOKEN_TOXICATION_API_KEY in the harness process environment, then merge these llm-pi-ai provider routes into ~/.dsh/settings.yaml. Keep existing keys; the harness applies changes on the next request."
 msgstr "Set TOKEN_TOXICATION_API_KEY in the harness process environment, then merge these llm-pi-ai provider routes into ~/.dsh/settings.yaml. Keep existing keys; the harness applies changes on the next request."
 
-#: src/admin-routes.tsx:19
+#: src/admin-routes.tsx:20
 msgid "Settings"
 msgstr "Settings"
 
@@ -1996,7 +2000,7 @@ msgstr "Settled baseline"
 msgid "Showing an older snapshot"
 msgstr "Showing an older snapshot"
 
-#: src/App.tsx:224
+#: src/App.tsx:228
 msgid "Sign in"
 msgstr "Sign in"
 
@@ -2009,7 +2013,7 @@ msgstr "Sign in with Antigravity"
 msgid "Sign in with Codex"
 msgstr "Sign in with Codex"
 
-#: src/App.tsx:310
+#: src/App.tsx:314
 msgid "Sign out"
 msgstr "Sign out"
 
@@ -2056,7 +2060,7 @@ msgstr "Status"
 msgid "Storage"
 msgstr "Storage"
 
-#: src/App.tsx:475
+#: src/App.tsx:484
 msgid "Store this value now"
 msgstr "Store this value now"
 
@@ -2144,7 +2148,7 @@ msgstr "This Provider Model Route may have been deleted or the link is incomplet
 msgid "This Request Log may have aged out of the current log collection or the link is incomplete."
 msgstr "This Request Log may have aged out of the current log collection or the link is incomplete."
 
-#: src/App.tsx:469
+#: src/App.tsx:478
 msgid "This secret is shown once."
 msgstr "This secret is shown once."
 
@@ -2354,7 +2358,7 @@ msgstr "Usage windows"
 msgid "Use a relay API key secret"
 msgstr "Use a relay API key secret"
 
-#: src/App.tsx:194
+#: src/App.tsx:198
 msgid "Use the credentials from your service environment."
 msgstr "Use the credentials from your service environment."
 
@@ -2362,7 +2366,7 @@ msgstr "Use the credentials from your service environment."
 msgid "Use this account for relay traffic"
 msgstr "Use this account for relay traffic"
 
-#: src/App.tsx:201
+#: src/App.tsx:205
 msgid "Username"
 msgstr "Username"
 

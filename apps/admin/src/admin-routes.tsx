@@ -6,6 +6,7 @@ import { i18n } from "./i18n";
 
 const adminRouteMetadata = [
   { id: "overview", path: "/", label: msg`Overview` },
+  { id: "metrics", path: "/analytics", label: msg`Metrics` },
   { id: "keys", path: "/keys", label: msg`API Keys` },
   { id: "key-detail", path: "/keys/:keyId", label: msg`API Key` },
   { id: "accounts", path: "/accounts", label: msg`Provider Accounts` },
@@ -36,6 +37,7 @@ export const adminNavigation: ReadonlyArray<{
   activeIds: readonly AdminRouteId[];
 }> = [
   { id: "overview", activeIds: ["overview"] },
+  { id: "metrics", activeIds: ["metrics"] },
   { id: "keys", activeIds: ["keys", "key-detail"] },
   { id: "accounts", activeIds: ["accounts", "account-detail"] },
   { id: "models", activeIds: ["models", "model-detail", "route-detail"] },
@@ -50,6 +52,7 @@ export function adminRoutePath(id: AdminRouteId) {
 
 export const adminPaths = {
   overview: () => adminRoutePath("overview"),
+  metrics: () => adminRoutePath("metrics"),
   keys: () => adminRoutePath("keys"),
   key: (keyId: string) => generatePath(adminRoutePath("key-detail"), { keyId }),
   accounts: () => adminRoutePath("accounts"),

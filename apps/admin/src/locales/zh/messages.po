@@ -125,7 +125,7 @@ msgstr "共 {0} · {1} 缓存命中"
 #. placeholder {1}: dashboard.totalAccounts
 #. placeholder {2}: dashboard.activeApiKeys
 #. placeholder {3}: dashboard.totalApiKeys
-#: src/admin-ui/dashboard.tsx:42
+#: src/admin-ui/dashboard.tsx:36
 msgid "{0}/{1} healthy accounts · {2}/{3} active API keys"
 msgstr "{0}/{1} 个健康账号 · {2}/{3} 个启用的 API 密钥"
 
@@ -179,7 +179,7 @@ msgstr "{value, plural, other {# 次请求}}"
 #: src/admin-ui/accounts.tsx:598
 #: src/admin-ui/accounts.tsx:1164
 #: src/admin-ui/analytics-panel.tsx:132
-#: src/admin-ui/dashboard.tsx:51
+#: src/admin-ui/dashboard.tsx:45
 msgid "Account"
 msgstr "账号"
 
@@ -197,7 +197,7 @@ msgstr "操作"
 msgid "Active"
 msgstr "启用"
 
-#: src/admin-ui/dashboard.tsx:63
+#: src/admin-ui/dashboard.tsx:57
 msgid "Add a provider account to relay traffic."
 msgstr "添加供应商账号以转发流量。"
 
@@ -282,7 +282,7 @@ msgstr "添加路由"
 msgid "Add Route"
 msgstr "添加路由"
 
-#: src/App.tsx:304
+#: src/App.tsx:308
 msgid "Admin"
 msgstr "管理员"
 
@@ -290,7 +290,7 @@ msgstr "管理员"
 msgid "Admin API"
 msgstr "管理 API"
 
-#: src/App.tsx:191
+#: src/App.tsx:195
 msgid "Admin sign in"
 msgstr "管理员登录"
 
@@ -345,9 +345,9 @@ msgstr "Antigravity 登录失败"
 msgid "API key"
 msgstr "API 密钥"
 
-#: src/admin-routes.tsx:10
+#: src/admin-routes.tsx:11
 #: src/admin-ui/api-keys.tsx:249
-#: src/admin-ui/dashboard.tsx:55
+#: src/admin-ui/dashboard.tsx:49
 msgid "API Key"
 msgstr "API 密钥"
 
@@ -371,11 +371,11 @@ msgstr "未找到 API 密钥"
 msgid "API key paused"
 msgstr "API 密钥已暂停"
 
-#: src/App.tsx:466
+#: src/App.tsx:475
 msgid "API key secret"
 msgstr "API 密钥密文"
 
-#: src/admin-routes.tsx:9
+#: src/admin-routes.tsx:10
 #: src/admin-ui/api-keys.tsx:56
 #: src/admin-ui/api-keys.tsx:244
 msgid "API Keys"
@@ -514,7 +514,7 @@ msgstr "取消登录"
 msgid "Catalog details"
 msgstr "目录详情"
 
-#: src/admin-routes.tsx:14
+#: src/admin-routes.tsx:15
 #: src/admin-ui/accounts.tsx:512
 #: src/admin-ui/models.tsx:388
 #: src/admin-ui/models.tsx:659
@@ -590,11 +590,11 @@ msgstr "客户端密钥"
 msgid "Client keys should start with tokentoxication-."
 msgstr "客户端密钥应以 tokentoxication- 开头。"
 
-#: src/App.tsx:495
+#: src/App.tsx:504
 msgid "Client setup"
 msgstr "客户端配置"
 
-#: src/admin-routes.tsx:16
+#: src/admin-routes.tsx:17
 #: src/admin-ui/client-setup.tsx:474
 msgid "Client Setup"
 msgstr "客户端配置"
@@ -718,7 +718,7 @@ msgstr "复制"
 msgid "Copy code"
 msgstr "复制代码"
 
-#: src/App.tsx:484
+#: src/App.tsx:493
 msgid "Copy secret"
 msgstr "复制密文"
 
@@ -788,7 +788,7 @@ msgstr "每日美元"
 msgid "Dark"
 msgstr "深色"
 
-#: src/App.tsx:334
+#: src/App.tsx:338
 msgid "Dashboard unavailable"
 msgstr "仪表盘不可用"
 
@@ -876,7 +876,7 @@ msgstr "已启用"
 msgid "Enter this code on the official Codex verification page."
 msgstr "请在官方 Codex 验证页面输入此代码。"
 
-#: src/App.tsx:281
+#: src/App.tsx:285
 msgid "Environment"
 msgstr "环境"
 
@@ -1095,7 +1095,7 @@ msgstr "已限流"
 msgid "Limits"
 msgstr "限额"
 
-#: src/App.tsx:286
+#: src/App.tsx:290
 msgid "Local"
 msgstr "本地"
 
@@ -1144,6 +1144,10 @@ msgstr "将此 TOML 合并到 ~/.codex/config.toml。它使用 TT 的动态 cata
 msgid "Messages routed"
 msgstr "已路由 Messages"
 
+#: src/admin-routes.tsx:9
+msgid "Metrics"
+msgstr "运行指标"
+
 #: src/admin-ui/accounts.tsx:738
 #: src/admin-ui/analytics-panel.tsx:132
 #: src/admin-ui/client-setup.tsx:697
@@ -1160,7 +1164,7 @@ msgstr "模型已添加"
 msgid "Model and account comparison"
 msgstr "模型与账号对比"
 
-#: src/admin-routes.tsx:13
+#: src/admin-routes.tsx:14
 #: src/admin-ui/models.tsx:95
 #: src/admin-ui/models.tsx:383
 #: src/admin-ui/models.tsx:605
@@ -1307,7 +1311,7 @@ msgid "No Pi routes"
 msgstr "没有 Pi 路由"
 
 #: src/admin-ui/accounts.tsx:166
-#: src/admin-ui/dashboard.tsx:62
+#: src/admin-ui/dashboard.tsx:56
 msgid "No provider accounts"
 msgstr "没有供应商账号"
 
@@ -1349,7 +1353,7 @@ msgstr "非流式"
 msgid "None"
 msgstr "无"
 
-#: src/admin-routes.tsx:20
+#: src/admin-routes.tsx:21
 msgid "Not found"
 msgstr "未找到"
 
@@ -1442,7 +1446,7 @@ msgstr "页面不存在"
 msgid "partially limited"
 msgstr "部分受限"
 
-#: src/App.tsx:212
+#: src/App.tsx:216
 msgid "Password"
 msgstr "密码"
 
@@ -1543,7 +1547,7 @@ msgstr "供应商"
 msgid "Provider account"
 msgstr "供应商账号"
 
-#: src/admin-routes.tsx:12
+#: src/admin-routes.tsx:13
 #: src/admin-ui/accounts.tsx:349
 #: src/admin-ui/logs.tsx:74
 #: src/admin-ui/logs.tsx:212
@@ -1569,7 +1573,7 @@ msgstr "未找到供应商账号"
 msgid "Provider account updated"
 msgstr "供应商账号已更新"
 
-#: src/admin-routes.tsx:11
+#: src/admin-routes.tsx:12
 #: src/admin-ui/accounts.tsx:139
 #: src/admin-ui/accounts.tsx:344
 msgid "Provider Accounts"
@@ -1579,7 +1583,7 @@ msgstr "供应商账号"
 msgid "Provider activated"
 msgstr "供应商已启用"
 
-#: src/admin-routes.tsx:15
+#: src/admin-routes.tsx:16
 #: src/admin-ui/models.tsx:610
 msgid "Provider Model Route"
 msgstr "供应商模型路由"
@@ -1598,7 +1602,7 @@ msgstr "供应商模型路由"
 msgid "Provider paused"
 msgstr "供应商已暂停"
 
-#: src/admin-ui/dashboard.tsx:39
+#: src/admin-ui/dashboard.tsx:33
 msgid "Provider pool"
 msgstr "供应商池"
 
@@ -1738,7 +1742,7 @@ msgid "Redeeming"
 msgstr "兑换中"
 
 #: src/admin-ui/analytics-panel.tsx:372
-#: src/App.tsx:298
+#: src/App.tsx:302
 msgid "Refresh"
 msgstr "刷新"
 
@@ -1746,7 +1750,7 @@ msgstr "刷新"
 msgid "Refresh analytics"
 msgstr "刷新指标"
 
-#: src/App.tsx:335
+#: src/App.tsx:339
 msgid "Refresh the admin data to load the overview."
 msgstr "刷新管理数据以加载概览。"
 
@@ -1775,7 +1779,7 @@ msgstr "中继运行指标"
 msgid "Relay API key"
 msgstr "中继 API 密钥"
 
-#: src/App.tsx:249
+#: src/App.tsx:253
 msgid "Relay control plane"
 msgstr "中继控制面板"
 
@@ -1783,7 +1787,7 @@ msgstr "中继控制面板"
 msgid "Relay endpoint"
 msgstr "中继端点"
 
-#: src/App.tsx:185
+#: src/App.tsx:189
 msgid "Relay operations console"
 msgstr "中继运维控制台"
 
@@ -1810,8 +1814,8 @@ msgstr "剩余额度 · 已消耗 {consumedPoints} 个百分点"
 msgid "Request"
 msgstr "请求"
 
-#: src/admin-routes.tsx:17
 #: src/admin-routes.tsx:18
+#: src/admin-routes.tsx:19
 #: src/admin-ui/logs.tsx:121
 #: src/admin-ui/logs.tsx:126
 #: src/admin-ui/logs.tsx:269
@@ -1984,7 +1988,7 @@ msgstr "启动 Codex 前设置中继密钥并下载 Desktop 兼容 catalog。"
 msgid "Set TOKEN_TOXICATION_API_KEY in the harness process environment, then merge these llm-pi-ai provider routes into ~/.dsh/settings.yaml. Keep existing keys; the harness applies changes on the next request."
 msgstr "在 harness 进程环境中设置 TOKEN_TOXICATION_API_KEY，然后将这些 llm-pi-ai 供应商路由合并到 ~/.dsh/settings.yaml。保留现有键；harness 会在下次请求时应用更改。"
 
-#: src/admin-routes.tsx:19
+#: src/admin-routes.tsx:20
 msgid "Settings"
 msgstr "设置"
 
@@ -1996,7 +2000,7 @@ msgstr "已建立稳定起点"
 msgid "Showing an older snapshot"
 msgstr "正在显示旧快照"
 
-#: src/App.tsx:224
+#: src/App.tsx:228
 msgid "Sign in"
 msgstr "登录"
 
@@ -2009,7 +2013,7 @@ msgstr "使用 Antigravity 登录"
 msgid "Sign in with Codex"
 msgstr "使用 Codex 登录"
 
-#: src/App.tsx:310
+#: src/App.tsx:314
 msgid "Sign out"
 msgstr "退出登录"
 
@@ -2056,7 +2060,7 @@ msgstr "状态"
 msgid "Storage"
 msgstr "存储"
 
-#: src/App.tsx:475
+#: src/App.tsx:484
 msgid "Store this value now"
 msgstr "请立即保存此值"
 
@@ -2144,7 +2148,7 @@ msgstr "此供应商模型路由可能已删除，或链接不完整。"
 msgid "This Request Log may have aged out of the current log collection or the link is incomplete."
 msgstr "此请求日志可能已超出当前日志集合，或链接不完整。"
 
-#: src/App.tsx:469
+#: src/App.tsx:478
 msgid "This secret is shown once."
 msgstr "此密文只显示一次。"
 
@@ -2354,7 +2358,7 @@ msgstr "用量窗口"
 msgid "Use a relay API key secret"
 msgstr "使用中继 API 密钥密文"
 
-#: src/App.tsx:194
+#: src/App.tsx:198
 msgid "Use the credentials from your service environment."
 msgstr "使用服务环境中的凭据。"
 
@@ -2362,7 +2366,7 @@ msgstr "使用服务环境中的凭据。"
 msgid "Use this account for relay traffic"
 msgstr "用此账号处理中继流量"
 
-#: src/App.tsx:201
+#: src/App.tsx:205
 msgid "Username"
 msgstr "用户名"
 

@@ -1,7 +1,9 @@
 # Relay analytics
 
-The Overview uses ECharts and authenticated SQLite-backed analytics. Choose the
-last hour, 24 hours, or seven days, then optionally filter by model or provider
+Open **Metrics** in the sidebar (`/analytics`) for ECharts and authenticated
+SQLite-backed analytics. Overview keeps the provider pool and recent requests.
+The existing `/metrics` URL remains the runtime JSON endpoint, not a UI page.
+Choose the last hour, 24 hours, or seven days, then optionally filter by model or provider
 account. Historical account search includes deleted accounts; those rows retain
 their stable IDs rather than disappearing from totals.
 
@@ -36,7 +38,8 @@ counter; cumulative retry indexes are preserved in request logs, not summed.
 
 ## Refresh and resource limits
 
-The Overview refreshes analytics every 15 seconds while visible. A failed refresh
+The Metrics page refreshes analytics every 15 seconds while visible. Leaving the
+page stops its refresh timer and aborts pending analytics requests. A failed refresh
 keeps the snapshot for the **same filters** and marks it stale. Changing filters
 never displays another filter's snapshot; late responses are ignored. Each chart
 also exposes an accessible data table.
