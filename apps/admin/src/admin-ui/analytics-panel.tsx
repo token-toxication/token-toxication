@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { RefreshCwIcon } from "lucide-react";
 
@@ -9,7 +9,11 @@ import type {
   AnalyticsOptions,
   AnalyticsStats,
 } from "../types";
-import { AnalyticsChart, type ChartSeries } from "./analytics-chart";
+import {
+  AnalyticsPlot as Plot,
+  AnalyticsCounts as Counts,
+  formatMeasurement as number,
+} from "./analytics-presentation";
 import {
   createAnalyticsLoader,
   ratio,
@@ -33,17 +37,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-
-const number = (value: number | null | undefined, unit = "") =>
-  value == null ? "—" : `${value.toLocaleString(undefined, { maximumFractionDigits: 1 })}${unit}`;
 const percent = (value: number | null) =>
   value == null
     ? "—"
@@ -216,86 +209,6 @@ function HistoricalFilter({
   );
 }
 
-function Plot({
-  title,
-  description,
-  labels,
-  series,
-  horizontal = false,
-}: {
-  title: string;
-  description: ReactNode;
-  labels: string[];
-  series: ChartSeries[];
-  horizontal?: boolean;
-}) {
-  return (
-    <Card className="min-w-0">
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <AnalyticsChart title={title} labels={labels} series={series} horizontal={horizontal} />
-        <details className="mt-2 text-xs text-muted-foreground">
-          <summary className="cursor-pointer focus-visible:outline-2 focus-visible:outline-ring">
-            <Trans>View data table</Trans>
-          </summary>
-          <div className="mt-3 max-h-72 overflow-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>
-                    <Trans>Interval / group</Trans>
-                  </TableHead>
-                  {series.map((s) => (
-                    <TableHead key={s.name}>{s.name}</TableHead>
-                  ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {labels.map((label, index) => (
-                  <TableRow key={`${index}-${label}`}>
-                    <TableCell>{label}</TableCell>
-                    {series.map((s) => (
-                      <TableCell key={s.name}>{number(s.values[index])}</TableCell>
-                    ))}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </details>
-      </CardContent>
-    </Card>
-  );
-}
-
-function Counts({ rows }: { rows: readonly { name: string; count: number }[] }) {
-  return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>
-            <Trans>Classification</Trans>
-          </TableHead>
-          <TableHead>
-            <Trans>Count</Trans>
-          </TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {rows.map((row) => (
-          <TableRow key={row.name}>
-            <TableCell className="whitespace-normal break-words">{row.name}</TableCell>
-            <TableCell>{formatNumber(row.count)}</TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
-  );
-}
-
 export default function AnalyticsPanel() {
   const { t, i18n } = useLingui();
   const [query, setQuery] = useState<AnalyticsSelection>({ range: "24h", rankBy: "attempts" });
@@ -313,6 +226,14 @@ export default function AnalyticsPanel() {
     ) ?? [];
   const values = (value: (stats: AnalyticsStats) => number | null) =>
     history?.buckets.map((bucket) => value(bucket.stats)) ?? [];
+  const timeAxis = history
+    ? {
+        timestamps: history.buckets.map((bucket) => Date.parse(bucket.startedAt)),
+        from: Date.parse(history.windowStartedAt),
+        to: Date.parse(history.windowEndedAt),
+        locale: i18n.locale,
+      }
+    : undefined;
   const known = stats ? stats.attempts - stats.unknown : 0;
   const rankValue = (group: AnalyticsGroup) =>
     query.rankBy === "tokens"
@@ -430,6 +351,11 @@ export default function AnalyticsPanel() {
             <span>
               <Trans>Refreshes every 15 seconds while visible</Trans>
             </span>
+            {snapshot?.pending ? (
+              <span role="status">
+                <Trans>Refreshing analytics…</Trans>
+              </span>
+            ) : null}
           </div>
           {stats ? (
             <dl className="grid grid-cols-2 gap-4 border-y py-4 lg:grid-cols-5">
@@ -484,6 +410,7 @@ export default function AnalyticsPanel() {
           <div className="grid gap-5 xl:grid-cols-2">
             <Plot
               title={t`Attempt outcomes`}
+              timeAxis={timeAxis}
               description={t`By completion time. The last interval is still in progress.`}
               labels={labels}
               series={[
@@ -522,6 +449,7 @@ export default function AnalyticsPanel() {
             />
             <Plot
               title={t`Time to first token · ms`}
+              timeAxis={timeAxis}
               description={t`Nearest-rank percentiles of successful, measured attempts. Missing samples leave gaps.`}
               labels={labels}
               series={[
@@ -531,6 +459,7 @@ export default function AnalyticsPanel() {
             />
             <Plot
               title={t`Attempt duration · ms`}
+              timeAxis={timeAxis}
               description={t`Excludes queue wait and earlier attempts; not end-to-end user latency.`}
               labels={labels}
               series={[
@@ -540,6 +469,7 @@ export default function AnalyticsPanel() {
             />
             <Plot
               title={t`Queue wait · ms`}
+              timeAxis={timeAxis}
               description={t`Successful attempts with queue measurements.`}
               labels={labels}
               series={[
@@ -549,12 +479,14 @@ export default function AnalyticsPanel() {
             />
             <Plot
               title={t`Output speed · token/s`}
+              timeAxis={timeAxis}
               description={t`Median after the first token; excludes TTFT. ${stats?.otps.samples ?? 0} measured successful attempts.`}
               labels={labels}
               series={[{ name: t`Median`, values: values((s) => s.otps.p50 ?? null) }]}
             />
             <Plot
               title={t`Recorded token usage`}
+              timeAxis={timeAxis}
               description={t`Cached input is part of input, not extra usage. Unclassified input has incomplete cache metadata.`}
               labels={labels}
               series={[
@@ -586,6 +518,7 @@ export default function AnalyticsPanel() {
             />
             <Plot
               title={t`Cache hit rate · %`}
+              timeAxis={timeAxis}
               description={t`Weighted by valid input tokens, not an average of request percentages. Missing cache metadata is excluded.`}
               labels={labels}
               series={[

@@ -81,13 +81,13 @@ msgstr "{0} 输入 · {1} 缓存 · {2} 输出"
 
 #. placeholder {0}: percent(ratio(stats.classifiedInputTokens, stats.inputTokens))
 #. placeholder {1}: stats.cacheSamples
-#: src/admin-ui/analytics-panel.tsx:460
+#: src/admin-ui/analytics-panel.tsx:386
 msgid "{0} input coverage; {1} samples"
 msgstr "覆盖 {0} 的输入量；{1} 个样本"
 
 #. placeholder {0}: stats.completeUsageSamples
 #. placeholder {1}: stats.attempts
-#: src/admin-ui/analytics-panel.tsx:455
+#: src/admin-ui/analytics-panel.tsx:381
 msgid "{0} of {1} usage records complete"
 msgstr "{1} 条用量记录中 {0} 条计量完整"
 
@@ -98,7 +98,7 @@ msgstr "剩余 {0}"
 
 #. placeholder {0}: stats.retryAttempts
 #. placeholder {1}: stats.overloadRetries
-#: src/admin-ui/analytics-panel.tsx:440
+#: src/admin-ui/analytics-panel.tsx:366
 msgid "{0} retry attempts; {1} internal overload retries"
 msgstr "{0} 次重试尝试；{1} 次内部过载重试"
 
@@ -111,7 +111,7 @@ msgid "{0} rpm"
 msgstr "{0} rpm"
 
 #. placeholder {0}: stats.ttft.samples
-#: src/admin-ui/analytics-panel.tsx:450
+#: src/admin-ui/analytics-panel.tsx:376
 msgid "{0} successful samples"
 msgstr "{0} 个成功样本"
 
@@ -152,7 +152,7 @@ msgid "{hours, plural, one {# hour} other {# hours}}"
 msgstr "{hours, plural, other {# 小时}}"
 
 #. placeholder {0}: stats.attempts
-#: src/admin-ui/analytics-panel.tsx:445
+#: src/admin-ui/analytics-panel.tsx:371
 msgid "{known} of {0} results classified; cancellations included"
 msgstr "{0} 次结果中 {known} 次已分类；分母包含取消"
 
@@ -178,12 +178,12 @@ msgstr "{value, plural, other {# 次请求}}"
 
 #: src/admin-ui/accounts.tsx:598
 #: src/admin-ui/accounts.tsx:1164
-#: src/admin-ui/analytics-panel.tsx:132
+#: src/admin-ui/analytics-panel.tsx:125
 #: src/admin-ui/dashboard.tsx:45
 msgid "Account"
 msgstr "账号"
 
-#: src/admin-ui/analytics-panel.tsx:670
+#: src/admin-ui/analytics-panel.tsx:603
 msgid "Accounts"
 msgstr "账号"
 
@@ -302,7 +302,7 @@ msgstr "有路由时对外展示"
 msgid "all"
 msgstr "全部"
 
-#: src/admin-ui/analytics-panel.tsx:139
+#: src/admin-ui/analytics-panel.tsx:132
 #: src/admin-ui/api-keys.tsx:110
 msgid "All"
 msgstr "全部"
@@ -317,7 +317,7 @@ msgstr "全部服务"
 msgid "Allow popups to sign in with Antigravity"
 msgstr "请允许弹窗以使用 Antigravity 登录"
 
-#: src/admin-ui/analytics-panel.tsx:399
+#: src/admin-ui/analytics-panel.tsx:320
 msgid "Analytics unavailable"
 msgstr "暂时无法获取指标"
 
@@ -394,15 +394,15 @@ msgstr "保持相同的模型、服务档位及 token 构成"
 msgid "Attempt"
 msgstr "尝试"
 
-#: src/admin-ui/analytics-panel.tsx:533
+#: src/admin-ui/analytics-panel.tsx:461
 msgid "Attempt duration · ms"
 msgstr "尝试耗时 · 毫秒"
 
-#: src/admin-ui/analytics-panel.tsx:486
+#: src/admin-ui/analytics-panel.tsx:412
 msgid "Attempt outcomes"
 msgstr "尝试结果"
 
-#: src/admin-ui/analytics-panel.tsx:649
+#: src/admin-ui/analytics-panel.tsx:582
 msgid "Attempts"
 msgstr "尝试次数"
 
@@ -484,25 +484,25 @@ msgstr "使此目录模型可达的绑定。"
 msgid "blocked"
 msgstr "已阻断"
 
-#: src/admin-ui/analytics-panel.tsx:487
+#: src/admin-ui/analytics-panel.tsx:414
 msgid "By completion time. The last interval is still in progress."
 msgstr "按结束时间统计，最后一个时间段尚未结束。"
 
-#: src/admin-ui/analytics-panel.tsx:458
-#: src/admin-ui/analytics-panel.tsx:593
+#: src/admin-ui/analytics-panel.tsx:384
+#: src/admin-ui/analytics-panel.tsx:526
 msgid "Cache hit rate"
 msgstr "缓存命中率"
 
-#: src/admin-ui/analytics-panel.tsx:588
+#: src/admin-ui/analytics-panel.tsx:520
 msgid "Cache hit rate · %"
 msgstr "缓存命中率 · %"
 
-#: src/admin-ui/analytics-panel.tsx:562
+#: src/admin-ui/analytics-panel.tsx:494
 #: src/admin-ui/quota-capacity.tsx:57
 msgid "Cached input"
 msgstr "缓存输入"
 
-#: src/admin-ui/analytics-panel.tsx:558
+#: src/admin-ui/analytics-panel.tsx:490
 msgid "Cached input is part of input, not extra usage. Unclassified input has incomplete cache metadata."
 msgstr "缓存输入是输入用量的一部分，不额外计入总量。未分类输入的缓存计量信息不完整。"
 
@@ -558,7 +558,7 @@ msgstr "在 DeepSeek Harness 中选择"
 msgid "Chosen in opencode"
 msgstr "在 opencode 中选择"
 
-#: src/admin-ui/analytics-panel.tsx:280
+#: src/admin-ui/analytics-presentation.tsx:97
 msgid "Classification"
 msgstr "分类"
 
@@ -570,11 +570,11 @@ msgstr "Claude Code 环境"
 msgid "Claude only"
 msgstr "仅 Claude"
 
-#: src/admin-ui/analytics-panel.tsx:161
+#: src/admin-ui/analytics-panel.tsx:154
 msgid "Clear filter"
 msgstr "清除筛选"
 
-#: src/admin-ui/analytics-panel.tsx:504
+#: src/admin-ui/analytics-panel.tsx:431
 msgid "Client cancellation"
 msgstr "客户端取消"
 
@@ -665,12 +665,12 @@ msgstr "正在积累数据，至少需要观测到 10 个百分点的额度消�
 msgid "Complete metering: {0} / {1} attempts"
 msgstr "计量完整：{0} / {1} 次请求尝试"
 
-#: src/admin-ui/analytics-panel.tsx:328
-#: src/admin-ui/analytics-panel.tsx:438
+#: src/admin-ui/analytics-panel.tsx:249
+#: src/admin-ui/analytics-panel.tsx:364
 msgid "Completed attempts"
 msgstr "已结束尝试"
 
-#: src/admin-ui/analytics-panel.tsx:337
+#: src/admin-ui/analytics-panel.tsx:258
 msgid "Completed upstream attempts, not user requests or live concurrency."
 msgstr "统计已结束的上游尝试，不代表用户请求数或实时并发。"
 
@@ -722,11 +722,11 @@ msgstr "复制代码"
 msgid "Copy secret"
 msgstr "复制密文"
 
-#: src/admin-ui/analytics-panel.tsx:165
+#: src/admin-ui/analytics-panel.tsx:158
 msgid "Could not load filter options. Change the search to retry."
 msgstr "无法加载筛选项，请修改搜索内容重试。"
 
-#: src/admin-ui/analytics-panel.tsx:283
+#: src/admin-ui/analytics-presentation.tsx:100
 msgid "Count"
 msgstr "次数"
 
@@ -807,7 +807,7 @@ msgid "Delete"
 msgstr "删除"
 
 #. placeholder {0}: group.id?.slice(0, 8)
-#: src/admin-ui/analytics-panel.tsx:87
+#: src/admin-ui/analytics-panel.tsx:80
 msgid "Deleted account ({0})"
 msgstr "已删除账号（{0}）"
 
@@ -900,7 +900,7 @@ msgstr "客户端可以发送的全部精确模型名。"
 msgid "Exact upstream model ID"
 msgstr "精确上游模型 ID"
 
-#: src/admin-ui/analytics-panel.tsx:534
+#: src/admin-ui/analytics-panel.tsx:463
 msgid "Excludes queue wait and earlier attempts; not end-to-end user latency."
 msgstr "不含排队和此前尝试的耗时，并非用户端到端延迟。"
 
@@ -918,8 +918,8 @@ msgstr "于 {0} 过期"
 msgid "Extra requests overflow to other accounts in the same tier, then wait in a queue. Leave blank or 0 for unlimited."
 msgstr "超出的请求会先溢出到同层级的其他账号，仍无空位时排队等待。留空或填 0 表示不限制。"
 
-#: src/admin-ui/analytics-panel.tsx:327
-#: src/admin-ui/analytics-panel.tsx:497
+#: src/admin-ui/analytics-panel.tsx:248
+#: src/admin-ui/analytics-panel.tsx:424
 msgid "Failed attempts"
 msgstr "失败尝试"
 
@@ -927,7 +927,7 @@ msgstr "失败尝试"
 msgid "Failed to load dashboard"
 msgstr "加载仪表盘失败"
 
-#: src/admin-ui/analytics-panel.tsx:655
+#: src/admin-ui/analytics-panel.tsx:588
 msgid "Failures"
 msgstr "失败次数"
 
@@ -985,7 +985,7 @@ msgstr "由 Rust 中继保留或补充的请求头。"
 msgid "healthy"
 msgstr "健康"
 
-#: src/admin-ui/analytics-panel.tsx:604
+#: src/admin-ui/analytics-panel.tsx:537
 msgid "Historical classifications"
 msgstr "历史结果分类"
 
@@ -997,11 +997,11 @@ msgstr "此目录模型如何到达其上游模型。"
 msgid "Identify the upstream account and connection endpoint."
 msgstr "标识上游账号与连接端点。"
 
-#: src/admin-ui/analytics-panel.tsx:312
+#: src/admin-ui/analytics-panel.tsx:225
 msgid "in progress"
 msgstr "统计中"
 
-#: src/admin-ui/analytics-panel.tsx:158
+#: src/admin-ui/analytics-panel.tsx:151
 msgid "Includes deleted accounts observed in this time range."
 msgstr "包含在该时间范围内有记录的已删除账号。"
 
@@ -1014,11 +1014,11 @@ msgid "Installs a global plugin and config that refresh the relay model catalog,
 msgstr ""
 
 #. placeholder {0}: runtime.overloadRetries
-#: src/admin-ui/analytics-panel.tsx:698
+#: src/admin-ui/analytics-panel.tsx:631
 msgid "Internal overload retries: {0}"
 msgstr "内部过载重试：{0} 次"
 
-#: src/admin-ui/analytics-panel.tsx:249
+#: src/admin-ui/analytics-presentation.tsx:59
 msgid "Interval / group"
 msgstr "时间段 / 分组"
 
@@ -1039,11 +1039,11 @@ msgstr "语言"
 msgid "Language: {0}"
 msgstr "语言：{0}"
 
-#: src/admin-ui/analytics-panel.tsx:357
+#: src/admin-ui/analytics-panel.tsx:278
 msgid "Last 24 hours"
 msgstr "最近 24 小时"
 
-#: src/admin-ui/analytics-panel.tsx:360
+#: src/admin-ui/analytics-panel.tsx:281
 msgid "Last 7 days"
 msgstr "最近 7 天"
 
@@ -1051,7 +1051,7 @@ msgstr "最近 7 天"
 msgid "Last error"
 msgstr "最近错误"
 
-#: src/admin-ui/analytics-panel.tsx:354
+#: src/admin-ui/analytics-panel.tsx:275
 msgid "Last hour"
 msgstr "最近一小时"
 
@@ -1127,12 +1127,12 @@ msgstr "手动 refresh token 已弃用。新账号应使用 Codex 设备登录�
 msgid "Max running requests"
 msgstr "最大并发请求数"
 
-#: src/admin-ui/analytics-panel.tsx:554
+#: src/admin-ui/analytics-panel.tsx:485
 msgid "Median"
 msgstr "中位数"
 
 #. placeholder {0}: stats?.otps.samples ?? 0
-#: src/admin-ui/analytics-panel.tsx:552
+#: src/admin-ui/analytics-panel.tsx:483
 msgid "Median after the first token; excludes TTFT. {0} measured successful attempts."
 msgstr "首 Token 之后的输出速度中位数，不含首 Token 等待时间。共 {0} 个成功计量样本。"
 
@@ -1149,7 +1149,7 @@ msgid "Metrics"
 msgstr "运行指标"
 
 #: src/admin-ui/accounts.tsx:738
-#: src/admin-ui/analytics-panel.tsx:132
+#: src/admin-ui/analytics-panel.tsx:125
 #: src/admin-ui/client-setup.tsx:697
 #: src/admin-ui/logs.tsx:296
 #: src/admin-ui/models.tsx:138
@@ -1160,7 +1160,7 @@ msgstr "模型"
 msgid "Model added"
 msgstr "模型已添加"
 
-#: src/admin-ui/analytics-panel.tsx:634
+#: src/admin-ui/analytics-panel.tsx:567
 msgid "Model and account comparison"
 msgstr "模型与账号对比"
 
@@ -1192,7 +1192,7 @@ msgstr "模型 ID"
 msgid "Model updated"
 msgstr "模型已更新"
 
-#: src/admin-ui/analytics-panel.tsx:663
+#: src/admin-ui/analytics-panel.tsx:596
 msgid "Models"
 msgstr "模型"
 
@@ -1212,7 +1212,7 @@ msgstr "此 Google 账号报告的模型与配额。"
 msgid "Name"
 msgstr "名称"
 
-#: src/admin-ui/analytics-panel.tsx:525
+#: src/admin-ui/analytics-panel.tsx:453
 msgid "Nearest-rank percentiles of successful, measured attempts. Missing samples leave gaps."
 msgstr "按成功计量样本计算最近秩分位数，缺失样本保留为空。"
 
@@ -1232,7 +1232,7 @@ msgstr "计量异常后已自动建立新起点"
 msgid "Newly created keys are prefilled here once. Existing rows only show previews, so paste the original tokentoxication-* value before copying a setup block."
 msgstr "新创建的密钥只会在此预填一次。已有条目只显示预览，复制配置前请粘贴原始 tokentoxication-* 值。"
 
-#: src/admin-ui/analytics-panel.tsx:208
+#: src/admin-ui/analytics-panel.tsx:201
 msgid "Next"
 msgstr "下一页"
 
@@ -1268,7 +1268,7 @@ msgstr "没有 Claude Code 路由"
 msgid "No Codex routes"
 msgstr "没有 Codex 路由"
 
-#: src/admin-ui/analytics-panel.tsx:474
+#: src/admin-ui/analytics-panel.tsx:400
 msgid "No completed attempts in this window"
 msgstr "该时间范围内没有已结束尝试"
 
@@ -1280,6 +1280,12 @@ msgstr "无并发限制"
 #: src/admin-ui/api-keys.tsx:319
 msgid "No concurrent requests"
 msgstr "无并发请求限制"
+
+#: src/admin-ui/analytics-chart.tsx:237
+#: src/admin-ui/analytics-presentation.tsx:70
+#: src/admin-ui/analytics-presentation.tsx:108
+msgid "No data"
+msgstr "无数据"
 
 #: src/admin-ui/client-setup.tsx:658
 msgid "No DeepSeek Harness routes"
@@ -1298,7 +1304,7 @@ msgstr "无字段"
 msgid "No limit"
 msgstr "无上限"
 
-#: src/admin-ui/analytics-panel.tsx:188
+#: src/admin-ui/analytics-panel.tsx:181
 msgid "No matching history"
 msgstr "没有匹配的历史记录"
 
@@ -1374,7 +1380,7 @@ msgstr "观测详情"
 msgid "Observed token capacity"
 msgstr "额度与 token 观测"
 
-#: src/admin-ui/analytics-panel.tsx:607
+#: src/admin-ui/analytics-panel.tsx:540
 msgid "Old records without persisted metadata remain unknown. Routing rejections before an attempt are excluded."
 msgstr "没有持久化分类信息的旧记录保留为未知。尝试开始前的路由拒绝不计入。"
 
@@ -1398,7 +1404,7 @@ msgstr "仅 OpenAI 兼容"
 msgid "opencode global config"
 msgstr ""
 
-#: src/admin-ui/analytics-panel.tsx:85
+#: src/admin-ui/analytics-panel.tsx:78
 msgid "Other"
 msgstr "其他"
 
@@ -1413,12 +1419,12 @@ msgstr "OTPS"
 msgid "OTPS {0}"
 msgstr "OTPS {0}"
 
-#: src/admin-ui/analytics-panel.tsx:580
+#: src/admin-ui/analytics-panel.tsx:512
 #: src/admin-ui/quota-capacity.tsx:57
 msgid "Output"
 msgstr "输出"
 
-#: src/admin-ui/analytics-panel.tsx:551
+#: src/admin-ui/analytics-panel.tsx:481
 msgid "Output speed · token/s"
 msgstr "输出速度 · Token/秒"
 
@@ -1426,15 +1432,15 @@ msgstr "输出速度 · Token/秒"
 msgid "Overview"
 msgstr "概览"
 
-#: src/admin-ui/analytics-panel.tsx:528
-#: src/admin-ui/analytics-panel.tsx:537
-#: src/admin-ui/analytics-panel.tsx:546
+#: src/admin-ui/analytics-panel.tsx:456
+#: src/admin-ui/analytics-panel.tsx:466
+#: src/admin-ui/analytics-panel.tsx:476
 msgid "P50"
 msgstr "P50"
 
-#: src/admin-ui/analytics-panel.tsx:529
-#: src/admin-ui/analytics-panel.tsx:538
-#: src/admin-ui/analytics-panel.tsx:547
+#: src/admin-ui/analytics-panel.tsx:457
+#: src/admin-ui/analytics-panel.tsx:467
+#: src/admin-ui/analytics-panel.tsx:477
 msgid "P95"
 msgstr "P95"
 
@@ -1508,7 +1514,7 @@ msgstr "预设"
 msgid "Preview"
 msgstr "预览"
 
-#: src/admin-ui/analytics-panel.tsx:199
+#: src/admin-ui/analytics-panel.tsx:192
 msgid "Previous"
 msgstr "上一页"
 
@@ -1634,7 +1640,7 @@ msgstr "公开模型标识与面向客户端的元数据。"
 msgid "Queue wait"
 msgstr "排队等待"
 
-#: src/admin-ui/analytics-panel.tsx:542
+#: src/admin-ui/analytics-panel.tsx:471
 msgid "Queue wait · ms"
 msgstr "排队耗时 · 毫秒"
 
@@ -1678,7 +1684,7 @@ msgstr "额度窗口重置"
 msgid "Quota windows are measured independently; do not add their token totals. Reopen this dialog to see the latest data."
 msgstr "各额度窗口独立统计，token 用量不可相加。重新打开弹窗可查看最新数据。"
 
-#: src/admin-ui/analytics-panel.tsx:643
+#: src/admin-ui/analytics-panel.tsx:576
 msgid "Rank by"
 msgstr "排序指标"
 
@@ -1715,12 +1721,12 @@ msgstr "重新连接"
 msgid "Reconnect Antigravity"
 msgstr "重新连接 Antigravity"
 
-#: src/admin-ui/analytics-panel.tsx:557
+#: src/admin-ui/analytics-panel.tsx:488
 msgid "Recorded token usage"
 msgstr "已记录 Token 用量"
 
-#: src/admin-ui/analytics-panel.tsx:325
-#: src/admin-ui/analytics-panel.tsx:453
+#: src/admin-ui/analytics-panel.tsx:246
+#: src/admin-ui/analytics-panel.tsx:379
 #: src/admin-ui/quota-capacity.tsx:88
 msgid "Recorded tokens"
 msgstr "已记录的 token"
@@ -1741,12 +1747,12 @@ msgstr "已兑换"
 msgid "Redeeming"
 msgstr "兑换中"
 
-#: src/admin-ui/analytics-panel.tsx:372
+#: src/admin-ui/analytics-panel.tsx:293
 #: src/App.tsx:302
 msgid "Refresh"
 msgstr "刷新"
 
-#: src/admin-ui/analytics-panel.tsx:369
+#: src/admin-ui/analytics-panel.tsx:290
 msgid "Refresh analytics"
 msgstr "刷新指标"
 
@@ -1754,13 +1760,17 @@ msgstr "刷新指标"
 msgid "Refresh the admin data to load the overview."
 msgstr "刷新管理数据以加载概览。"
 
-#: src/admin-ui/analytics-panel.tsx:402
+#: src/admin-ui/analytics-panel.tsx:323
 msgid "Refresh to retry, or select a shorter range. No data from a different filter is shown."
 msgstr "请刷新重试，或缩短时间范围。此处不会显示其他筛选条件的数据。"
 
-#: src/admin-ui/analytics-panel.tsx:431
+#: src/admin-ui/analytics-panel.tsx:352
 msgid "Refreshes every 15 seconds while visible"
 msgstr "页面可见时每 15 秒刷新"
+
+#: src/admin-ui/analytics-panel.tsx:356
+msgid "Refreshing analytics…"
+msgstr "正在刷新指标…"
 
 #: src/admin-ui/models.tsx:762
 msgid "Register an exact public model name clients may send."
@@ -1770,8 +1780,8 @@ msgstr "登记客户端可能发送的精确公开模型名。"
 msgid "Register an upstream credential for relay scheduling."
 msgstr "登记用于中继调度的上游凭证。"
 
-#: src/admin-ui/analytics-panel.tsx:330
-#: src/admin-ui/analytics-panel.tsx:334
+#: src/admin-ui/analytics-panel.tsx:251
+#: src/admin-ui/analytics-panel.tsx:255
 msgid "Relay analytics"
 msgstr "中继运行指标"
 
@@ -1862,7 +1872,7 @@ msgstr "重置额度"
 msgid "Responses routed"
 msgstr "已路由 Responses"
 
-#: src/admin-ui/analytics-panel.tsx:706
+#: src/admin-ui/analytics-panel.tsx:639
 msgid "retry index"
 msgstr "重试序号"
 
@@ -1911,7 +1921,7 @@ msgstr "路由与限制"
 msgid "Routing details"
 msgstr "路由详情"
 
-#: src/admin-ui/analytics-panel.tsx:730
+#: src/admin-ui/analytics-panel.tsx:663
 msgid "Routing rejections"
 msgstr "路由拒绝"
 
@@ -1947,7 +1957,7 @@ msgstr "保存更改"
 msgid "Schedulable"
 msgstr "可调度"
 
-#: src/admin-ui/analytics-panel.tsx:144
+#: src/admin-ui/analytics-panel.tsx:137
 msgid "Search historical names or IDs"
 msgstr "搜索历史名称或 ID"
 
@@ -1972,11 +1982,11 @@ msgstr "选择模型"
 msgid "Server restarted"
 msgstr "服务重启"
 
-#: src/admin-ui/analytics-panel.tsx:510
+#: src/admin-ui/analytics-panel.tsx:437
 msgid "Server shutdown"
 msgstr "服务关闭"
 
-#: src/admin-ui/analytics-panel.tsx:713
+#: src/admin-ui/analytics-panel.tsx:646
 msgid "Session affinity and route selections"
 msgstr "会话亲和与路由选择"
 
@@ -1996,7 +2006,7 @@ msgstr "设置"
 msgid "Settled baseline"
 msgstr "已建立稳定起点"
 
-#: src/admin-ui/analytics-panel.tsx:399
+#: src/admin-ui/analytics-panel.tsx:320
 msgid "Showing an older snapshot"
 msgstr "正在显示旧快照"
 
@@ -2029,7 +2039,7 @@ msgstr "已登录"
 msgid "Signed out"
 msgstr "已退出"
 
-#: src/admin-ui/analytics-panel.tsx:683
+#: src/admin-ui/analytics-panel.tsx:616
 msgid "Since service startup"
 msgstr "自服务启动以来"
 
@@ -2084,15 +2094,15 @@ msgstr "剥离请求参数"
 msgid "Subscription quota reported by this Codex account."
 msgstr "此 Codex 账号报告的订阅配额。"
 
-#: src/admin-ui/analytics-panel.tsx:491
+#: src/admin-ui/analytics-panel.tsx:418
 msgid "Success"
 msgstr "成功"
 
-#: src/admin-ui/analytics-panel.tsx:443
+#: src/admin-ui/analytics-panel.tsx:369
 msgid "Successful attempts"
 msgstr "尝试成功率"
 
-#: src/admin-ui/analytics-panel.tsx:543
+#: src/admin-ui/analytics-panel.tsx:473
 msgid "Successful attempts with queue measurements."
 msgstr "仅统计有排队计量的成功尝试。"
 
@@ -2169,15 +2179,15 @@ msgstr "档位为请求指定的服务档位；重试单独计入请求尝试次
 msgid "Time"
 msgstr "时间"
 
-#: src/admin-ui/analytics-panel.tsx:348
+#: src/admin-ui/analytics-panel.tsx:269
 msgid "Time range"
 msgstr "时间范围"
 
-#: src/admin-ui/analytics-panel.tsx:524
+#: src/admin-ui/analytics-panel.tsx:451
 msgid "Time to first token · ms"
 msgstr "首 Token 延迟 · 毫秒"
 
-#: src/admin-ui/analytics-panel.tsx:652
+#: src/admin-ui/analytics-panel.tsx:585
 #: src/admin-ui/logs.tsx:179
 #: src/admin-ui/logs.tsx:618
 msgid "Tokens"
@@ -2187,20 +2197,20 @@ msgstr "Token"
 msgid "Tokens cannot be attributed to this quota pool."
 msgstr "无法将账号的 token 用量归属到此额度池。"
 
-#: src/admin-ui/analytics-panel.tsx:664
-#: src/admin-ui/analytics-panel.tsx:671
+#: src/admin-ui/analytics-panel.tsx:597
+#: src/admin-ui/analytics-panel.tsx:604
 msgid "Top 10 + other · {rankTitle}"
 msgstr "前 10 项及其他 · {rankTitle}"
 
-#: src/admin-ui/analytics-panel.tsx:617
+#: src/admin-ui/analytics-panel.tsx:550
 msgid "Transport and status codes"
 msgstr "传输方式与状态码"
 
-#: src/admin-ui/analytics-panel.tsx:702
+#: src/admin-ui/analytics-panel.tsx:635
 msgid "Transport, outcomes and retries"
 msgstr "传输方式、结果与重试"
 
-#: src/admin-ui/analytics-panel.tsx:477
+#: src/admin-ui/analytics-panel.tsx:403
 msgid "Try a longer range or clear the model and account filters. Missing measurements are not plotted as zero."
 msgstr "请扩大时间范围，或清除模型和账号筛选。缺失计量不会绘制成零。"
 
@@ -2215,7 +2225,7 @@ msgstr "TTFT"
 msgid "TTFT {0}"
 msgstr "TTFT {0}"
 
-#: src/admin-ui/analytics-panel.tsx:448
+#: src/admin-ui/analytics-panel.tsx:374
 msgid "TTFT P95"
 msgstr "首 Token 延迟 P95"
 
@@ -2243,16 +2253,16 @@ msgstr "无法加载配额"
 msgid "Unable to start Antigravity sign-in"
 msgstr "无法开始 Antigravity 登录"
 
-#: src/admin-ui/analytics-panel.tsx:88
+#: src/admin-ui/analytics-panel.tsx:81
 msgid "Unassigned"
 msgstr "未分配"
 
-#: src/admin-ui/analytics-panel.tsx:568
+#: src/admin-ui/analytics-panel.tsx:500
 #: src/admin-ui/quota-capacity.tsx:57
 msgid "Uncached input"
 msgstr "非缓存输入"
 
-#: src/admin-ui/analytics-panel.tsx:574
+#: src/admin-ui/analytics-panel.tsx:506
 msgid "Unclassified input"
 msgstr "未分类输入"
 
@@ -2260,7 +2270,7 @@ msgstr "未分类输入"
 msgid "Unexpected key prefix"
 msgstr "密钥前缀不符合预期"
 
-#: src/admin-ui/analytics-panel.tsx:686
+#: src/admin-ui/analytics-panel.tsx:619
 msgid "Unfiltered process counters. Not affected by the history range, model or account filters; resets on restart."
 msgstr "未经筛选的进程计数，不受历史时间、模型或账号筛选影响，重启后清零。"
 
@@ -2284,7 +2294,7 @@ msgstr "未经筛选的进程计数，不受历史时间、模型或账号筛选
 msgid "unknown"
 msgstr "未知"
 
-#: src/admin-ui/analytics-panel.tsx:516
+#: src/admin-ui/analytics-panel.tsx:443
 #: src/admin-ui/helpers.tsx:348
 #: src/admin-ui/helpers.tsx:541
 #: src/admin-ui/helpers.tsx:578
@@ -2310,7 +2320,7 @@ msgid "Update routing details or replace the upstream credential."
 msgstr "更新路由详情或替换上游凭证。"
 
 #. placeholder {0}: new Date(history.generatedAt).toLocaleTimeString()
-#: src/admin-ui/analytics-panel.tsx:428
+#: src/admin-ui/analytics-panel.tsx:349
 msgid "Updated {0}"
 msgstr "更新于 {0}"
 
@@ -2370,7 +2380,7 @@ msgstr "用此账号处理中继流量"
 msgid "Username"
 msgstr "用户名"
 
-#: src/admin-ui/analytics-panel.tsx:242
+#: src/admin-ui/analytics-presentation.tsx:52
 msgid "View data table"
 msgstr "查看数据表"
 
@@ -2397,7 +2407,7 @@ msgstr "权重"
 msgid "Weight applies among healthy routes with the same role. Primary routes are preferred over backups."
 msgstr "权重在具有相同角色的健康路由之间生效。主路由优先于备用路由。"
 
-#: src/admin-ui/analytics-panel.tsx:589
+#: src/admin-ui/analytics-panel.tsx:522
 msgid "Weighted by valid input tokens, not an average of request percentages. Missing cache metadata is excluded."
 msgstr "按有效输入 Token 加权，不是请求命中率的平均值。缺失缓存计量的样本不计入。"
 
