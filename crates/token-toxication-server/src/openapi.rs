@@ -3,6 +3,7 @@ use crate::analytics::{
     AnalyticsOptions, AnalyticsOptionsQuery, AnalyticsPercentiles, AnalyticsQuery, AnalyticsRange,
     AnalyticsRankBy, AnalyticsResponse, AnalyticsRuntime, AnalyticsStats,
 };
+use crate::service_tier::ReportedServiceTier;
 use axum::Json;
 use utoipa::OpenApi;
 
@@ -148,6 +149,7 @@ use crate::models::{
         RequestLog,
         RequestLogListResponse,
         RequestSummary,
+        ReportedServiceTier,
         ResponsesRequestMetadata,
         RoutableModelCatalogEntry,
         RoutableModelCatalogListResponse,

@@ -22,6 +22,7 @@ pub(crate) mod relay_retry;
 pub mod routes;
 pub mod routing;
 pub mod server;
+pub mod service_tier;
 pub mod session_affinity;
 pub mod static_assets;
 pub mod websocket_transport;

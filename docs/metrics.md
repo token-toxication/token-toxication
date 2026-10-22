@@ -36,6 +36,28 @@ does not guess WebSocket transport from the request path.
 Old records without the per-attempt internal-retry marker are excluded from that
 counter; cumulative retry indexes are preserved in request logs, not summed.
 
+## Requested and upstream-reported service tiers
+
+Request-log `requestSummary.serviceTier` records the **forwarded request** tier.
+`requestSummary.upstreamServiceTier` independently records the last non-null tier
+reported in the upstream JSON response or SSE/WebSocket response events. A final
+report supersedes an earlier report; missing events do not erase an observation.
+Observations reset between attempts and between responses on a reused connection.
+
+- Missing or null reports, including historical rows, stay null. They are not
+  filled from the request and do not imply `default` or a downgrade.
+- Recognized values retain their reported spelling; unrecognized strings and
+  invalid types become the bounded `unknown` value, never raw upstream text.
+- A report is what the provider claimed, not proof of the scheduling resources
+  actually allocated. Compare the same model, account, input, reasoning settings,
+  transport, and cache conditions before attributing speed changes to a tier.
+- `relay attempt completed` journal events include request/account correlation,
+  transport, status, outcome, retries, both tiers, timings, and token counts. The
+  journal uses `unreported` for a missing upstream tier. No bodies are logged.
+
+This is additive metadata in existing SQLite JSON summaries; no migration or
+backfill is required. Response bodies and forwarded request settings are unchanged.
+
 ## Zero, missing measurements, and empty results
 
 Chart behavior follows the distinctions in Grafana's current Time series panel,

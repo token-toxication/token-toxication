@@ -925,11 +925,14 @@ async fn codex_overload_reconnects_with_bounded_random_delay() {
                     if let Some(Ok(Message::Text(text))) = socket.next().await {
                         let mut requests = capture.lock().await;
                         requests.push((std::time::Instant::now(), serde_json::from_str(&text).unwrap()));
-                        let event = if recover && requests.len() == 6 {
+                        let mut event = if recover && requests.len() == 6 {
                             json!({"type":"response.completed","response":{"id":"resp_ok"}})
                         } else {
                             json!({"type":"error","status":502,"error":{"code":"server_is_overloaded"}})
                         };
+                        if requests.len() == 1 {
+                            event["service_tier"] = json!("priority");
+                        }
                         drop(requests);
                         socket.send(Message::Text(event.to_string().into())).await.unwrap();
                         while let Some(Ok(message)) = socket.next().await {
@@ -1012,6 +1015,14 @@ async fn codex_overload_reconnects_with_bounded_random_delay() {
         let logs = state.db.list_request_logs(20).await.unwrap();
         assert_eq!(logs.len(), if recover { 6 } else { 11 });
         assert_eq!(logs[0].status_code, if recover { 200 } else { 502 });
+        for log in &logs {
+            assert_eq!(
+                log.request_summary.as_ref().unwrap().upstream_service_tier,
+                (log.attempt_index == 0)
+                    .then_some(crate::service_tier::ReportedServiceTier::Priority),
+                "a retry must not inherit an earlier attempt's reported tier"
+            );
+        }
         assert_eq!(logs[0].overload_retry_count, if recover { 5 } else { 10 });
         assert!(logs[0].overload_retry_started);
         assert_eq!(logs[0].overload_retry_exhausted, !recover);

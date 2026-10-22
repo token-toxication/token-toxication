@@ -56,6 +56,7 @@ pub(crate) struct TokenUsage {
     pub output_tokens: u64,
     /// Time spent generating output after the first output delta was emitted.
     pub generation_ms: Option<u64>,
+    pub upstream_service_tier: Option<crate::service_tier::ReportedServiceTier>,
 }
 
 const CLIENT_CLOSED_REQUEST_STATUS: u16 = 499;
@@ -298,6 +299,34 @@ impl RelayAttempt {
         if log.is_overload_retry {
             self.state.relay_metrics.record_overload_retry();
         }
+        // One bounded completion record per attempt, including successful attempts.
+        // The requested and reported tiers are independent observations: never fill
+        // an absent upstream tier from the request or infer that priority was served.
+        let forwarded_tier = log
+            .request_summary
+            .as_ref()
+            .and_then(|summary| summary.service_tier.as_deref())
+            .filter(|tier| matches!(*tier, "default" | "priority" | "ultrafast" | "flex"))
+            .unwrap_or("unknown");
+        tracing::info!(
+            request_id = %log.request_id,
+            provider_account_id = %self.selection.account.account.id,
+            transport = log.transport,
+            status_code,
+            outcome,
+            retry_count = log.attempt_index,
+            overload_retry_count = log.overload_retry_count,
+            forwarded_service_tier = forwarded_tier,
+            upstream_service_tier = usage.upstream_service_tier.map(|tier| tier.as_str()).unwrap_or("unreported"),
+            ttft_ms = log.ttft_ms,
+            latency_ms = self.elapsed_ms(),
+            queue_wait_ms = self.queue_wait.as_millis() as u64,
+            input_tokens = usage.input_tokens,
+            cached_input_tokens = usage.cached_input_tokens,
+            output_tokens = usage.output_tokens,
+            usage_complete = usage.complete,
+            "relay attempt completed"
+        );
         if status_code >= 400 {
             tracing::warn!(
                 request_id = %log.request_id,
@@ -324,6 +353,7 @@ impl RelayAttempt {
                     upstream_url: log.upstream_url.as_deref().map(sanitize_upstream_url),
                     request_summary: log.request_summary.clone().map(|mut summary| {
                         summary.usage_complete = Some(usage.complete);
+                        summary.upstream_service_tier = usage.upstream_service_tier;
                         summary.attempt_started_at = Some(
                             Utc::now()
                                 - chrono::Duration::from_std(self.started.elapsed())

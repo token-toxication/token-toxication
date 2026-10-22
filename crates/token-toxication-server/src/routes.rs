@@ -2468,6 +2468,7 @@ fn build_request_summary(
             }
             .to_owned(),
         ),
+        upstream_service_tier: None,
         top_level_keys,
         body_bytes,
         stream: value
@@ -2903,6 +2904,7 @@ struct UsageUpdate {
     cache_read_input_tokens: Option<u64>,
     cache_creation_input_tokens: Option<u64>,
     output_tokens: Option<u64>,
+    upstream_service_tier: Option<crate::service_tier::ReportedServiceTier>,
 }
 
 impl UsageUpdate {
@@ -2921,6 +2923,9 @@ impl UsageUpdate {
         }
         if update.output_tokens.is_some() {
             self.output_tokens = update.output_tokens;
+        }
+        if update.upstream_service_tier.is_some() {
+            self.upstream_service_tier = update.upstream_service_tier;
         }
     }
 
@@ -2954,6 +2959,7 @@ impl UsageUpdate {
             output_tokens: self.output_tokens.unwrap_or(0),
             generation_ms: first_output_at
                 .map(|started| Instant::now().duration_since(started).as_millis() as u64),
+            upstream_service_tier: self.upstream_service_tier,
         }
     }
 }
@@ -3123,7 +3129,10 @@ fn parse_usage(bytes: &[u8]) -> TokenUsage {
 }
 
 fn usage_update(value: &Value) -> UsageUpdate {
-    let mut update = UsageUpdate::default();
+    let mut update = UsageUpdate {
+        upstream_service_tier: crate::service_tier::ReportedServiceTier::from_response(value),
+        ..UsageUpdate::default()
+    };
     for usage in [
         value.get("usage"),
         value.get("usageMetadata"),
@@ -3149,6 +3158,7 @@ fn usage_update(value: &Value) -> UsageUpdate {
                 usage,
                 &["output_tokens", "completion_tokens", "candidatesTokenCount"],
             ),
+            upstream_service_tier: None,
         });
     }
     update
@@ -3302,6 +3312,7 @@ mod tests {
     mod account_concurrency;
     mod responses_contract;
     mod responses_websocket;
+    mod service_tiers;
 
     use std::{convert::Infallible, net::SocketAddr, path::PathBuf, sync::Arc, time::Duration};
 
@@ -6048,6 +6059,7 @@ mod tests {
                 cached_input_tokens: 6,
                 output_tokens: 7,
                 generation_ms: None,
+                upstream_service_tier: None,
                 complete: true,
             }
         );
@@ -6066,6 +6078,7 @@ mod tests {
                 cached_input_tokens: 0,
                 output_tokens: 4,
                 generation_ms: None,
+                upstream_service_tier: None,
                 complete: false,
             }
         );
@@ -6091,6 +6104,7 @@ mod tests {
                 cached_input_tokens: 100,
                 output_tokens: 9,
                 generation_ms: None,
+                upstream_service_tier: None,
                 complete: true,
             }
         );
@@ -6118,6 +6132,7 @@ mod tests {
                 cached_input_tokens: 10,
                 output_tokens: 8,
                 generation_ms: None,
+                upstream_service_tier: None,
                 complete: true,
             }
         );

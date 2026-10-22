@@ -635,6 +635,10 @@ pub struct RequestSummary {
     /// Forwarded request tier, not a claim about the tier actually delivered.
     #[serde(default)]
     pub service_tier: Option<String>,
+    /// Last service tier reported by this upstream attempt. Missing is not default;
+    /// even a reported tier is not proof of the upstream's effective scheduling.
+    #[serde(default)]
+    pub upstream_service_tier: Option<crate::service_tier::ReportedServiceTier>,
     pub top_level_keys: Vec<String>,
     pub body_bytes: u64,
     pub stream: bool,
