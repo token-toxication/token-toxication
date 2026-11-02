@@ -17,6 +17,7 @@ clap.workspace = true
 futures-util.workspace = true
 hex.workspace = true
 http-body-util.workspace = true
+hyper-util.workspace = true
 instant-acme.workspace = true
 mime_guess.workspace = true
 rand.workspace = true
@@ -37,5 +38,6 @@ url.workspace = true
 x509-parser.workspace = true
 
 [dev-dependencies]
+h2.workspace = true
 rcgen.workspace = true
 tokio-tungstenite = { workspace = true, features = ["connect"] }

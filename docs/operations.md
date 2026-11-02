@@ -84,12 +84,29 @@ Every server option is available as a command-line flag and, where listed, an en
 | `TT_BIND_ADDR` | `0.0.0.0:3000` | Main HTTP or HTTPS listener |
 | `TT_DATABASE_PATH` | `data/token-toxication.sqlite3` | SQLite database path |
 | `TT_STATIC_DIR` | `apps/admin/dist` | Optional external admin build; embedded assets are the fallback |
+| `TT_HTTP_HEADER_TIMEOUT_SECS` | `60` | HTTP/1 header and between-request idle deadline; must be positive |
 | `TT_RELAY_STREAM_IDLE_TIMEOUT_SECS` | `1800` | Maximum gap between upstream streaming response chunks |
 | `TT_RELAY_STREAM_MAX_DURATION_SECS` | `900` | Maximum lifetime of one relay stream |
 | `TT_ADMIN_USERNAME` | `admin` | Admin login username |
 | `TT_ADMIN_PASSWORD` | `change-this-password` | Admin login password; change before deployment |
 | `TT_API_KEY_PREFIX` | `tokentoxication-` | Prefix for generated relay keys |
 | `RUST_LOG` | Server and HTTP info logs | Tracing filter |
+
+### HTTP/1 header and keep-alive timeout
+
+`--http-header-timeout-secs` / `TT_HTTP_HEADER_TIMEOUT_SECS` defaults to 60 seconds
+and must be positive. The same native Hyper setting applies to plain HTTP,
+certificate-file HTTPS, and both ACME HTTP-01 listeners.
+
+After protocol selection, Hyper bounds incomplete HTTP/1 headers and idle waits
+between completed requests. Keep-alive reuse remains enabled within that window.
+**This is not a request execution timeout:** uploads, inference, response bodies,
+SSE, and upgraded WebSockets do not inherit this deadline.
+
+Waits before protocol selection, including completely silent HTTP connections,
+are outside this setting. TLS handshake limits, HTTP/2 settings, and existing
+request-level metrics and logs are unchanged. No FD monitoring or custom
+connection-reclamation mechanism is added.
 
 ### TLS modes
 

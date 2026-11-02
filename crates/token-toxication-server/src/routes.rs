@@ -3375,6 +3375,7 @@ mod tests {
                 acme_directory_url: LETS_ENCRYPT_PRODUCTION_DIRECTORY.to_string(),
                 database_path,
                 static_dir: PathBuf::from("apps/admin/dist"),
+                http_header_timeout_secs: 60,
                 relay_stream_idle_timeout_secs: 60,
                 relay_stream_max_duration_secs: 900,
                 admin_username: "admin".to_string(),
