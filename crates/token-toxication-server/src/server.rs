@@ -1,13 +1,8 @@
-use std::{
-    future::{Future, IntoFuture},
-    net::SocketAddr,
-    path::PathBuf,
-    sync::Arc,
-    time::Duration,
-};
+use std::{future::Future, net::SocketAddr, path::PathBuf, sync::Arc, time::Duration};
 
 use axum::Router;
 use axum_server::{Handle, tls_rustls::RustlsConfig};
+use hyper_util::rt::TokioTimer;
 use tokio::{net::TcpListener, sync::watch};
 
 use crate::{
@@ -90,20 +85,86 @@ async fn serve_http(
             source,
         })?;
     tracing::info!("listening on http://{}", config.bind_addr);
-    let graceful_shutdown = shutdown.subscribe();
-    serve_until_shutdown_deadline(
-        axum::serve(
-            listener,
-            app.into_make_service_with_connect_info::<SocketAddr>(),
-        )
-        .with_graceful_shutdown(wait_for_shutdown(graceful_shutdown))
-        .into_future(),
+    serve_plain_listener(
+        listener,
+        config.http_header_timeout(),
+        app,
         shutdown,
         "HTTP",
     )
     .await
     .map_err(|source| ServerError::ServeHttp { source })?;
     Ok(())
+}
+
+fn configure_listener<A>(
+    mut server: axum_server::Server<SocketAddr, A>,
+    header_timeout: Duration,
+    listener: &'static str,
+) -> axum_server::Server<SocketAddr, A> {
+    // An executor is not a timer: Hyper disables its default header deadline
+    // without this explicit timer. The deadline also covers HTTP/1 keep-alive
+    // waits, but never a parsed request body, response stream, or upgrade.
+    server
+        .http_builder()
+        .http1()
+        .timer(TokioTimer::new())
+        .header_read_timeout(header_timeout);
+    tracing::info!(
+        listener,
+        http_header_timeout_secs = header_timeout.as_secs(),
+        "configured HTTP/1 header/idle deadline"
+    );
+    server
+}
+
+async fn serve_plain_listener(
+    listener: TcpListener,
+    header_timeout: Duration,
+    app: Router,
+    shutdown: ShutdownSignal,
+    listener_name: &'static str,
+) -> Result<(), std::io::Error> {
+    let handle = Handle::new();
+    let mut server = configure_listener(
+        axum_server::Server::from_listener(listener),
+        header_timeout,
+        listener_name,
+    );
+    // Preserve axum::serve's HTTP/2 extended CONNECT setting on plain HTTP.
+    server.http_builder().http2().enable_connect_protocol();
+    serve_listener(
+        server
+            .handle(handle.clone())
+            .serve(app.into_make_service_with_connect_info::<SocketAddr>()),
+        handle,
+        shutdown,
+        GRACEFUL_SHUTDOWN_TIMEOUT,
+    )
+    .await
+}
+
+async fn serve_listener<F>(
+    server: F,
+    handle: Handle<SocketAddr>,
+    shutdown: ShutdownSignal,
+    drain_timeout: Duration,
+) -> Result<(), std::io::Error>
+where
+    F: Future<Output = Result<(), std::io::Error>>,
+{
+    tokio::pin!(server);
+    let result = tokio::select! {
+        result = &mut server => result,
+        () = wait_for_shutdown(shutdown.subscribe()) => {
+            // The native handle enforces the drain deadline and closes any
+            // remaining connections; no second shutdown timer is needed.
+            handle.graceful_shutdown(Some(drain_timeout));
+            server.await
+        }
+    };
+    handle.shutdown();
+    result
 }
 
 async fn serve_cert_files(
@@ -120,7 +181,14 @@ async fn serve_cert_files(
             key_path: key_path.clone(),
             source,
         })?;
-    serve_rustls(config.bind_addr, tls_config, app, shutdown).await
+    serve_rustls(
+        config.bind_addr,
+        tls_config,
+        config.http_header_timeout(),
+        app,
+        shutdown,
+    )
+    .await
 }
 
 async fn serve_acme_http01(
@@ -143,15 +211,12 @@ async fn serve_acme_http01(
         acme_config.http_bind_addr
     );
     let http01_shutdown = shutdown.clone();
+    let header_timeout = config.http_header_timeout();
     let http01_task = tokio::spawn(async move {
-        let graceful_shutdown = http01_shutdown.subscribe();
-        serve_until_shutdown_deadline(
-            axum::serve(
-                http01_listener,
-                http01_app.into_make_service_with_connect_info::<SocketAddr>(),
-            )
-            .with_graceful_shutdown(wait_for_shutdown(graceful_shutdown))
-            .into_future(),
+        serve_plain_listener(
+            http01_listener,
+            header_timeout,
+            http01_app,
             http01_shutdown,
             "ACME HTTP-01",
         )
@@ -178,9 +243,10 @@ async fn serve_acme_http01(
     let renewal_task = manager
         .clone()
         .spawn_renewal(tls_config.clone(), shutdown.subscribe());
-    let mut https_task = tokio::spawn(serve_rustls_with_shutdown(
+    let mut https_task = tokio::spawn(serve_rustls(
         config.bind_addr,
         tls_config,
+        config.http_header_timeout(),
         app,
         shutdown.clone(),
     ));
@@ -213,33 +279,25 @@ async fn serve_acme_http01(
 async fn serve_rustls(
     bind_addr: SocketAddr,
     tls_config: RustlsConfig,
-    app: Router,
-    shutdown: ShutdownSignal,
-) -> Result<(), ServerError> {
-    serve_rustls_with_shutdown(bind_addr, tls_config, app, shutdown).await
-}
-
-async fn serve_rustls_with_shutdown(
-    bind_addr: SocketAddr,
-    tls_config: RustlsConfig,
+    header_timeout: Duration,
     app: Router,
     shutdown: ShutdownSignal,
 ) -> Result<(), ServerError> {
     let handle = Handle::new();
-    let shutdown_handle = handle.clone();
-    let handle_shutdown = shutdown.clone();
-    tokio::spawn(async move {
-        wait_for_shutdown(handle_shutdown.subscribe()).await;
-        shutdown_handle.graceful_shutdown(Some(Duration::from_secs(10)));
-    });
+    let server = configure_listener(
+        axum_server::bind_rustls(bind_addr, tls_config),
+        header_timeout,
+        "HTTPS",
+    );
 
     tracing::info!("listening on https://{}", bind_addr);
-    serve_until_shutdown_deadline(
-        axum_server::bind_rustls(bind_addr, tls_config)
-            .handle(handle)
+    serve_listener(
+        server
+            .handle(handle.clone())
             .serve(app.into_make_service_with_connect_info::<SocketAddr>()),
+        handle,
         shutdown,
-        "HTTPS",
+        Duration::from_secs(10),
     )
     .await
     .map_err(|source| ServerError::ServeHttps { source })?;
@@ -263,51 +321,6 @@ async fn wait_for_shutdown(mut shutdown_rx: watch::Receiver<bool>) {
     while shutdown_rx.changed().await.is_ok() {
         if *shutdown_rx.borrow() {
             return;
-        }
-    }
-}
-
-async fn serve_until_shutdown_deadline<F>(
-    server: F,
-    shutdown: ShutdownSignal,
-    listener: &'static str,
-) -> Result<(), std::io::Error>
-where
-    F: Future<Output = Result<(), std::io::Error>>,
-{
-    serve_until_shutdown_deadline_with_timeout(
-        server,
-        shutdown,
-        listener,
-        GRACEFUL_SHUTDOWN_TIMEOUT,
-    )
-    .await
-}
-
-async fn serve_until_shutdown_deadline_with_timeout<F>(
-    server: F,
-    shutdown: ShutdownSignal,
-    listener: &'static str,
-    graceful_shutdown_timeout: Duration,
-) -> Result<(), std::io::Error>
-where
-    F: Future<Output = Result<(), std::io::Error>>,
-{
-    tokio::pin!(server);
-    tokio::select! {
-        result = &mut server => result,
-        () = wait_for_shutdown(shutdown.subscribe()) => {
-            match tokio::time::timeout(graceful_shutdown_timeout, &mut server).await {
-                Ok(result) => result,
-                Err(_) => {
-                    tracing::warn!(
-                        listener,
-                        timeout_secs = graceful_shutdown_timeout.as_secs(),
-                        "graceful shutdown deadline elapsed; ending listener"
-                    );
-                    Ok(())
-                }
-            }
         }
     }
 }
@@ -337,28 +350,4 @@ async fn shutdown_signal() {
 }
 
 #[cfg(test)]
-mod tests {
-    use std::{io, time::Duration};
-
-    use super::{ShutdownSignal, serve_until_shutdown_deadline_with_timeout};
-
-    #[tokio::test]
-    async fn shutdown_deadline_ends_an_unresponsive_listener() {
-        let shutdown = ShutdownSignal::for_test();
-        shutdown.cancel();
-
-        let result = tokio::time::timeout(
-            Duration::from_millis(100),
-            serve_until_shutdown_deadline_with_timeout(
-                std::future::pending::<Result<(), io::Error>>(),
-                shutdown,
-                "test",
-                Duration::from_millis(10),
-            ),
-        )
-        .await
-        .expect("shutdown deadline must end the listener promptly");
-
-        assert!(result.is_ok());
-    }
-}
+mod tests;

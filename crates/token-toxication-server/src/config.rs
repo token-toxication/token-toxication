@@ -89,6 +89,10 @@ pub struct Config {
     #[arg(long, env = "TT_STATIC_DIR", default_value = "apps/admin/dist")]
     pub static_dir: PathBuf,
 
+    /// HTTP/1 header and between-request idle deadline, not a request execution timeout.
+    #[arg(long, env = "TT_HTTP_HEADER_TIMEOUT_SECS", default_value_t = 60)]
+    pub http_header_timeout_secs: u64,
+
     #[arg(
         long,
         env = "TT_RELAY_STREAM_IDLE_TIMEOUT_SECS",
@@ -127,6 +131,9 @@ impl Config {
     }
 
     pub fn https_config(&self) -> Result<HttpsConfig, ConfigError> {
+        if self.http_header_timeout_secs == 0 {
+            return Err(ConfigError::ZeroHttpHeaderTimeout);
+        }
         self.validate_relay_timeouts()?;
         match self.https_mode {
             HttpsMode::Off => Ok(HttpsConfig::Off),
@@ -194,6 +201,10 @@ impl Config {
         }
     }
 
+    pub fn http_header_timeout(&self) -> Duration {
+        Duration::from_secs(self.http_header_timeout_secs)
+    }
+
     pub fn relay_stream_idle_timeout(&self) -> Duration {
         Duration::from_secs(self.relay_stream_idle_timeout_secs)
     }
@@ -217,8 +228,47 @@ impl Config {
 mod tests {
     use std::{net::SocketAddr, path::PathBuf};
 
+    use clap::{CommandFactory, Parser};
+
     use super::{Config, HttpsMode, LETS_ENCRYPT_PRODUCTION_DIRECTORY};
     use crate::error::ConfigError;
+
+    #[derive(Parser)]
+    struct TestCli {
+        #[command(flatten)]
+        config: Config,
+    }
+
+    #[test]
+    fn http_header_timeout_is_configurable_with_a_60_second_default() {
+        let command = TestCli::command();
+        let argument = command
+            .get_arguments()
+            .find(|argument| argument.get_id() == "http_header_timeout_secs")
+            .expect("the listener deadline must be configurable");
+        assert_eq!(argument.get_default_values(), &["60"]);
+        let config = TestCli::try_parse_from(["server", "--http-header-timeout-secs", "5"])
+            .unwrap()
+            .config;
+        assert_eq!(
+            config.http_header_timeout(),
+            std::time::Duration::from_secs(5)
+        );
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn http_header_timeout_must_be_positive_in_every_tls_mode() {
+        for mode in [HttpsMode::Off, HttpsMode::CertFiles, HttpsMode::AcmeHttp01] {
+            let mut config = test_config();
+            config.https_mode = mode;
+            config.http_header_timeout_secs = 0;
+            assert!(matches!(
+                config.validate(),
+                Err(ConfigError::ZeroHttpHeaderTimeout)
+            ));
+        }
+    }
 
     fn test_config() -> Config {
         Config {
@@ -234,6 +284,7 @@ mod tests {
             acme_directory_url: LETS_ENCRYPT_PRODUCTION_DIRECTORY.to_string(),
             database_path: PathBuf::from("data/token-toxication.sqlite3"),
             static_dir: PathBuf::from("apps/admin/dist"),
+            http_header_timeout_secs: 60,
             relay_stream_idle_timeout_secs: 1_800,
             relay_stream_max_duration_secs: 900,
             admin_username: "admin".to_string(),
