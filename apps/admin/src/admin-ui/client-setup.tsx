@@ -32,11 +32,31 @@ import {
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-const dshProviderIds: Record<DshProtocol, string> = {
-  chat: "token-toxication-chat",
-  responses: "token-toxication-responses",
-  anthropic: "token-toxication-anthropic",
+const dshProtocols: DshProtocol[] = ["chat", "responses", "anthropic"];
+
+export type ClientSetupNames = {
+  providerId: string;
+  displayName: string;
+  apiKeyEnv: string;
 };
+
+// TT_INSTANCE_NAME (validated server-side as a lowercase slug) keeps several
+// deployments side by side in one client: separate provider IDs, key env vars,
+// and file names. Without it the generated config is unchanged.
+export function clientSetupNames(instanceName?: string): ClientSetupNames {
+  if (!instanceName) {
+    return {
+      providerId: "token-toxication",
+      displayName: "Token Toxication",
+      apiKeyEnv: "TOKEN_TOXICATION_API_KEY",
+    };
+  }
+  return {
+    providerId: instanceName,
+    displayName: `Token Toxication (${instanceName})`,
+    apiKeyEnv: `TOKEN_TOXICATION_API_KEY_${instanceName.toUpperCase().replaceAll("-", "_")}`,
+  };
+}
 
 const dshWireApis: Record<DshProtocol, string> = {
   chat: "openai-completions",
@@ -74,7 +94,11 @@ function base64Encode(value: string) {
   return btoa(binary);
 }
 
-function opencodeCatalogPluginSource(openaiBaseUrl: string, fallbackModels: OpencodeModelOption[]) {
+function opencodeCatalogPluginSource(
+  openaiBaseUrl: string,
+  fallbackModels: OpencodeModelOption[],
+  names: ClientSetupNames,
+) {
   const chatUrl = `${openaiBaseUrl}/models?wire_api=openai-chat`;
   const responsesUrl = `${openaiBaseUrl}/codex/models`;
   const fallbackEntries = JSON.stringify(
@@ -87,7 +111,7 @@ function opencodeCatalogPluginSource(openaiBaseUrl: string, fallbackModels: Open
   );
   return `import { Plugin } from "@opencode/plugin";
 
-const PROVIDER_ID = "token-toxication";
+const PROVIDER_ID = ${JSON.stringify(names.providerId)};
 const OPENAI_BASE_URL = ${JSON.stringify(openaiBaseUrl)};
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 const FALLBACK_ENTRIES = ${fallbackEntries};
@@ -110,7 +134,7 @@ function withSpeedTierAliases(entries) {
 }
 
 async function fetchCatalog() {
-  const key = process.env.TOKEN_TOXICATION_API_KEY;
+  const key = process.env.${names.apiKeyEnv};
   if (!key) return undefined;
   const responses = await Promise.all(
     endpoints.map(async ({ wireApi, url }) => {
@@ -227,7 +251,7 @@ function modelDefinitions(entries, provider) {
 }
 
 export default Plugin.define({
-  id: "token-toxication-model-catalog",
+  id: ${JSON.stringify(`${names.providerId}-model-catalog`)},
   setup: async (ctx) => {
     let discovered = FALLBACK_ENTRIES;
     try {
@@ -245,7 +269,7 @@ export default Plugin.define({
         editor.add({
           info: {
             id: PROVIDER_ID,
-            name: "Token Toxication",
+            name: ${JSON.stringify(names.displayName)},
             activation: "enabled",
             package: "aisdk:@ai-sdk/openai-compatible",
             settings: { baseURL: OPENAI_BASE_URL },
@@ -273,12 +297,12 @@ export default Plugin.define({
 `;
 }
 
-function piCatalogExtensionSource(openaiBaseUrl: string) {
+function piCatalogExtensionSource(openaiBaseUrl: string, names: ClientSetupNames) {
   const endpoint = `${openaiBaseUrl}/codex/models`;
-  return `const PROVIDER_ID = "token-toxication";
+  return `const PROVIDER_ID = ${JSON.stringify(names.providerId)};
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 const CATALOG_URL = ${JSON.stringify(endpoint)};
-const API_KEY = "$TOKEN_TOXICATION_API_KEY";
+const API_KEY = ${JSON.stringify(`$${names.apiKeyEnv}`)};
 
 function withSpeedTierAliases(entries) {
   return entries.flatMap((entry) => {
@@ -294,7 +318,7 @@ function withSpeedTierAliases(entries) {
 }
 
 async function fetchCatalog(signal) {
-  const key = process.env.TOKEN_TOXICATION_API_KEY;
+  const key = process.env.${names.apiKeyEnv};
   if (!key) return undefined;
   const timeout = AbortSignal.timeout(4_000);
   const requestSignal = signal ? AbortSignal.any([signal, timeout]) : timeout;
@@ -323,7 +347,7 @@ async function fetchCatalog(signal) {
 
 function providerConfig(models) {
   return {
-    name: "Token Toxication",
+    name: ${JSON.stringify(names.displayName)},
     baseUrl: ${JSON.stringify(openaiBaseUrl)},
     api: "openai-responses",
     apiKey: API_KEY,
@@ -396,15 +420,16 @@ export function dshProviderYaml(
   models: DshModelOption[],
   openaiBaseUrl: string,
   anthropicBaseUrl: string,
+  names: ClientSetupNames = clientSetupNames(),
 ) {
   if (models.length === 0) {
     return "";
   }
   const baseUrl = protocol === "anthropic" ? anthropicBaseUrl : openaiBaseUrl;
   return [
-    `    ${dshProviderIds[protocol]}:`,
-    '      displayName: "Token Toxication"',
-    "      apiKeyEnv: TOKEN_TOXICATION_API_KEY",
+    `    ${names.providerId}-${protocol}:`,
+    `      displayName: ${JSON.stringify(names.displayName)}`,
+    `      apiKeyEnv: ${names.apiKeyEnv}`,
     `      api: ${dshWireApis[protocol]}`,
     `      baseURL: ${baseUrl}`,
     "      models:",
@@ -417,11 +442,13 @@ export function ClientSetupView({
   routableModels,
   apiKey,
   setApiKey,
+  instanceName,
 }: {
   models: ModelCatalogEntry[];
   routableModels: RoutableModelCatalogEntry[];
   apiKey: string;
   setApiKey: React.Dispatch<React.SetStateAction<string>>;
+  instanceName?: string;
 }) {
   const serviceOrigin = useMemo(
     () => (typeof window === "undefined" ? "http://127.0.0.1:3000" : window.location.origin),
@@ -461,8 +488,9 @@ export function ClientSetupView({
         opencodeModels,
         piModels,
         dshModels,
+        instanceName,
       }),
-    [apiKey, serviceOrigin, opencodeModels, piModels, dshModels],
+    [apiKey, serviceOrigin, opencodeModels, piModels, dshModels, instanceName],
   );
   const keyLooksValid = apiKey.trim() === "" || apiKey.trim().startsWith("tokentoxication-");
 
@@ -574,7 +602,7 @@ export function ClientSetupView({
                 <ClientSnippetCard
                   title={t`Codex environment`}
                   description={t`Set the relay key and download the Desktop compatibility catalog before starting Codex.`}
-                  endpoint="TOKEN_TOXICATION_API_KEY"
+                  endpoint={snippets.apiKeyEnv}
                   model={t`Chosen in Codex`}
                   snippet={snippets.codexEnvironment}
                 />
@@ -710,30 +738,33 @@ export function buildClientSetupSnippets({
   opencodeModels,
   piModels,
   dshModels,
+  instanceName,
 }: {
   apiKey: string;
   serviceOrigin: string;
   opencodeModels: OpencodeModelOption[];
   piModels: ClientModelOption[];
   dshModels: DshModelOption[];
+  instanceName?: string;
 }) {
+  const names = clientSetupNames(instanceName);
+  const { providerId, displayName, apiKeyEnv } = names;
   const origin = serviceOrigin.replace(/\/+$/, "");
   const relayApiKey = apiKey.trim() || "tokentoxication-REPLACE_ME";
   const openaiBaseUrl = `${origin}/openai/v1`;
   const anthropicBaseUrl = `${origin}/anthropic`;
-  const opencodeProvider = "token-toxication";
-  const opencodeCatalogPlugin = opencodeCatalogPluginSource(openaiBaseUrl, opencodeModels);
+  const opencodeCatalogPlugin = opencodeCatalogPluginSource(openaiBaseUrl, opencodeModels, names);
   const opencodeCatalogPluginBase64 = base64Encode(opencodeCatalogPlugin);
-  const piCatalogExtension = piCatalogExtensionSource(openaiBaseUrl);
+  const piCatalogExtension = piCatalogExtensionSource(openaiBaseUrl, names);
   const opencodeConfig = JSON.stringify(
     {
       $schema: "https://opencode.ai/config.json",
       provider: {
-        [opencodeProvider]: {
-          name: "Token Toxication",
+        [providerId]: {
+          name: displayName,
           options: {
             baseURL: openaiBaseUrl,
-            apiKey: "{env:TOKEN_TOXICATION_API_KEY}",
+            apiKey: `{env:${apiKeyEnv}}`,
           },
         },
       },
@@ -744,11 +775,11 @@ export function buildClientSetupSnippets({
   const piModelsConfig = JSON.stringify(
     {
       providers: {
-        "token-toxication": {
-          name: "Token Toxication",
+        [providerId]: {
+          name: displayName,
           baseUrl: openaiBaseUrl,
           api: "openai-responses",
-          apiKey: "$TOKEN_TOXICATION_API_KEY",
+          apiKey: `$${apiKeyEnv}`,
           models: withSpeedTierAliases(piModels).map((model) => ({
             id: model.id,
             name: model.displayName,
@@ -760,7 +791,7 @@ export function buildClientSetupSnippets({
     null,
     2,
   );
-  const dshProviderSections = (Object.keys(dshProviderIds) as DshProtocol[])
+  const dshProviderSections = dshProtocols
     .map((protocol) =>
       dshProviderYaml(
         protocol,
@@ -769,11 +800,12 @@ export function buildClientSetupSnippets({
         ),
         openaiBaseUrl,
         anthropicBaseUrl,
+        names,
       ),
     )
     .filter((section) => section !== "");
   const dshSnippet = [
-    "# Set TOKEN_TOXICATION_API_KEY in the DeepSeek Harness process environment.",
+    `# Set ${apiKeyEnv} in the DeepSeek Harness process environment.`,
     `# Model discovery endpoints: ${openaiBaseUrl}/models and ${anthropicBaseUrl}/v1/models`,
     "# Merge the sections below into ~/.dsh/settings.yaml, then reload the",
     "# harness page. Keep your existing keys (ui-theme, permission, ...).",
@@ -786,28 +818,29 @@ export function buildClientSetupSnippets({
   return {
     openaiBaseUrl,
     anthropicBaseUrl,
+    apiKeyEnv,
     codexEnvironment: [
-      `export TOKEN_TOXICATION_API_KEY=${shellQuote(relayApiKey)}`,
+      `export ${apiKeyEnv}=${shellQuote(relayApiKey)}`,
       "mkdir -p ~/.codex",
       `curl --fail --silent --show-error --location \\
-  --header "Authorization: Bearer $TOKEN_TOXICATION_API_KEY" \\
+  --header "Authorization: Bearer $${apiKeyEnv}" \\
   ${shellQuote(`${openaiBaseUrl}/codex/models`)} \\
-  > ~/.codex/token-toxication-model-catalog.json`,
+  > ~/.codex/${providerId}-model-catalog.json`,
     ].join("\n"),
     codexConfig: [
-      "# Set TOKEN_TOXICATION_API_KEY in the Codex process environment.",
+      `# Set ${apiKeyEnv} in the Codex process environment.`,
       "# Run the Codex environment snippet first to download the Desktop compatibility catalog.",
       "# Merge into ~/.codex/config.toml; keep your own model and reasoning settings.",
       "",
-      `model_provider = ${tomlString("token-toxication")}`,
+      `model_provider = ${tomlString(providerId)}`,
       "",
-      "[model_providers.token-toxication]",
-      `name = ${tomlString("Token Toxication")}`,
+      `[model_providers.${providerId}]`,
+      `name = ${tomlString(displayName)}`,
       `base_url = ${tomlString(openaiBaseUrl)}`,
-      `env_key = ${tomlString("TOKEN_TOXICATION_API_KEY")}`,
+      `env_key = ${tomlString(apiKeyEnv)}`,
       `wire_api = ${tomlString("responses")}`,
       "supports_websockets = true",
-      `model_catalog_json = ${tomlString("token-toxication-model-catalog.json")}`,
+      `model_catalog_json = ${tomlString(`${providerId}-model-catalog.json`)}`,
       `model_catalog_url = ${tomlString(`${openaiBaseUrl}/codex/models`)}`,
     ].join("\n"),
     claudeCode: [
@@ -816,14 +849,14 @@ export function buildClientSetupSnippets({
       "export CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1",
     ].join("\n"),
     opencode: [
-      `export TOKEN_TOXICATION_API_KEY=${shellQuote(relayApiKey)}`,
+      `export ${apiKeyEnv}=${shellQuote(relayApiKey)}`,
       'opencode_config_dir="${OPENCODE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/opencode}"',
       'mkdir -p "$opencode_config_dir/plugins"',
       `opencode_plugin_base64=${shellQuote(opencodeCatalogPluginBase64)}`,
       "if base64 --decode </dev/null >/dev/null 2>&1; then",
-      '  printf "%s" "$opencode_plugin_base64" | base64 --decode > "$opencode_config_dir/plugins/token-toxication-models.ts"',
+      `  printf "%s" "$opencode_plugin_base64" | base64 --decode > "$opencode_config_dir/plugins/${providerId}-models.ts"`,
       "else",
-      '  printf "%s" "$opencode_plugin_base64" | base64 -D > "$opencode_config_dir/plugins/token-toxication-models.ts"',
+      `  printf "%s" "$opencode_plugin_base64" | base64 -D > "$opencode_config_dir/plugins/${providerId}-models.ts"`,
       "fi",
       "unset opencode_plugin_base64",
       "cat > \"$opencode_config_dir/opencode.jsonc\" <<'JSON'",
@@ -833,13 +866,13 @@ export function buildClientSetupSnippets({
       "opencode",
     ].join("\n"),
     pi: [
-      `export TOKEN_TOXICATION_API_KEY=${shellQuote(relayApiKey)}`,
+      `export ${apiKeyEnv}=${shellQuote(relayApiKey)}`,
       "mkdir -p ~/.pi/agent",
       "mkdir -p ~/.pi/agent/extensions",
       "cat > ~/.pi/agent/models.json <<'JSON'",
       piModelsConfig,
       "JSON",
-      "cat > ~/.pi/agent/extensions/token-toxication-models.mjs <<'JS'",
+      `cat > ~/.pi/agent/extensions/${providerId}-models.mjs <<'JS'`,
       piCatalogExtension,
       "JS",
       "pi",

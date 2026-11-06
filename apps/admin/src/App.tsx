@@ -73,6 +73,7 @@ import {
 import { EmptyNotice, LoadingState, NotFoundView } from "./admin-ui/shared";
 import { SettingsView } from "./admin-ui/settings";
 import { useAdminWorkspace } from "./admin-ui/use-admin-workspace";
+import { useInstanceName } from "./admin-ui/instance-name";
 import { copyText } from "./admin-ui/helpers";
 
 const AnalyticsPanel = lazy(() => import("./admin-ui/analytics-panel"));
@@ -170,6 +171,7 @@ function App() {
     toggleAccount,
     deleteAccount,
   } = useAdminWorkspace();
+  const instanceName = useInstanceName();
 
   if (!token) {
     return (
@@ -186,7 +188,7 @@ function App() {
               </div>
               <h1 className="text-2xl font-semibold">Token Toxication</h1>
               <p className="text-sm text-muted-foreground">
-                <Trans>Relay operations console</Trans>
+                {instanceName ?? <Trans>Relay operations console</Trans>}
               </p>
             </div>
             <Card>
@@ -249,8 +251,8 @@ function App() {
                 </div>
                 <div className="min-w-0">
                   <div className="truncate text-sm font-semibold">Token Toxication</div>
-                  <div className="text-xs text-muted-foreground">
-                    <Trans>Relay control plane</Trans>
+                  <div className="truncate text-xs text-muted-foreground" title={instanceName}>
+                    {instanceName ?? <Trans>Relay control plane</Trans>}
                   </div>
                 </div>
               </div>
@@ -416,6 +418,7 @@ function App() {
                         routableModels={routableModels}
                         apiKey={clientSetupApiKey}
                         setApiKey={setClientSetupApiKey}
+                        instanceName={instanceName}
                       />
                     ),
                     logs: <RequestLogsView logs={logs} apiKeys={apiKeys} accounts={accounts} />,

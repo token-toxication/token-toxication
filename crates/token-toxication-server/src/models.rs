@@ -727,6 +727,8 @@ pub struct HealthResponse {
     pub version: String,
     pub uptime_seconds: i64,
     pub timestamp: DateTime<Utc>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub instance_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

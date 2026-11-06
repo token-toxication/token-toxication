@@ -570,3 +570,41 @@ describe("DeepSeek Harness YAML builders", () => {
     }
   });
 });
+
+describe("instance-scoped client setup", () => {
+  const snippets = buildClientSetupSnippets({
+    apiKey: "tokentoxication-test",
+    serviceOrigin: "http://tokyo.example:3000",
+    opencodeModels: [],
+    piModels: [],
+    dshModels: dshModelOptions(catalog, routable),
+    instanceName: "tokyo-prod",
+  });
+
+  it("separates provider IDs, key env vars, and file names per instance", () => {
+    expect(snippets.apiKeyEnv).toBe("TOKEN_TOXICATION_API_KEY_TOKYO_PROD");
+    expect(snippets.codexEnvironment).toContain(
+      "export TOKEN_TOXICATION_API_KEY_TOKYO_PROD='tokentoxication-test'",
+    );
+    expect(snippets.codexEnvironment).toContain("~/.codex/tokyo-prod-model-catalog.json");
+    expect(snippets.codexConfig).toContain('model_provider = "tokyo-prod"');
+    expect(snippets.codexConfig).toContain("[model_providers.tokyo-prod]");
+    expect(snippets.codexConfig).toContain('name = "Token Toxication (tokyo-prod)"');
+    expect(snippets.codexConfig).toContain('env_key = "TOKEN_TOXICATION_API_KEY_TOKYO_PROD"');
+    expect(snippets.opencode).toContain("plugins/tokyo-prod-models.ts");
+    expect(snippets.opencode).toContain('"tokyo-prod": {');
+    expect(snippets.opencode).toContain("{env:TOKEN_TOXICATION_API_KEY_TOKYO_PROD}");
+    expect(snippets.pi).toContain("extensions/tokyo-prod-models.mjs");
+    expect(snippets.pi).toContain('const PROVIDER_ID = "tokyo-prod";');
+    expect(snippets.pi).toContain("process.env.TOKEN_TOXICATION_API_KEY_TOKYO_PROD");
+    expect(snippets.dsh).toContain("tokyo-prod-chat:");
+    expect(snippets.dsh).toContain("apiKeyEnv: TOKEN_TOXICATION_API_KEY_TOKYO_PROD");
+  });
+
+  it("leaves no default names behind", () => {
+    for (const snippet of [snippets.codexConfig, snippets.opencode, snippets.pi, snippets.dsh]) {
+      expect(snippet).not.toContain("token-toxication-");
+      expect(snippet).not.toMatch(/TOKEN_TOXICATION_API_KEY(?!_TOKYO_PROD)/);
+    }
+  });
+});

@@ -150,6 +150,7 @@ pub async fn health(State(state): State<AppState>) -> Json<HealthResponse> {
         version: env!("CARGO_PKG_VERSION").to_string(),
         uptime_seconds: (Utc::now() - state.started_at).num_seconds(),
         timestamp: Utc::now(),
+        instance_name: Some(state.config.instance_name.clone()).filter(|name| !name.is_empty()),
     })
 }
 
@@ -3375,6 +3376,7 @@ mod tests {
                 acme_directory_url: LETS_ENCRYPT_PRODUCTION_DIRECTORY.to_string(),
                 database_path,
                 static_dir: PathBuf::from("apps/admin/dist"),
+                instance_name: String::new(),
                 http_header_timeout_secs: 60,
                 relay_stream_idle_timeout_secs: 60,
                 relay_stream_max_duration_secs: 900,

@@ -89,6 +89,16 @@ pub struct Config {
     #[arg(long, env = "TT_STATIC_DIR", default_value = "apps/admin/dist")]
     pub static_dir: PathBuf,
 
+    /// Label shown in the admin UI and used as the client setup provider ID to
+    /// tell deployments apart. Empty means unset.
+    #[arg(
+        long,
+        env = "TT_INSTANCE_NAME",
+        default_value = "",
+        value_parser = parse_instance_name
+    )]
+    pub instance_name: String,
+
     /// HTTP/1 header and between-request idle deadline, not a request execution timeout.
     #[arg(long, env = "TT_HTTP_HEADER_TIMEOUT_SECS", default_value_t = 60)]
     pub http_header_timeout_secs: u64,
@@ -123,6 +133,24 @@ pub struct Config {
         value_parser = clap::builder::BoolishValueParser::new()
     )]
     pub allow_default_admin_password: bool,
+}
+
+/// Instance names become client provider IDs, config keys, file names, and env
+/// var suffixes, so only a portable slug is accepted.
+fn parse_instance_name(value: &str) -> Result<String, String> {
+    let valid_chars = value
+        .bytes()
+        .all(|byte| matches!(byte, b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_'));
+    let valid_edges = value
+        .bytes()
+        .next()
+        .zip(value.bytes().last())
+        .is_some_and(|(first, last)| first.is_ascii_alphanumeric() && last.is_ascii_alphanumeric());
+    if value.is_empty() || (value.len() <= 32 && valid_chars && valid_edges) {
+        Ok(value.to_owned())
+    } else {
+        Err("use 1-32 lowercase letters, digits, '-' or '_', starting and ending with a letter or digit".to_owned())
+    }
 }
 
 impl Config {
@@ -230,7 +258,7 @@ mod tests {
 
     use clap::{CommandFactory, Parser};
 
-    use super::{Config, HttpsMode, LETS_ENCRYPT_PRODUCTION_DIRECTORY};
+    use super::{Config, HttpsMode, LETS_ENCRYPT_PRODUCTION_DIRECTORY, parse_instance_name};
     use crate::error::ConfigError;
 
     #[derive(Parser)]
@@ -284,6 +312,7 @@ mod tests {
             acme_directory_url: LETS_ENCRYPT_PRODUCTION_DIRECTORY.to_string(),
             database_path: PathBuf::from("data/token-toxication.sqlite3"),
             static_dir: PathBuf::from("apps/admin/dist"),
+            instance_name: String::new(),
             http_header_timeout_secs: 60,
             relay_stream_idle_timeout_secs: 1_800,
             relay_stream_max_duration_secs: 900,
@@ -292,6 +321,21 @@ mod tests {
             api_key_prefix: "tokentoxication-".to_string(),
             allow_default_admin_password: false,
         }
+    }
+
+    #[test]
+    fn instance_name_accepts_only_portable_slugs() {
+        for name in ["", "tokyo", "tokyo-prod", "custom_name", "a", "node1"] {
+            assert_eq!(parse_instance_name(name).as_deref(), Ok(name));
+        }
+        for name in ["Tokyo", "东京", "tokyo prod", "-tokyo", "tokyo_", "a.b"] {
+            assert!(
+                parse_instance_name(name).is_err(),
+                "{name:?} should be rejected"
+            );
+        }
+        assert!(parse_instance_name(&"a".repeat(32)).is_ok());
+        assert!(parse_instance_name(&"a".repeat(33)).is_err());
     }
 
     #[test]
