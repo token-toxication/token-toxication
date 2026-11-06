@@ -84,6 +84,7 @@ Every server option is available as a command-line flag and, where listed, an en
 | `TT_BIND_ADDR` | `0.0.0.0:3000` | Main HTTP or HTTPS listener |
 | `TT_DATABASE_PATH` | `data/token-toxication.sqlite3` | SQLite database path |
 | `TT_STATIC_DIR` | `apps/admin/dist` | Optional external admin build; embedded assets are the fallback |
+| `TT_INSTANCE_NAME` | unset | Lowercase slug (`a-z`, `0-9`, `-`, `_`; max 32) shown in the admin UI and used as the client setup provider ID, so one client can connect to several deployments; the key env var becomes `TOKEN_TOXICATION_API_KEY_<NAME>` |
 | `TT_HTTP_HEADER_TIMEOUT_SECS` | `60` | HTTP/1 header and between-request idle deadline; must be positive |
 | `TT_RELAY_STREAM_IDLE_TIMEOUT_SECS` | `1800` | Maximum gap between upstream streaming response chunks |
 | `TT_RELAY_STREAM_MAX_DURATION_SECS` | `900` | Maximum lifetime of one relay stream |

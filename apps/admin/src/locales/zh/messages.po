@@ -24,7 +24,7 @@ msgid "{0, plural, one {# route} other {# routes}}"
 msgstr "{0, plural, other {# 条路由}}"
 
 #. placeholder {0}: piModels.length
-#: src/admin-ui/client-setup.tsx:634
+#: src/admin-ui/client-setup.tsx:662
 msgid "{0, plural, one {# routed model} other {# routed models}}"
 msgstr "{0, plural, other {# 个已路由模型}}"
 
@@ -225,23 +225,23 @@ msgstr "添加账号"
 msgid "Add an account to make the relay schedulable."
 msgstr "添加账号以使中继可被调度。"
 
-#: src/admin-ui/client-setup.tsx:624
+#: src/admin-ui/client-setup.tsx:652
 msgid "Add an eligible OpenAI Chat or Responses route to generate an opencode config."
 msgstr "添加可用的 OpenAI Chat 或 Responses 路由以生成 opencode 配置。"
 
-#: src/admin-ui/client-setup.tsx:659
+#: src/admin-ui/client-setup.tsx:687
 msgid "Add an eligible OpenAI Chat, OpenAI Responses, or Anthropic Messages route to generate a DeepSeek Harness config."
 msgstr "添加可用的 OpenAI Chat、OpenAI Responses 或 Anthropic Messages 路由以生成 DeepSeek Harness 配置。"
 
-#: src/admin-ui/client-setup.tsx:643
+#: src/admin-ui/client-setup.tsx:671
 msgid "Add an eligible OpenAI Responses route to generate a Pi provider config."
 msgstr "添加可用的 OpenAI Responses 路由以生成 Pi 供应商配置。"
 
-#: src/admin-ui/client-setup.tsx:608
+#: src/admin-ui/client-setup.tsx:636
 msgid "Add an enabled Anthropic Messages route to configure Claude Code."
 msgstr "添加已启用的 Anthropic Messages 路由，以配置 Claude Code。"
 
-#: src/admin-ui/client-setup.tsx:592
+#: src/admin-ui/client-setup.tsx:620
 msgid "Add an enabled OpenAI Responses route to configure Codex."
 msgstr "添加已启用的 OpenAI Responses 路由，以配置 Codex。"
 
@@ -249,7 +249,7 @@ msgstr "添加已启用的 OpenAI Responses 路由，以配置 Codex。"
 msgid "Add catalog model"
 msgstr "添加目录模型"
 
-#: src/admin-ui/client-setup.tsx:531
+#: src/admin-ui/client-setup.tsx:559
 msgid "Add exact model names in Model Catalog, then bind them to provider routes. Client setup will populate from that catalog."
 msgstr "先在模型目录中添加精确模型名，再绑定到供应商路由。客户端配置会从该目录填充。"
 
@@ -282,7 +282,7 @@ msgstr "添加路由"
 msgid "Add Route"
 msgstr "添加路由"
 
-#: src/App.tsx:308
+#: src/App.tsx:310
 msgid "Admin"
 msgstr "管理员"
 
@@ -290,7 +290,7 @@ msgstr "管理员"
 msgid "Admin API"
 msgstr "管理 API"
 
-#: src/App.tsx:195
+#: src/App.tsx:197
 msgid "Admin sign in"
 msgstr "管理员登录"
 
@@ -321,7 +321,7 @@ msgstr "请允许弹窗以使用 Antigravity 登录"
 msgid "Analytics unavailable"
 msgstr "暂时无法获取指标"
 
-#: src/admin-ui/client-setup.tsx:516
+#: src/admin-ui/client-setup.tsx:544
 msgid "Anthropic base"
 msgstr "Anthropic 基址"
 
@@ -371,7 +371,7 @@ msgstr "未找到 API 密钥"
 msgid "API key paused"
 msgstr "API 密钥已暂停"
 
-#: src/App.tsx:475
+#: src/App.tsx:478
 msgid "API key secret"
 msgstr "API 密钥密文"
 
@@ -529,11 +529,11 @@ msgstr "使用此供应商账号的目录模型绑定。"
 msgid "Catalog Model not found"
 msgstr "未找到目录模型"
 
-#: src/admin-ui/client-setup.tsx:518
+#: src/admin-ui/client-setup.tsx:546
 msgid "Catalog models"
 msgstr "目录模型"
 
-#: src/admin-ui/client-setup.tsx:519
+#: src/admin-ui/client-setup.tsx:547
 msgid "Chat routed"
 msgstr "已路由 Chat"
 
@@ -541,20 +541,20 @@ msgstr "已路由 Chat"
 msgid "Choose how the relay obtains and sends the upstream credential."
 msgstr "选择中继获取并发送上游凭证的方式。"
 
-#: src/admin-ui/client-setup.tsx:602
+#: src/admin-ui/client-setup.tsx:630
 msgid "Chosen in Claude Code"
 msgstr "在 Claude Code 中选择"
 
-#: src/admin-ui/client-setup.tsx:578
-#: src/admin-ui/client-setup.tsx:585
+#: src/admin-ui/client-setup.tsx:606
+#: src/admin-ui/client-setup.tsx:613
 msgid "Chosen in Codex"
 msgstr "在 Codex 中选择"
 
-#: src/admin-ui/client-setup.tsx:653
+#: src/admin-ui/client-setup.tsx:681
 msgid "Chosen in DeepSeek Harness"
 msgstr "在 DeepSeek Harness 中选择"
 
-#: src/admin-ui/client-setup.tsx:618
+#: src/admin-ui/client-setup.tsx:646
 msgid "Chosen in opencode"
 msgstr "在 opencode 中选择"
 
@@ -562,7 +562,7 @@ msgstr "在 opencode 中选择"
 msgid "Classification"
 msgstr "分类"
 
-#: src/admin-ui/client-setup.tsx:599
+#: src/admin-ui/client-setup.tsx:627
 msgid "Claude Code environment"
 msgstr "Claude Code 环境"
 
@@ -586,16 +586,16 @@ msgstr "客户端凭证、限额与服务权限。"
 msgid "Client key"
 msgstr "客户端密钥"
 
-#: src/admin-ui/client-setup.tsx:500
+#: src/admin-ui/client-setup.tsx:528
 msgid "Client keys should start with tokentoxication-."
 msgstr "客户端密钥应以 tokentoxication- 开头。"
 
-#: src/App.tsx:504
+#: src/App.tsx:507
 msgid "Client setup"
 msgstr "客户端配置"
 
 #: src/admin-routes.tsx:17
-#: src/admin-ui/client-setup.tsx:474
+#: src/admin-ui/client-setup.tsx:502
 msgid "Client Setup"
 msgstr "客户端配置"
 
@@ -626,11 +626,11 @@ msgstr "Codex 设备登录"
 msgid "Codex device login expired"
 msgstr "Codex 设备登录已过期"
 
-#: src/admin-ui/client-setup.tsx:575
+#: src/admin-ui/client-setup.tsx:603
 msgid "Codex environment"
 msgstr "Codex 环境变量"
 
-#: src/admin-ui/client-setup.tsx:582
+#: src/admin-ui/client-setup.tsx:610
 msgid "Codex provider configuration"
 msgstr "Codex 供应商配置"
 
@@ -647,7 +647,7 @@ msgstr "Codex Responses"
 msgid "Codex sign-in failed"
 msgstr "Codex 登录失败"
 
-#: src/admin-ui/client-setup.tsx:559
+#: src/admin-ui/client-setup.tsx:587
 msgid "Codex uses its own model catalog and chooses the model. Check that the selected model has a compatible relay route; every fallback route must support the protocol Codex sends."
 msgstr "Codex 使用自己的模型目录并选择模型。请确认所选模型有兼容的中继路由；每条回退路由都必须支持 Codex 发出的协议。"
 
@@ -710,7 +710,7 @@ msgstr "控制请求去向以及此账号可以处理的并发工作量。"
 msgid "Copied"
 msgstr "已复制"
 
-#: src/admin-ui/client-setup.tsx:690
+#: src/admin-ui/client-setup.tsx:718
 msgid "Copy"
 msgstr "复制"
 
@@ -718,7 +718,7 @@ msgstr "复制"
 msgid "Copy code"
 msgstr "复制代码"
 
-#: src/App.tsx:493
+#: src/App.tsx:496
 msgid "Copy secret"
 msgstr "复制密文"
 
@@ -788,11 +788,11 @@ msgstr "每日美元"
 msgid "Dark"
 msgstr "深色"
 
-#: src/App.tsx:338
+#: src/App.tsx:340
 msgid "Dashboard unavailable"
 msgstr "仪表盘不可用"
 
-#: src/admin-ui/client-setup.tsx:650
+#: src/admin-ui/client-setup.tsx:678
 msgid "DeepSeek Harness provider"
 msgstr "DeepSeek Harness 供应商"
 
@@ -876,7 +876,7 @@ msgstr "已启用"
 msgid "Enter this code on the official Codex verification page."
 msgstr "请在官方 Codex 验证页面输入此代码。"
 
-#: src/App.tsx:285
+#: src/App.tsx:287
 msgid "Environment"
 msgstr "环境"
 
@@ -957,7 +957,7 @@ msgstr "Gemini 端点基址"
 msgid "Gemini GenerateContent"
 msgstr "Gemini GenerateContent"
 
-#: src/admin-ui/client-setup.tsx:477
+#: src/admin-ui/client-setup.tsx:505
 msgid "Generate copy-paste configuration for local AI coding clients."
 msgstr "为本地 AI 编程客户端生成可复制粘贴的配置。"
 
@@ -1009,7 +1009,7 @@ msgstr "包含在该时间范围内有记录的已删除账号。"
 msgid "Incomplete token metering or a request crossed the baseline. Estimate withheld."
 msgstr "存在计量缺失或跨越起点的请求，暂不估算。"
 
-#: src/admin-ui/client-setup.tsx:616
+#: src/admin-ui/client-setup.tsx:644
 msgid "Installs a global plugin and config that refresh the relay model catalog, with the generated list as a fallback. Back up your existing OpenCode config first."
 msgstr ""
 
@@ -1095,7 +1095,7 @@ msgstr "已限流"
 msgid "Limits"
 msgstr "限额"
 
-#: src/App.tsx:290
+#: src/App.tsx:292
 msgid "Local"
 msgstr "本地"
 
@@ -1136,11 +1136,11 @@ msgstr "中位数"
 msgid "Median after the first token; excludes TTFT. {0} measured successful attempts."
 msgstr "首 Token 之后的输出速度中位数，不含首 Token 等待时间。共 {0} 个成功计量样本。"
 
-#: src/admin-ui/client-setup.tsx:583
+#: src/admin-ui/client-setup.tsx:611
 msgid "Merge this TOML into ~/.codex/config.toml. It uses TT's dynamic catalog while the downloaded file keeps the Desktop picker populated."
 msgstr "将此 TOML 合并到 ~/.codex/config.toml。它使用 TT 的动态 catalog，同时通过下载的文件保持 Desktop 模型选择器可用。"
 
-#: src/admin-ui/client-setup.tsx:521
+#: src/admin-ui/client-setup.tsx:549
 msgid "Messages routed"
 msgstr "已路由 Messages"
 
@@ -1150,7 +1150,7 @@ msgstr "运行指标"
 
 #: src/admin-ui/accounts.tsx:738
 #: src/admin-ui/analytics-panel.tsx:125
-#: src/admin-ui/client-setup.tsx:697
+#: src/admin-ui/client-setup.tsx:725
 #: src/admin-ui/logs.tsx:296
 #: src/admin-ui/models.tsx:138
 msgid "Model"
@@ -1228,7 +1228,7 @@ msgstr "永不"
 msgid "New baseline after incomplete metering"
 msgstr "计量异常后已自动建立新起点"
 
-#: src/admin-ui/client-setup.tsx:487
+#: src/admin-ui/client-setup.tsx:515
 msgid "Newly created keys are prefilled here once. Existing rows only show previews, so paste the original tokentoxication-* value before copying a setup block."
 msgstr "新创建的密钥只会在此预填一次。已有条目只显示预览，复制配置前请粘贴原始 tokentoxication-* 值。"
 
@@ -1256,15 +1256,15 @@ msgstr "未分配后端"
 msgid "No catalog models"
 msgstr "没有目录模型"
 
-#: src/admin-ui/client-setup.tsx:528
+#: src/admin-ui/client-setup.tsx:556
 msgid "No catalog models yet"
 msgstr "还没有目录模型"
 
-#: src/admin-ui/client-setup.tsx:607
+#: src/admin-ui/client-setup.tsx:635
 msgid "No Claude Code routes"
 msgstr "没有 Claude Code 路由"
 
-#: src/admin-ui/client-setup.tsx:591
+#: src/admin-ui/client-setup.tsx:619
 msgid "No Codex routes"
 msgstr "没有 Codex 路由"
 
@@ -1287,7 +1287,7 @@ msgstr "无并发请求限制"
 msgid "No data"
 msgstr "无数据"
 
-#: src/admin-ui/client-setup.tsx:658
+#: src/admin-ui/client-setup.tsx:686
 msgid "No DeepSeek Harness routes"
 msgstr "没有 DeepSeek Harness 路由"
 
@@ -1308,11 +1308,11 @@ msgstr "无上限"
 msgid "No matching history"
 msgstr "没有匹配的历史记录"
 
-#: src/admin-ui/client-setup.tsx:623
+#: src/admin-ui/client-setup.tsx:651
 msgid "No opencode routes"
 msgstr "没有 opencode 路由"
 
-#: src/admin-ui/client-setup.tsx:642
+#: src/admin-ui/client-setup.tsx:670
 msgid "No Pi routes"
 msgstr "没有 Pi 路由"
 
@@ -1363,7 +1363,7 @@ msgstr "无"
 msgid "Not found"
 msgstr "未找到"
 
-#: src/admin-ui/client-setup.tsx:697
+#: src/admin-ui/client-setup.tsx:725
 msgid "not set"
 msgstr "未设置"
 
@@ -1388,7 +1388,7 @@ msgstr "没有持久化分类信息的旧记录保留为未知。尝试开始前
 msgid "Open Codex verification page"
 msgstr "打开 Codex 验证页面"
 
-#: src/admin-ui/client-setup.tsx:515
+#: src/admin-ui/client-setup.tsx:543
 msgid "OpenAI base"
 msgstr "OpenAI 基址"
 
@@ -1400,7 +1400,7 @@ msgstr "OpenAI Chat"
 msgid "OpenAI-compatible only"
 msgstr "仅 OpenAI 兼容"
 
-#: src/admin-ui/client-setup.tsx:615
+#: src/admin-ui/client-setup.tsx:643
 msgid "opencode global config"
 msgstr ""
 
@@ -1452,7 +1452,7 @@ msgstr "页面不存在"
 msgid "partially limited"
 msgstr "部分受限"
 
-#: src/App.tsx:216
+#: src/App.tsx:218
 msgid "Password"
 msgstr "密码"
 
@@ -1485,7 +1485,7 @@ msgstr "性能"
 msgid "Permissions"
 msgstr "权限"
 
-#: src/admin-ui/client-setup.tsx:631
+#: src/admin-ui/client-setup.tsx:659
 msgid "Pi custom provider"
 msgstr "Pi 自定义供应商"
 
@@ -1497,7 +1497,7 @@ msgstr "套餐"
 msgid "Plan or window changed"
 msgstr "套餐或额度窗口变化"
 
-#: src/admin-ui/client-setup.tsx:600
+#: src/admin-ui/client-setup.tsx:628
 msgid "Points Claude Code at the Anthropic Messages namespace."
 msgstr "将 Claude Code 指向 Anthropic Messages 命名空间。"
 
@@ -1748,7 +1748,7 @@ msgid "Redeeming"
 msgstr "兑换中"
 
 #: src/admin-ui/analytics-panel.tsx:293
-#: src/App.tsx:302
+#: src/App.tsx:304
 msgid "Refresh"
 msgstr "刷新"
 
@@ -1756,7 +1756,7 @@ msgstr "刷新"
 msgid "Refresh analytics"
 msgstr "刷新指标"
 
-#: src/App.tsx:339
+#: src/App.tsx:341
 msgid "Refresh the admin data to load the overview."
 msgstr "刷新管理数据以加载概览。"
 
@@ -1785,11 +1785,11 @@ msgstr "登记用于中继调度的上游凭证。"
 msgid "Relay analytics"
 msgstr "中继运行指标"
 
-#: src/admin-ui/client-setup.tsx:504
+#: src/admin-ui/client-setup.tsx:532
 msgid "Relay API key"
 msgstr "中继 API 密钥"
 
-#: src/App.tsx:253
+#: src/App.tsx:255
 msgid "Relay control plane"
 msgstr "中继控制面板"
 
@@ -1797,7 +1797,7 @@ msgstr "中继控制面板"
 msgid "Relay endpoint"
 msgstr "中继端点"
 
-#: src/App.tsx:189
+#: src/App.tsx:191
 msgid "Relay operations console"
 msgstr "中继运维控制台"
 
@@ -1868,7 +1868,7 @@ msgstr "重置额度"
 msgid "Reset credits"
 msgstr "重置额度"
 
-#: src/admin-ui/client-setup.tsx:520
+#: src/admin-ui/client-setup.tsx:548
 msgid "Responses routed"
 msgstr "已路由 Responses"
 
@@ -1888,11 +1888,11 @@ msgstr "Retry-After"
 msgid "Role"
 msgstr "角色"
 
-#: src/admin-ui/client-setup.tsx:556
+#: src/admin-ui/client-setup.tsx:584
 msgid "Routable Responses models"
 msgstr "可路由的 Responses 模型"
 
-#: src/admin-ui/client-setup.tsx:696
+#: src/admin-ui/client-setup.tsx:724
 msgid "Route"
 msgstr "路由"
 
@@ -1990,11 +1990,11 @@ msgstr "服务关闭"
 msgid "Session affinity and route selections"
 msgstr "会话亲和与路由选择"
 
-#: src/admin-ui/client-setup.tsx:576
+#: src/admin-ui/client-setup.tsx:604
 msgid "Set the relay key and download the Desktop compatibility catalog before starting Codex."
 msgstr "启动 Codex 前设置中继密钥并下载 Desktop 兼容 catalog。"
 
-#: src/admin-ui/client-setup.tsx:651
+#: src/admin-ui/client-setup.tsx:679
 msgid "Set TOKEN_TOXICATION_API_KEY in the harness process environment, then merge these llm-pi-ai provider routes into ~/.dsh/settings.yaml. Keep existing keys; the harness applies changes on the next request."
 msgstr "在 harness 进程环境中设置 TOKEN_TOXICATION_API_KEY，然后将这些 llm-pi-ai 供应商路由合并到 ~/.dsh/settings.yaml。保留现有键；harness 会在下次请求时应用更改。"
 
@@ -2010,7 +2010,7 @@ msgstr "已建立稳定起点"
 msgid "Showing an older snapshot"
 msgstr "正在显示旧快照"
 
-#: src/App.tsx:228
+#: src/App.tsx:230
 msgid "Sign in"
 msgstr "登录"
 
@@ -2023,7 +2023,7 @@ msgstr "使用 Antigravity 登录"
 msgid "Sign in with Codex"
 msgstr "使用 Codex 登录"
 
-#: src/App.tsx:314
+#: src/App.tsx:316
 msgid "Sign out"
 msgstr "退出登录"
 
@@ -2070,7 +2070,7 @@ msgstr "状态"
 msgid "Storage"
 msgstr "存储"
 
-#: src/App.tsx:484
+#: src/App.tsx:487
 msgid "Store this value now"
 msgstr "请立即保存此值"
 
@@ -2158,7 +2158,7 @@ msgstr "此供应商模型路由可能已删除，或链接不完整。"
 msgid "This Request Log may have aged out of the current log collection or the link is incomplete."
 msgstr "此请求日志可能已超出当前日志集合，或链接不完整。"
 
-#: src/App.tsx:478
+#: src/App.tsx:481
 msgid "This secret is shown once."
 msgstr "此密文只显示一次。"
 
@@ -2266,7 +2266,7 @@ msgstr "非缓存输入"
 msgid "Unclassified input"
 msgstr "未分类输入"
 
-#: src/admin-ui/client-setup.tsx:497
+#: src/admin-ui/client-setup.tsx:525
 msgid "Unexpected key prefix"
 msgstr "密钥前缀不符合预期"
 
@@ -2364,11 +2364,11 @@ msgstr "用量"
 msgid "Usage windows"
 msgstr "用量窗口"
 
-#: src/admin-ui/client-setup.tsx:484
+#: src/admin-ui/client-setup.tsx:512
 msgid "Use a relay API key secret"
 msgstr "使用中继 API 密钥密文"
 
-#: src/App.tsx:198
+#: src/App.tsx:200
 msgid "Use the credentials from your service environment."
 msgstr "使用服务环境中的凭据。"
 
@@ -2376,7 +2376,7 @@ msgstr "使用服务环境中的凭据。"
 msgid "Use this account for relay traffic"
 msgstr "用此账号处理中继流量"
 
-#: src/App.tsx:205
+#: src/App.tsx:207
 msgid "Username"
 msgstr "用户名"
 
@@ -2416,6 +2416,6 @@ msgstr "按有效输入 Token 加权，不是请求命中率的平均值。缺�
 msgid "Window"
 msgstr "窗口"
 
-#: src/admin-ui/client-setup.tsx:632
+#: src/admin-ui/client-setup.tsx:660
 msgid "Writes a fallback models.json file and a provider extension that refreshes the relay catalog. Back up existing Pi configuration first."
 msgstr ""
