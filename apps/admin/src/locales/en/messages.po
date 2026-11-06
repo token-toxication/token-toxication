@@ -24,7 +24,7 @@ msgid "{0, plural, one {# route} other {# routes}}"
 msgstr "{0, plural, one {# route} other {# routes}}"
 
 #. placeholder {0}: piModels.length
-#: src/admin-ui/client-setup.tsx:634
+#: src/admin-ui/client-setup.tsx:662
 msgid "{0, plural, one {# routed model} other {# routed models}}"
 msgstr "{0, plural, one {# routed model} other {# routed models}}"
 
@@ -225,23 +225,23 @@ msgstr "Add Account"
 msgid "Add an account to make the relay schedulable."
 msgstr "Add an account to make the relay schedulable."
 
-#: src/admin-ui/client-setup.tsx:624
+#: src/admin-ui/client-setup.tsx:652
 msgid "Add an eligible OpenAI Chat or Responses route to generate an opencode config."
 msgstr "Add an eligible OpenAI Chat or Responses route to generate an opencode config."
 
-#: src/admin-ui/client-setup.tsx:659
+#: src/admin-ui/client-setup.tsx:687
 msgid "Add an eligible OpenAI Chat, OpenAI Responses, or Anthropic Messages route to generate a DeepSeek Harness config."
 msgstr "Add an eligible OpenAI Chat, OpenAI Responses, or Anthropic Messages route to generate a DeepSeek Harness config."
 
-#: src/admin-ui/client-setup.tsx:643
+#: src/admin-ui/client-setup.tsx:671
 msgid "Add an eligible OpenAI Responses route to generate a Pi provider config."
 msgstr "Add an eligible OpenAI Responses route to generate a Pi provider config."
 
-#: src/admin-ui/client-setup.tsx:608
+#: src/admin-ui/client-setup.tsx:636
 msgid "Add an enabled Anthropic Messages route to configure Claude Code."
 msgstr "Add an enabled Anthropic Messages route to configure Claude Code."
 
-#: src/admin-ui/client-setup.tsx:592
+#: src/admin-ui/client-setup.tsx:620
 msgid "Add an enabled OpenAI Responses route to configure Codex."
 msgstr "Add an enabled OpenAI Responses route to configure Codex."
 
@@ -249,7 +249,7 @@ msgstr "Add an enabled OpenAI Responses route to configure Codex."
 msgid "Add catalog model"
 msgstr "Add catalog model"
 
-#: src/admin-ui/client-setup.tsx:531
+#: src/admin-ui/client-setup.tsx:559
 msgid "Add exact model names in Model Catalog, then bind them to provider routes. Client setup will populate from that catalog."
 msgstr "Add exact model names in Model Catalog, then bind them to provider routes. Client setup will populate from that catalog."
 
@@ -282,7 +282,7 @@ msgstr "Add route"
 msgid "Add Route"
 msgstr "Add Route"
 
-#: src/App.tsx:308
+#: src/App.tsx:310
 msgid "Admin"
 msgstr "Admin"
 
@@ -290,7 +290,7 @@ msgstr "Admin"
 msgid "Admin API"
 msgstr "Admin API"
 
-#: src/App.tsx:195
+#: src/App.tsx:197
 msgid "Admin sign in"
 msgstr "Admin sign in"
 
@@ -321,7 +321,7 @@ msgstr "Allow popups to sign in with Antigravity"
 msgid "Analytics unavailable"
 msgstr "Analytics unavailable"
 
-#: src/admin-ui/client-setup.tsx:516
+#: src/admin-ui/client-setup.tsx:544
 msgid "Anthropic base"
 msgstr "Anthropic base"
 
@@ -371,7 +371,7 @@ msgstr "API key not found"
 msgid "API key paused"
 msgstr "API key paused"
 
-#: src/App.tsx:475
+#: src/App.tsx:478
 msgid "API key secret"
 msgstr "API key secret"
 
@@ -529,11 +529,11 @@ msgstr "Catalog Model bindings that use this Provider Account."
 msgid "Catalog Model not found"
 msgstr "Catalog Model not found"
 
-#: src/admin-ui/client-setup.tsx:518
+#: src/admin-ui/client-setup.tsx:546
 msgid "Catalog models"
 msgstr "Catalog models"
 
-#: src/admin-ui/client-setup.tsx:519
+#: src/admin-ui/client-setup.tsx:547
 msgid "Chat routed"
 msgstr "Chat routed"
 
@@ -541,20 +541,20 @@ msgstr "Chat routed"
 msgid "Choose how the relay obtains and sends the upstream credential."
 msgstr "Choose how the relay obtains and sends the upstream credential."
 
-#: src/admin-ui/client-setup.tsx:602
+#: src/admin-ui/client-setup.tsx:630
 msgid "Chosen in Claude Code"
 msgstr "Chosen in Claude Code"
 
-#: src/admin-ui/client-setup.tsx:578
-#: src/admin-ui/client-setup.tsx:585
+#: src/admin-ui/client-setup.tsx:606
+#: src/admin-ui/client-setup.tsx:613
 msgid "Chosen in Codex"
 msgstr "Chosen in Codex"
 
-#: src/admin-ui/client-setup.tsx:653
+#: src/admin-ui/client-setup.tsx:681
 msgid "Chosen in DeepSeek Harness"
 msgstr "Chosen in DeepSeek Harness"
 
-#: src/admin-ui/client-setup.tsx:618
+#: src/admin-ui/client-setup.tsx:646
 msgid "Chosen in opencode"
 msgstr "Chosen in opencode"
 
@@ -562,7 +562,7 @@ msgstr "Chosen in opencode"
 msgid "Classification"
 msgstr "Classification"
 
-#: src/admin-ui/client-setup.tsx:599
+#: src/admin-ui/client-setup.tsx:627
 msgid "Claude Code environment"
 msgstr "Claude Code environment"
 
@@ -586,16 +586,16 @@ msgstr "Client credentials, limits, and service permissions."
 msgid "Client key"
 msgstr "Client key"
 
-#: src/admin-ui/client-setup.tsx:500
+#: src/admin-ui/client-setup.tsx:528
 msgid "Client keys should start with tokentoxication-."
 msgstr "Client keys should start with tokentoxication-."
 
-#: src/App.tsx:504
+#: src/App.tsx:507
 msgid "Client setup"
 msgstr "Client setup"
 
 #: src/admin-routes.tsx:17
-#: src/admin-ui/client-setup.tsx:474
+#: src/admin-ui/client-setup.tsx:502
 msgid "Client Setup"
 msgstr "Client Setup"
 
@@ -626,11 +626,11 @@ msgstr "Codex device login"
 msgid "Codex device login expired"
 msgstr "Codex device login expired"
 
-#: src/admin-ui/client-setup.tsx:575
+#: src/admin-ui/client-setup.tsx:603
 msgid "Codex environment"
 msgstr "Codex environment"
 
-#: src/admin-ui/client-setup.tsx:582
+#: src/admin-ui/client-setup.tsx:610
 msgid "Codex provider configuration"
 msgstr "Codex provider configuration"
 
@@ -647,7 +647,7 @@ msgstr "Codex Responses"
 msgid "Codex sign-in failed"
 msgstr "Codex sign-in failed"
 
-#: src/admin-ui/client-setup.tsx:559
+#: src/admin-ui/client-setup.tsx:587
 msgid "Codex uses its own model catalog and chooses the model. Check that the selected model has a compatible relay route; every fallback route must support the protocol Codex sends."
 msgstr "Codex uses its own model catalog and chooses the model. Check that the selected model has a compatible relay route; every fallback route must support the protocol Codex sends."
 
@@ -710,7 +710,7 @@ msgstr "Control where requests go and how much work this account can run."
 msgid "Copied"
 msgstr "Copied"
 
-#: src/admin-ui/client-setup.tsx:690
+#: src/admin-ui/client-setup.tsx:718
 msgid "Copy"
 msgstr "Copy"
 
@@ -718,7 +718,7 @@ msgstr "Copy"
 msgid "Copy code"
 msgstr "Copy code"
 
-#: src/App.tsx:493
+#: src/App.tsx:496
 msgid "Copy secret"
 msgstr "Copy secret"
 
@@ -788,11 +788,11 @@ msgstr "Daily USD"
 msgid "Dark"
 msgstr "Dark"
 
-#: src/App.tsx:338
+#: src/App.tsx:340
 msgid "Dashboard unavailable"
 msgstr "Dashboard unavailable"
 
-#: src/admin-ui/client-setup.tsx:650
+#: src/admin-ui/client-setup.tsx:678
 msgid "DeepSeek Harness provider"
 msgstr "DeepSeek Harness provider"
 
@@ -876,7 +876,7 @@ msgstr "Enabled"
 msgid "Enter this code on the official Codex verification page."
 msgstr "Enter this code on the official Codex verification page."
 
-#: src/App.tsx:285
+#: src/App.tsx:287
 msgid "Environment"
 msgstr "Environment"
 
@@ -957,7 +957,7 @@ msgstr "Gemini endpoint base"
 msgid "Gemini GenerateContent"
 msgstr "Gemini GenerateContent"
 
-#: src/admin-ui/client-setup.tsx:477
+#: src/admin-ui/client-setup.tsx:505
 msgid "Generate copy-paste configuration for local AI coding clients."
 msgstr "Generate copy-paste configuration for local AI coding clients."
 
@@ -1009,7 +1009,7 @@ msgstr "Includes deleted accounts observed in this time range."
 msgid "Incomplete token metering or a request crossed the baseline. Estimate withheld."
 msgstr "Incomplete token metering or a request crossed the baseline. Estimate withheld."
 
-#: src/admin-ui/client-setup.tsx:616
+#: src/admin-ui/client-setup.tsx:644
 msgid "Installs a global plugin and config that refresh the relay model catalog, with the generated list as a fallback. Back up your existing OpenCode config first."
 msgstr "Installs a global plugin and config that refresh the relay model catalog, with the generated list as a fallback. Back up your existing OpenCode config first."
 
@@ -1095,7 +1095,7 @@ msgstr "limited"
 msgid "Limits"
 msgstr "Limits"
 
-#: src/App.tsx:290
+#: src/App.tsx:292
 msgid "Local"
 msgstr "Local"
 
@@ -1136,11 +1136,11 @@ msgstr "Median"
 msgid "Median after the first token; excludes TTFT. {0} measured successful attempts."
 msgstr "Median after the first token; excludes TTFT. {0} measured successful attempts."
 
-#: src/admin-ui/client-setup.tsx:583
+#: src/admin-ui/client-setup.tsx:611
 msgid "Merge this TOML into ~/.codex/config.toml. It uses TT's dynamic catalog while the downloaded file keeps the Desktop picker populated."
 msgstr "Merge this TOML into ~/.codex/config.toml. It uses TT's dynamic catalog while the downloaded file keeps the Desktop picker populated."
 
-#: src/admin-ui/client-setup.tsx:521
+#: src/admin-ui/client-setup.tsx:549
 msgid "Messages routed"
 msgstr "Messages routed"
 
@@ -1150,7 +1150,7 @@ msgstr "Metrics"
 
 #: src/admin-ui/accounts.tsx:738
 #: src/admin-ui/analytics-panel.tsx:125
-#: src/admin-ui/client-setup.tsx:697
+#: src/admin-ui/client-setup.tsx:725
 #: src/admin-ui/logs.tsx:296
 #: src/admin-ui/models.tsx:138
 msgid "Model"
@@ -1228,7 +1228,7 @@ msgstr "Never"
 msgid "New baseline after incomplete metering"
 msgstr "New baseline after incomplete metering"
 
-#: src/admin-ui/client-setup.tsx:487
+#: src/admin-ui/client-setup.tsx:515
 msgid "Newly created keys are prefilled here once. Existing rows only show previews, so paste the original tokentoxication-* value before copying a setup block."
 msgstr "Newly created keys are prefilled here once. Existing rows only show previews, so paste the original tokentoxication-* value before copying a setup block."
 
@@ -1256,15 +1256,15 @@ msgstr "No backend assigned"
 msgid "No catalog models"
 msgstr "No catalog models"
 
-#: src/admin-ui/client-setup.tsx:528
+#: src/admin-ui/client-setup.tsx:556
 msgid "No catalog models yet"
 msgstr "No catalog models yet"
 
-#: src/admin-ui/client-setup.tsx:607
+#: src/admin-ui/client-setup.tsx:635
 msgid "No Claude Code routes"
 msgstr "No Claude Code routes"
 
-#: src/admin-ui/client-setup.tsx:591
+#: src/admin-ui/client-setup.tsx:619
 msgid "No Codex routes"
 msgstr "No Codex routes"
 
@@ -1287,7 +1287,7 @@ msgstr "No concurrent requests"
 msgid "No data"
 msgstr "No data"
 
-#: src/admin-ui/client-setup.tsx:658
+#: src/admin-ui/client-setup.tsx:686
 msgid "No DeepSeek Harness routes"
 msgstr "No DeepSeek Harness routes"
 
@@ -1308,11 +1308,11 @@ msgstr "No limit"
 msgid "No matching history"
 msgstr "No matching history"
 
-#: src/admin-ui/client-setup.tsx:623
+#: src/admin-ui/client-setup.tsx:651
 msgid "No opencode routes"
 msgstr "No opencode routes"
 
-#: src/admin-ui/client-setup.tsx:642
+#: src/admin-ui/client-setup.tsx:670
 msgid "No Pi routes"
 msgstr "No Pi routes"
 
@@ -1363,7 +1363,7 @@ msgstr "None"
 msgid "Not found"
 msgstr "Not found"
 
-#: src/admin-ui/client-setup.tsx:697
+#: src/admin-ui/client-setup.tsx:725
 msgid "not set"
 msgstr "not set"
 
@@ -1388,7 +1388,7 @@ msgstr "Old records without persisted metadata remain unknown. Routing rejection
 msgid "Open Codex verification page"
 msgstr "Open Codex verification page"
 
-#: src/admin-ui/client-setup.tsx:515
+#: src/admin-ui/client-setup.tsx:543
 msgid "OpenAI base"
 msgstr "OpenAI base"
 
@@ -1400,7 +1400,7 @@ msgstr "OpenAI Chat"
 msgid "OpenAI-compatible only"
 msgstr "OpenAI-compatible only"
 
-#: src/admin-ui/client-setup.tsx:615
+#: src/admin-ui/client-setup.tsx:643
 msgid "opencode global config"
 msgstr "opencode global config"
 
@@ -1452,7 +1452,7 @@ msgstr "Page not found"
 msgid "partially limited"
 msgstr "partially limited"
 
-#: src/App.tsx:216
+#: src/App.tsx:218
 msgid "Password"
 msgstr "Password"
 
@@ -1485,7 +1485,7 @@ msgstr "Performance"
 msgid "Permissions"
 msgstr "Permissions"
 
-#: src/admin-ui/client-setup.tsx:631
+#: src/admin-ui/client-setup.tsx:659
 msgid "Pi custom provider"
 msgstr "Pi custom provider"
 
@@ -1497,7 +1497,7 @@ msgstr "Plan"
 msgid "Plan or window changed"
 msgstr "Plan or window changed"
 
-#: src/admin-ui/client-setup.tsx:600
+#: src/admin-ui/client-setup.tsx:628
 msgid "Points Claude Code at the Anthropic Messages namespace."
 msgstr "Points Claude Code at the Anthropic Messages namespace."
 
@@ -1748,7 +1748,7 @@ msgid "Redeeming"
 msgstr "Redeeming"
 
 #: src/admin-ui/analytics-panel.tsx:293
-#: src/App.tsx:302
+#: src/App.tsx:304
 msgid "Refresh"
 msgstr "Refresh"
 
@@ -1756,7 +1756,7 @@ msgstr "Refresh"
 msgid "Refresh analytics"
 msgstr "Refresh analytics"
 
-#: src/App.tsx:339
+#: src/App.tsx:341
 msgid "Refresh the admin data to load the overview."
 msgstr "Refresh the admin data to load the overview."
 
@@ -1785,11 +1785,11 @@ msgstr "Register an upstream credential for relay scheduling."
 msgid "Relay analytics"
 msgstr "Relay analytics"
 
-#: src/admin-ui/client-setup.tsx:504
+#: src/admin-ui/client-setup.tsx:532
 msgid "Relay API key"
 msgstr "Relay API key"
 
-#: src/App.tsx:253
+#: src/App.tsx:255
 msgid "Relay control plane"
 msgstr "Relay control plane"
 
@@ -1797,7 +1797,7 @@ msgstr "Relay control plane"
 msgid "Relay endpoint"
 msgstr "Relay endpoint"
 
-#: src/App.tsx:189
+#: src/App.tsx:191
 msgid "Relay operations console"
 msgstr "Relay operations console"
 
@@ -1868,7 +1868,7 @@ msgstr "Reset credit"
 msgid "Reset credits"
 msgstr "Reset credits"
 
-#: src/admin-ui/client-setup.tsx:520
+#: src/admin-ui/client-setup.tsx:548
 msgid "Responses routed"
 msgstr "Responses routed"
 
@@ -1888,11 +1888,11 @@ msgstr "Retry-After"
 msgid "Role"
 msgstr "Role"
 
-#: src/admin-ui/client-setup.tsx:556
+#: src/admin-ui/client-setup.tsx:584
 msgid "Routable Responses models"
 msgstr "Routable Responses models"
 
-#: src/admin-ui/client-setup.tsx:696
+#: src/admin-ui/client-setup.tsx:724
 msgid "Route"
 msgstr "Route"
 
@@ -1990,11 +1990,11 @@ msgstr "Server shutdown"
 msgid "Session affinity and route selections"
 msgstr "Session affinity and route selections"
 
-#: src/admin-ui/client-setup.tsx:576
+#: src/admin-ui/client-setup.tsx:604
 msgid "Set the relay key and download the Desktop compatibility catalog before starting Codex."
 msgstr "Set the relay key and download the Desktop compatibility catalog before starting Codex."
 
-#: src/admin-ui/client-setup.tsx:651
+#: src/admin-ui/client-setup.tsx:679
 msgid "Set TOKEN_TOXICATION_API_KEY in the harness process environment, then merge these llm-pi-ai provider routes into ~/.dsh/settings.yaml. Keep existing keys; the harness applies changes on the next request."
 msgstr "Set TOKEN_TOXICATION_API_KEY in the harness process environment, then merge these llm-pi-ai provider routes into ~/.dsh/settings.yaml. Keep existing keys; the harness applies changes on the next request."
 
@@ -2010,7 +2010,7 @@ msgstr "Settled baseline"
 msgid "Showing an older snapshot"
 msgstr "Showing an older snapshot"
 
-#: src/App.tsx:228
+#: src/App.tsx:230
 msgid "Sign in"
 msgstr "Sign in"
 
@@ -2023,7 +2023,7 @@ msgstr "Sign in with Antigravity"
 msgid "Sign in with Codex"
 msgstr "Sign in with Codex"
 
-#: src/App.tsx:314
+#: src/App.tsx:316
 msgid "Sign out"
 msgstr "Sign out"
 
@@ -2070,7 +2070,7 @@ msgstr "Status"
 msgid "Storage"
 msgstr "Storage"
 
-#: src/App.tsx:484
+#: src/App.tsx:487
 msgid "Store this value now"
 msgstr "Store this value now"
 
@@ -2158,7 +2158,7 @@ msgstr "This Provider Model Route may have been deleted or the link is incomplet
 msgid "This Request Log may have aged out of the current log collection or the link is incomplete."
 msgstr "This Request Log may have aged out of the current log collection or the link is incomplete."
 
-#: src/App.tsx:478
+#: src/App.tsx:481
 msgid "This secret is shown once."
 msgstr "This secret is shown once."
 
@@ -2266,7 +2266,7 @@ msgstr "Uncached input"
 msgid "Unclassified input"
 msgstr "Unclassified input"
 
-#: src/admin-ui/client-setup.tsx:497
+#: src/admin-ui/client-setup.tsx:525
 msgid "Unexpected key prefix"
 msgstr "Unexpected key prefix"
 
@@ -2364,11 +2364,11 @@ msgstr "Usage"
 msgid "Usage windows"
 msgstr "Usage windows"
 
-#: src/admin-ui/client-setup.tsx:484
+#: src/admin-ui/client-setup.tsx:512
 msgid "Use a relay API key secret"
 msgstr "Use a relay API key secret"
 
-#: src/App.tsx:198
+#: src/App.tsx:200
 msgid "Use the credentials from your service environment."
 msgstr "Use the credentials from your service environment."
 
@@ -2376,7 +2376,7 @@ msgstr "Use the credentials from your service environment."
 msgid "Use this account for relay traffic"
 msgstr "Use this account for relay traffic"
 
-#: src/App.tsx:205
+#: src/App.tsx:207
 msgid "Username"
 msgstr "Username"
 
@@ -2416,6 +2416,6 @@ msgstr "Weighted by valid input tokens, not an average of request percentages. M
 msgid "Window"
 msgstr "Window"
 
-#: src/admin-ui/client-setup.tsx:632
+#: src/admin-ui/client-setup.tsx:660
 msgid "Writes a fallback models.json file and a provider extension that refreshes the relay catalog. Back up existing Pi configuration first."
 msgstr "Writes a fallback models.json file and a provider extension that refreshes the relay catalog. Back up existing Pi configuration first."
