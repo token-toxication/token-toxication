@@ -42,6 +42,7 @@ async fn limit_account(db: &Db, account_id: &str, limit: u32) {
             api_key: None,
             is_active: None,
             max_running_requests: Some(limit),
+            allow_credits: None,
         },
     )
     .await

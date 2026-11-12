@@ -838,6 +838,7 @@ async fn websocket_queued_response_keeps_upstream_alive_and_respects_limit() {
             api_key: None,
             is_active: None,
             max_running_requests: Some(1),
+            allow_credits: None,
         },
     )
     .await

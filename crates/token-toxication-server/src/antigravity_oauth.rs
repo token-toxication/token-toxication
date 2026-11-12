@@ -260,6 +260,7 @@ async fn finish_antigravity_oauth(
                 api_key: Some(credential),
                 is_active: Some(true),
                 max_running_requests: None,
+                allow_credits: None,
             },
         )
         .await?

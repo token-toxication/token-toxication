@@ -250,37 +250,66 @@ async fn relay_connection(
     connection_id: &str,
 ) -> Stop {
     let idle = state.relay_stream_idle_timeout;
-    let first = match timeout(idle, client.next()).await {
-        Ok(Some(Ok(Message::Text(text)))) => text,
-        Err(_) => return Stop::Timeout,
-        _ => return Stop::Client,
-    };
-    let mut first: Value = match serde_json::from_str(&first) {
-        Ok(value) => value,
-        Err(_) => return Stop::Protocol,
-    };
-    let Some(model) = first
-        .get("model")
-        .and_then(Value::as_str)
-        .map(str::to_owned)
-    else {
-        return Stop::Protocol;
-    };
     let mut previous = HashSet::new();
-    if prepare_event(&mut first, headers, &model, &previous, true).is_err() {
-        return Stop::Protocol;
-    }
-    let affinity = relay_session_affinity(state, "openai-responses", headers, &first);
-    let authenticated = match RelayAttempt::authenticate(state, headers, None).await {
-        Ok(value) => value,
-        Err(_) => return Stop::Client,
-    };
-    let selection = authenticated.select("openai-responses", &model, affinity.as_ref());
-    let mut binding = match while_queued(client, None, idle, selection).await {
-        Ok(Ok(value)) => value,
-        Ok(Err(AppError::ServiceUnavailable(_))) => return Stop::Shutdown,
-        Ok(Err(_)) => return Stop::Protocol,
-        Err(stop) => return stop,
+    let (mut first, model, mut binding) = loop {
+        let first = loop {
+            match timeout(idle, client.next()).await {
+                Ok(Some(Ok(Message::Text(text)))) => break text,
+                Ok(Some(Ok(Message::Ping(data)))) => {
+                    if !matches!(
+                        timeout(idle, client.send(Message::Pong(data))).await,
+                        Ok(Ok(()))
+                    ) {
+                        return Stop::Client;
+                    }
+                }
+                Ok(Some(Ok(Message::Pong(_)))) => {}
+                Err(_) => return Stop::Timeout,
+                _ => return Stop::Client,
+            }
+        };
+        let mut first: Value = match serde_json::from_str(&first) {
+            Ok(value) => value,
+            Err(_) => return Stop::Protocol,
+        };
+        let Some(model) = first
+            .get("model")
+            .and_then(Value::as_str)
+            .map(str::to_owned)
+        else {
+            return Stop::Protocol;
+        };
+        if prepare_event(&mut first, headers, &model, &previous, true).is_err() {
+            return Stop::Protocol;
+        }
+        let affinity = relay_session_affinity(state, "openai-responses", headers, &first);
+        let authenticated = match RelayAttempt::authenticate(state, headers, None).await {
+            Ok(value) => value,
+            Err(_) => return Stop::Client,
+        };
+        let selection = authenticated.select("openai-responses", &model, affinity.as_ref());
+        let binding = match while_queued(client, None, idle, selection).await {
+            Ok(Ok(value)) => value,
+            Ok(Err(AppError::TooManyRequestsWithRetryAfter(_, retry_after))) => {
+                if let Err(stop) = reject_credit_request(
+                    client,
+                    idle,
+                    connection_id,
+                    &Uuid::new_v4().to_string(),
+                    retry_after,
+                    0,
+                )
+                .await
+                {
+                    return stop;
+                }
+                continue;
+            }
+            Ok(Err(AppError::ServiceUnavailable(_))) => return Stop::Shutdown,
+            Ok(Err(_)) => return Stop::Protocol,
+            Err(stop) => return stop,
+        };
+        break (first, model, binding);
     };
     let first_permit = binding
         .take_queued_permit()
@@ -420,6 +449,14 @@ async fn relay_connection(
                         let queued_at = Instant::now();
                         let permit = match while_queued(client, upstream.as_mut().map(|socket| &mut *socket), idle, binding.acquire_permit()).await {
                             Ok(Ok(permit)) => permit,
+                            Ok(Err(AppError::TooManyRequestsWithRetryAfter(_, retry_after))) => {
+                                if let Err(stop) = reject_credit_request(client, idle, connection_id, &Uuid::new_v4().to_string(), retry_after, 0).await {
+                                    return stop;
+                                }
+                                queued_ms.fetch_add(queued_at.elapsed().as_millis() as u64, Ordering::Relaxed);
+                                idle_deadline = Instant::now() + idle;
+                                continue;
+                            }
                             Ok(Err(_)) => return Stop::Shutdown,
                             Err(stop) => return stop,
                         };
@@ -564,6 +601,13 @@ async fn relay_connection(
                                     }
                                     let permit = match while_queued(client, None, idle, binding.acquire_permit()).await {
                                         Ok(Ok(permit)) => permit,
+                                        Ok(Err(AppError::TooManyRequestsWithRetryAfter(_, retry_after))) => {
+                                            if let Err(stop) = reject_credit_request(client, idle, connection_id, &current.log.request_id, retry_after, current.overload_retries).await {
+                                                return stop;
+                                            }
+                                            idle_deadline = Instant::now() + idle;
+                                            continue;
+                                        }
                                         Ok(Err(_)) => return Stop::Shutdown,
                                         Err(stop) => return stop,
                                     };
@@ -609,24 +653,25 @@ async fn relay_connection(
                                         }
                                         .to_string(),
                                     );
-                                 }
-                                 let result = if let Some(status) = wrapped_status {
-                                     let error = stream_failure
-                                         .as_ref()
-                                         .and_then(|failure| failure.class)
-                                         .map(|class| format!("upstream stream failed ({class})"));
-                                     current
-                                         .attempt
-                                         .record_response_with_error(
-                                             &current.log,
-                                             status,
-                                             &HeaderMap::new(),
-                                             b"{}",
-                                             current.tokens(),
-                                             error,
-                                         )
-                                         .await
-                                 } else if let Some(failure) = openai_responses_stream_failure(&value) {
+                                }
+                                let result = if let Some(status) = wrapped_status {
+                                    let error_body = json!({"error":{"code":stream_failure.as_ref().and_then(|failure| failure.code.as_deref())}}).to_string();
+                                    let error = stream_failure
+                                        .as_ref()
+                                        .and_then(|failure| failure.class)
+                                        .map(|class| format!("upstream stream failed ({class})"));
+                                    current
+                                        .attempt
+                                        .record_response_with_error(
+                                            &current.log,
+                                            status,
+                                            &HeaderMap::new(),
+                                            error_body.as_bytes(),
+                                            current.tokens(),
+                                            error,
+                                        )
+                                        .await
+                                } else if let Some(failure) = openai_responses_stream_failure(&value) {
                                     let error = failure.log_error();
                                     if let Some(failure) = classify_upstream_application_failure(failure.code.as_deref(), error.clone(), Utc::now()) {
                                         current.attempt.record_failure_with_usage(&current.log, failure, current.tokens()).await
@@ -663,6 +708,33 @@ async fn relay_connection(
                 idle_deadline = Instant::now() + idle;
             }
         }
+    }
+}
+
+async fn reject_credit_request(
+    client: &mut WebSocket,
+    idle: Duration,
+    connection_id: &str,
+    request_id: &str,
+    retry_after: u64,
+    retry_count: u8,
+) -> Result<(), Stop> {
+    tracing::info!(
+        transport = WEBSOCKET_TRANSPORT,
+        connection_id,
+        request_id,
+        status_code = 429,
+        outcome = "rate_limited",
+        retry_count,
+        connection_action = "keep_open",
+        "responses WebSocket credits policy rejected request"
+    );
+    let event = json!({"type":"error", "status":429,
+        "error":{"type":"rate_limit_error", "code":"credits_policy_unavailable",
+            "message":"The provider account is unavailable for this request.", "retry_after":retry_after}});
+    match timeout(idle, client.send(Message::Text(event.to_string().into()))).await {
+        Ok(Ok(())) => Ok(()),
+        _ => Err(Stop::Client),
     }
 }
 

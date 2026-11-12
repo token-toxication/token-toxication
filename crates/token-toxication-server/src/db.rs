@@ -1,3 +1,6 @@
+#[cfg(test)]
+#[path = "codex_credits_tests.rs"]
+mod codex_credits_tests;
 #[path = "quota_capacity_db.rs"]
 mod quota_capacity;
 use std::{collections::HashSet, path::Path, sync::Arc};
@@ -207,6 +210,13 @@ impl Db {
         )?;
         ensure_column(
             &conn,
+            "provider_accounts",
+            "allow_credits",
+            "INTEGER NOT NULL DEFAULT 0",
+        )?;
+        ensure_column(&conn, "provider_accounts", "codex_quota_checked_at", "TEXT")?;
+        ensure_column(
+            &conn,
             "request_logs",
             "queue_wait_ms",
             "INTEGER NOT NULL DEFAULT 0",
@@ -330,6 +340,22 @@ impl Db {
                 ON provider_limits(provider_account_id, scope_kind, scope_key);
             CREATE INDEX IF NOT EXISTS idx_provider_limits_due
                 ON provider_limits(next_check_at);
+            -- Retain the included-quota observation even while it is bypassed:
+            -- revoking permission must take effect without another upstream read.
+            -- A failed refresh cannot extend the freshness of credit availability.
+            CREATE VIEW IF NOT EXISTS effective_provider_limits AS
+                SELECT l.* FROM provider_limits l
+                JOIN provider_accounts a ON a.id = l.provider_account_id
+                WHERE (julianday(l.next_check_at) > julianday('now')
+                       OR (a.auth_mode IN ('codex-manual-refresh', 'codex-device-oauth', 'codex-oauth')
+                           AND l.reason_code IN ('codex_usage_limit_reached',
+                               'codex_usage_limit_with_credits', 'codex_quota_unavailable')))
+                  AND NOT (a.allow_credits = 1
+                      AND a.auth_mode IN ('codex-manual-refresh', 'codex-device-oauth', 'codex-oauth')
+                      AND l.scope_kind = 'account'
+                      AND l.scope_key = 'codex_usage'
+                      AND l.reason_code = 'codex_usage_limit_with_credits'
+                      AND julianday(l.observed_at) > julianday('now', '-2 minutes'));
             CREATE INDEX IF NOT EXISTS idx_managed_model_sources_account
                 ON managed_model_sources(provider_account_id, source_kind, last_seen_at);
             DROP INDEX IF EXISTS idx_provider_model_routes_primary;
@@ -565,6 +591,7 @@ impl Db {
             auth_mode,
             wire_api: normalize_wire_api(&input.wire_api, &input.provider),
             is_active: input.is_active,
+            allow_credits: false,
             max_running_requests: input.max_running_requests,
             running_requests: 0,
             queued_requests: 0,
@@ -601,7 +628,7 @@ impl Db {
         let conn = self.conn.lock().await;
         let mut stmt = conn.prepare(
             "SELECT id, name, provider, base_url, auth_mode, wire_api, api_key, is_active,
-                    status, last_error, created_at, last_used_at, max_running_requests
+                    status, last_error, created_at, last_used_at, max_running_requests, allow_credits
              FROM provider_accounts
              ORDER BY created_at DESC",
         )?;
@@ -1052,9 +1079,8 @@ impl Db {
                AND r.status != 'blocked'
                AND (r.cooldown_until IS NULL OR r.cooldown_until <= ?1)
                AND NOT EXISTS (
-                   SELECT 1 FROM provider_limits l
+                   SELECT 1 FROM effective_provider_limits l
                    WHERE l.provider_account_id = a.id
-                     AND l.next_check_at > ?1
                      AND (
                          l.scope_kind = 'account'
                          OR (l.scope_kind = 'model' AND l.scope_key = r.upstream_model_id)
@@ -1089,7 +1115,7 @@ impl Db {
             "SELECT a.id, a.name, a.provider, a.base_url, a.auth_mode, a.wire_api, a.api_key,
                     a.is_active, a.status, a.last_error, a.created_at, a.last_used_at,
                     r.id, r.public_model_id, r.upstream_model_id, r.role, r.weight, r.strip_params,
-                    a.max_running_requests
+                    a.max_running_requests, a.allow_credits
              FROM model_catalog m
              JOIN provider_model_routes r ON r.public_model_id = m.id
              JOIN provider_accounts a ON a.id = r.provider_account_id
@@ -1102,9 +1128,8 @@ impl Db {
                AND r.status != 'blocked'
                AND (r.cooldown_until IS NULL OR r.cooldown_until <= ?3)
                AND NOT EXISTS (
-                   SELECT 1 FROM provider_limits l
+                   SELECT 1 FROM effective_provider_limits l
                    WHERE l.provider_account_id = a.id
-                     AND l.next_check_at > ?3
                      AND (
                          l.scope_kind = 'account'
                          OR (l.scope_kind = 'model' AND l.scope_key = r.upstream_model_id)
@@ -1130,7 +1155,7 @@ impl Db {
                  FROM model_catalog m
                  JOIN provider_model_routes r ON r.public_model_id = m.id
                  JOIN provider_accounts a ON a.id = r.provider_account_id
-                 JOIN provider_limits l ON l.provider_account_id = a.id
+                 JOIN effective_provider_limits l ON l.provider_account_id = a.id
                  WHERE m.id = ?2
                    AND m.enabled = 1
                    AND r.wire_api = ?1
@@ -1138,13 +1163,12 @@ impl Db {
                    AND a.is_active = 1
                    AND a.status != 'blocked'
                    AND r.status != 'blocked'
-                   AND l.next_check_at > ?3
                    AND (
                        l.scope_kind = 'account'
                        OR (l.scope_kind = 'model' AND l.scope_key = r.upstream_model_id)
                    )
              )",
-            params![wire_api, model, Utc::now().to_rfc3339()],
+            params![wire_api, model],
             |row| row.get::<_, bool>(0),
         )
     }
@@ -1158,6 +1182,30 @@ impl Db {
             .get_provider_account(id)
             .await?
             .ok_or(rusqlite::Error::QueryReturnedNoRows)?;
+        // Spending permission is not a credential repair. Keep the ordinary
+        // account-edit behavior separate from a policy-only patch.
+        if input.is_credits_policy_update() {
+            let conn = self.conn.lock().await;
+            conn.execute(
+                "UPDATE provider_accounts SET allow_credits = ?1
+                    AND auth_mode IN ('codex-manual-refresh', 'codex-device-oauth', 'codex-oauth')
+                 WHERE id = ?2",
+                params![input.allow_credits, id],
+            )?;
+            if input.allow_credits == Some(true) {
+                conn.execute(
+                    "UPDATE provider_limits SET next_check_at = MIN(next_check_at, ?1)
+                     WHERE provider_account_id = ?2 AND scope_kind = 'account' AND scope_key = 'codex_usage'",
+                    params![(Utc::now() + Duration::minutes(1)).to_rfc3339(), id],
+                )?;
+            }
+            refresh_provider_availability(&conn, id)?;
+            drop(conn);
+            return self
+                .get_provider_account(id)
+                .await?
+                .ok_or(rusqlite::Error::QueryReturnedNoRows);
+        }
         let provider = input
             .provider
             .map(|provider| normalize_provider(&provider))
@@ -1176,6 +1224,7 @@ impl Db {
             .as_deref()
             .map(|url| normalize_provider_base_url(url, &auth_mode))
             .unwrap_or_else(|| normalize_provider_base_url(&current.base_url, &auth_mode));
+        let allow_credits = is_codex_subscription_auth(&auth_mode) && current.allow_credits;
         let account = ProviderAccount {
             id: current.id,
             name: input.name.unwrap_or(current.name),
@@ -1184,6 +1233,7 @@ impl Db {
             auth_mode,
             wire_api,
             is_active: input.is_active.unwrap_or(current.is_active),
+            allow_credits,
             max_running_requests: input
                 .max_running_requests
                 .unwrap_or(current.max_running_requests),
@@ -1201,6 +1251,7 @@ impl Db {
                 "UPDATE provider_accounts SET name = ?1, provider = ?2, base_url = ?3,
                  auth_mode = ?4, wire_api = ?5, api_key = ?6, is_active = ?7,
                  max_running_requests = ?9,
+                 allow_credits = allow_credits AND ?4 IN ('codex-manual-refresh', 'codex-device-oauth', 'codex-oauth'),
                  status = 'healthy', last_error = NULL WHERE id = ?8",
                 params![
                     &account.name,
@@ -1219,6 +1270,7 @@ impl Db {
                 "UPDATE provider_accounts SET name = ?1, provider = ?2, base_url = ?3,
                  auth_mode = ?4, wire_api = ?5, is_active = ?6,
                  max_running_requests = ?8,
+                 allow_credits = allow_credits AND ?4 IN ('codex-manual-refresh', 'codex-device-oauth', 'codex-oauth'),
                  status = 'healthy', last_error = NULL WHERE id = ?7",
                 params![
                     &account.name,
@@ -1230,6 +1282,18 @@ impl Db {
                     &account.id,
                     i64::from(account.max_running_requests),
                 ],
+            )?;
+        }
+        if !is_codex_subscription_auth(&account.auth_mode) {
+            conn.execute(
+                "DELETE FROM provider_limits WHERE provider_account_id = ?1
+                AND scope_kind = 'account' AND (scope_key = 'codex_usage'
+                    OR (scope_key = '' AND reason_code = 'codex_usage_limit_reached'))",
+                [&account.id],
+            )?;
+            conn.execute(
+                "UPDATE provider_accounts SET codex_quota_checked_at = NULL WHERE id = ?1",
+                [&account.id],
             )?;
         }
         refresh_provider_availability(&conn, &account.id)?;
@@ -1246,7 +1310,7 @@ impl Db {
         let conn = self.conn.lock().await;
         let mut stmt = conn.prepare(
             "SELECT id, name, provider, base_url, auth_mode, wire_api, api_key, is_active,
-                    status, last_error, created_at, last_used_at, max_running_requests
+                    status, last_error, created_at, last_used_at, max_running_requests, allow_credits
              FROM provider_accounts WHERE id = ?1",
         )?;
         stmt.query_row(params![id], account_from_row)
@@ -1261,7 +1325,7 @@ impl Db {
         let conn = self.conn.lock().await;
         let mut stmt = conn.prepare(
             "SELECT id, name, provider, base_url, auth_mode, wire_api, api_key, is_active,
-                    status, last_error, created_at, last_used_at, max_running_requests
+                    status, last_error, created_at, last_used_at, max_running_requests, allow_credits
              FROM provider_accounts WHERE id = ?1",
         )?;
         stmt.query_row(params![id], account_from_row).optional()
@@ -1419,17 +1483,79 @@ impl Db {
         Ok(())
     }
 
-    pub async fn clear_provider_quota_limits(
+    /// A quota read may update its own observation, never a newer read or a
+    /// still-cooling actual upstream rejection. Policy and observed quota remain
+    /// separate so disabling credits immediately restores the included limit.
+    pub(crate) async fn apply_codex_quota_observation(
         &self,
         account_id: &str,
+        started: DateTime<Utc>,
+        limit: Option<(&str, Option<DateTime<Utc>>)>,
     ) -> Result<(), rusqlite::Error> {
-        let conn = self.conn.lock().await;
-        conn.execute(
-            "DELETE FROM provider_limits
-             WHERE provider_account_id = ?1 AND kind = 'quota_exhausted'",
-            params![account_id],
+        let mut conn = self.conn.lock().await;
+        let tx = conn.transaction()?;
+        let applied = tx.execute(
+            "UPDATE provider_accounts SET codex_quota_checked_at = ?1
+             WHERE id = ?2 AND (codex_quota_checked_at IS NULL OR codex_quota_checked_at < ?1)",
+            params![started.to_rfc3339(), account_id],
         )?;
-        refresh_provider_availability(&conn, account_id)?;
+        if applied == 0 {
+            return Ok(());
+        }
+        let allow_credits: bool = tx.query_row(
+            "SELECT allow_credits FROM provider_accounts WHERE id = ?1",
+            [account_id],
+            |row| row.get(0),
+        )?;
+        tx.execute(
+            "DELETE FROM provider_limits WHERE provider_account_id = ?1
+             AND scope_kind = 'account' AND (scope_key = 'codex_usage'
+                 OR (scope_key = '' AND reason_code = 'codex_usage_limit_reached'))",
+            [account_id],
+        )?;
+        if let Some((reason, reset_at)) = limit {
+            let next_check_at = if allow_credits && reason == "codex_usage_limit_with_credits" {
+                Utc::now() + Duration::minutes(1)
+            } else {
+                reset_at
+                    .unwrap_or_else(|| Utc::now() + Duration::hours(2))
+                    .min(Utc::now() + Duration::hours(2))
+            };
+            tx.execute(
+                "INSERT INTO provider_limits
+                 (id, provider_account_id, scope_kind, scope_key, kind, reason_code,
+                  observed_at, reset_at, next_check_at, revision)
+                 VALUES (?1, ?2, 'account', 'codex_usage', 'quota_exhausted', ?3, ?4, ?5, ?6, 1)",
+                params![
+                    Uuid::new_v4().to_string(),
+                    account_id,
+                    reason,
+                    started.to_rfc3339(),
+                    reset_at.map(|time| time.to_rfc3339()),
+                    next_check_at.to_rfc3339()
+                ],
+            )?;
+        }
+        if limit.is_none()
+            || (allow_credits
+                && limit.is_some_and(|(reason, _)| reason == "codex_usage_limit_with_credits"))
+        {
+            tx.execute(
+                "DELETE FROM provider_limits WHERE provider_account_id = ?1
+                 AND NOT (scope_kind = 'account' AND scope_key = 'codex_usage')
+                 AND kind = 'quota_exhausted'
+                 AND next_check_at <= ?2 AND observed_at < ?2",
+                params![account_id, started.to_rfc3339()],
+            )?;
+        }
+        refresh_provider_availability(&tx, account_id)?;
+        tx.commit()?;
+        tracing::info!(
+            account_id,
+            allow_credits,
+            quota_outcome = limit.map_or("available", |(reason, _)| reason),
+            "Codex quota observation applied"
+        );
         Ok(())
     }
 
@@ -1444,6 +1570,7 @@ impl Db {
             "DELETE FROM provider_limits
              WHERE provider_account_id = ?1
                AND next_check_at <= ?2
+               AND NOT (scope_kind = 'account' AND scope_key = 'codex_usage')
                AND (
                    scope_kind = 'account'
                    OR (scope_kind = 'model' AND scope_key = ?3)
@@ -1792,6 +1919,7 @@ fn account_from_row(row: &rusqlite::Row<'_>) -> Result<ProviderAccountRecord, ru
             auth_mode: row.get(4)?,
             wire_api: row.get(5)?,
             is_active: row.get::<_, i64>(7)? == 1,
+            allow_credits: row.get::<_, i64>("allow_credits")? == 1,
             // Read by name: account rows and route-selection rows place it differently.
             max_running_requests: clamp_u32(row.get::<_, i64>("max_running_requests")?),
             running_requests: 0,
@@ -2999,6 +3127,7 @@ mod tests {
                     api_key: None,
                     is_active: None,
                     max_running_requests: None,
+                    allow_credits: None,
                 },
             )
             .await

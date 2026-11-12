@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createWorkspaceRefresh } from "./workspace-refresh";
 import type React from "react";
 import { t } from "@lingui/core/macro";
 import { toast } from "sonner";
@@ -151,12 +152,20 @@ export function useAdminWorkspace() {
     setDashboard(workspace.dashboard);
     setApiKeys(workspace.apiKeys);
     setAccounts(workspace.accounts);
+    setCodexDetailsAccount((current) =>
+      current ? (workspace.accounts.find((account) => account.id === current.id) ?? null) : null,
+    );
     setProviderPresets(workspace.providerPresets);
     setModelCatalog(workspace.modelCatalog);
     setRoutableModels(workspace.routableModels);
     setModelRoutes(workspace.modelRoutes);
     setLogs(workspace.logs);
   }, []);
+
+  const workspaceRefresh = useMemo(
+    () => createWorkspaceRefresh(fetchWorkspace, applyWorkspace),
+    [applyWorkspace],
+  );
 
   const handleWorkspaceError = useCallback((error: unknown) => {
     toast.error(error instanceof Error ? error.message : t`Failed to load dashboard`);
@@ -172,13 +181,13 @@ export function useAdminWorkspace() {
     }
     setIsLoading(true);
     try {
-      applyWorkspace(await fetchWorkspace());
+      await workspaceRefresh.refresh();
     } catch (error) {
       handleWorkspaceError(error);
     } finally {
       setIsLoading(false);
     }
-  }, [applyWorkspace, handleWorkspaceError]);
+  }, [workspaceRefresh, handleWorkspaceError]);
 
   // Initial load for a stored session; sign-in refreshes explicitly. State is
   // only updated from the settled promise, never synchronously in the effect.
@@ -187,10 +196,8 @@ export function useAdminWorkspace() {
       return;
     }
     let cancelled = false;
-    fetchWorkspace()
-      .then((workspace) => {
-        if (!cancelled) applyWorkspace(workspace);
-      })
+    workspaceRefresh
+      .refresh()
       .catch((error: unknown) => {
         if (!cancelled) handleWorkspaceError(error);
       })
@@ -199,8 +206,9 @@ export function useAdminWorkspace() {
       });
     return () => {
       cancelled = true;
+      workspaceRefresh.invalidate();
     };
-  }, [applyWorkspace, handleWorkspaceError]);
+  }, [workspaceRefresh, handleWorkspaceError]);
 
   useEffect(() => {
     function handleOAuthMessage(event: MessageEvent<AntigravityOAuthMessage>) {
@@ -246,6 +254,7 @@ export function useAdminWorkspace() {
       // Local logout still clears the session token.
     }
     clearStoredToken();
+    workspaceRefresh.invalidate();
     setToken(null);
     setDashboard(null);
     toast.success(t`Signed out`);
@@ -510,7 +519,7 @@ export function useAdminWorkspace() {
       // Quota checks can update account health. Refresh it without replacing
       // the account list with a skeleton, which collapses the page and scroll.
       try {
-        applyWorkspace(await fetchWorkspace());
+        await workspaceRefresh.refresh();
       } catch (error) {
         handleWorkspaceError(error);
       }
@@ -605,6 +614,16 @@ export function useAdminWorkspace() {
     await refresh();
   }
 
+  async function updateCodexCredits(account: ProviderAccount, allow: boolean) {
+    const updated = await api.updateProviderAccount(account.id, { allowCredits: allow });
+    setCodexDetailsAccount((current) => (current?.id === updated.id ? updated : current));
+    try {
+      await workspaceRefresh.refresh();
+    } catch (error) {
+      handleWorkspaceError(error);
+    }
+  }
+
   async function deleteAccount(account: ProviderAccount) {
     const dependentRoutes = routeCountForAccount(modelRoutes, account.id);
     const routeWarning =
@@ -695,6 +714,7 @@ export function useAdminWorkspace() {
     deleteRoute,
     deleteApiKey,
     toggleAccount,
+    updateCodexCredits,
     deleteAccount,
   };
 }
