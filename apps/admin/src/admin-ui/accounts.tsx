@@ -1,4 +1,5 @@
 import { QuotaCapacity } from "./quota-capacity";
+import { CodexCreditsControl } from "./codex-credits";
 import { useMemo } from "react";
 import type React from "react";
 import { Link, useNavigate, useParams } from "react-router";
@@ -890,12 +891,14 @@ export function CodexAccountDialog({
   loading,
   error,
   onOpenChange,
+  onCreditsChange,
 }: {
   account: ProviderAccount | null;
   quota: CodexAccountQuotaResponse | null;
   loading: boolean;
   error: string | null;
   onOpenChange: (open: boolean) => void;
+  onCreditsChange: (account: ProviderAccount, allow: boolean) => Promise<void>;
 }) {
   const rows = useMemo<CodexQuotaRow[]>(() => {
     const next: CodexQuotaRow[] = [];
@@ -941,6 +944,16 @@ export function CodexAccountDialog({
             <Trans>Subscription quota reported by this Codex account.</Trans>
           </DialogDescription>
         </DialogHeader>
+        {account ? (
+          <CodexCreditsControl
+            key={account.id}
+            account={account}
+            creditsUsable={
+              !loading && !error && quota?.accountId === account.id && quota.creditsUsable === true
+            }
+            onChange={(allow) => onCreditsChange(account, allow)}
+          />
+        ) : null}
         {loading ? (
           <div className="grid gap-3">
             <Skeleton className="h-16" />

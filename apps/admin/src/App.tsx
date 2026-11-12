@@ -169,6 +169,7 @@ function App() {
     deleteRoute,
     deleteApiKey,
     toggleAccount,
+    updateCodexCredits,
     deleteAccount,
   } = useAdminWorkspace();
   const instanceName = useInstanceName();
@@ -520,6 +521,7 @@ function App() {
       <CodexAccountDialog
         account={codexDetailsAccount}
         quota={codexQuota}
+        onCreditsChange={updateCodexCredits}
         loading={isCodexDetailsLoading}
         error={codexDetailsError}
         onOpenChange={(open) => !open && setCodexDetailsAccount(null)}

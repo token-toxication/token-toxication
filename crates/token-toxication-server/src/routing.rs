@@ -9,13 +9,14 @@ use crate::{db::ProviderRouteSelection, session_affinity::SessionAffinity};
 pub enum LimitKind {
     RateLimited,
     QuotaExhausted,
+    AccountQuotaExhausted,
 }
 
 impl LimitKind {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::RateLimited => "rate_limited",
-            Self::QuotaExhausted => "quota_exhausted",
+            Self::QuotaExhausted | Self::AccountQuotaExhausted => "quota_exhausted",
         }
     }
 }
@@ -202,6 +203,16 @@ pub fn classify_upstream_application_failure(
             Duration::seconds(60),
             Some(LimitKind::QuotaExhausted),
         ),
+        Some(
+            "credit_balance_exhausted"
+            | "organization_spend_limit_exceeded"
+            | "project_spend_limit_exceeded"
+            | "organization_usage_limit_exceeded",
+        ) => (
+            StatusCode::TOO_MANY_REQUESTS,
+            Duration::seconds(60),
+            Some(LimitKind::AccountQuotaExhausted),
+        ),
         _ => return None,
     };
 
@@ -221,15 +232,25 @@ fn classify_limit_kind(body: &[u8]) -> LimitKind {
         .and_then(|value| {
             value
                 .pointer("/error/code")
-                .or_else(|| value.pointer("/error/type"))
-                .or_else(|| value.get("code"))
                 .and_then(serde_json::Value::as_str)
+                .or_else(|| {
+                    value
+                        .pointer("/error/type")
+                        .and_then(serde_json::Value::as_str)
+                })
+                .or_else(|| value.get("code").and_then(serde_json::Value::as_str))
                 .map(str::to_owned)
         });
     match code.as_deref() {
         Some("usage_limit_reached" | "quota_exhausted" | "insufficient_quota") => {
             LimitKind::QuotaExhausted
         }
+        Some(
+            "credit_balance_exhausted"
+            | "organization_spend_limit_exceeded"
+            | "project_spend_limit_exceeded"
+            | "organization_usage_limit_exceeded",
+        ) => LimitKind::AccountQuotaExhausted,
         _ => LimitKind::RateLimited,
     }
 }
@@ -278,6 +299,7 @@ mod tests {
                     auth_mode: "bearer".to_string(),
                     wire_api: "openai-responses".to_string(),
                     is_active: true,
+                    allow_credits: false,
                     max_running_requests: 0,
                     running_requests: 0,
                     queued_requests: 0,
@@ -436,6 +458,36 @@ mod tests {
         assert_eq!(failure.provider_status, None);
         assert_eq!(failure.route_status, "cooling_down");
         assert_eq!(failure.cooldown_until, Some(now + Duration::seconds(60)));
+    }
+
+    #[test]
+    fn credit_and_spend_failures_apply_to_the_account_for_http_and_events() {
+        for code in [
+            "credit_balance_exhausted",
+            "organization_spend_limit_exceeded",
+            "project_spend_limit_exceeded",
+            "organization_usage_limit_exceeded",
+        ] {
+            let body = serde_json::json!({"error":{"code":null,"type":code}}).to_string();
+            let http = classify_response_failure(
+                "openai",
+                StatusCode::TOO_MANY_REQUESTS,
+                &HeaderMap::new(),
+                body.as_bytes(),
+                Utc::now(),
+            );
+            let event = classify_upstream_application_failure(
+                Some(code),
+                "synthetic quota failure".into(),
+                Utc::now(),
+            )
+            .unwrap();
+            for failure in [http, event] {
+                assert_eq!(failure.limit_kind, Some(LimitKind::AccountQuotaExhausted));
+                assert_eq!(failure.status_code, Some(429));
+                assert_eq!(failure.provider_status, None);
+            }
+        }
     }
 
     #[test]

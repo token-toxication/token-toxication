@@ -334,22 +334,24 @@ pub async fn codex_account_quota(
     device_store: &CodexDeviceOAuthStore,
     account_id: &str,
 ) -> Result<CodexAccountQuotaResponse, AppError> {
+    let started = Utc::now();
     let result = fetch_codex_account_quota(db, http, device_store, account_id).await;
 
     match result {
         Ok(quota) => {
-            if let Some(reset_at) = codex_quota_exhausted_until(&quota) {
-                db.record_provider_limit(
-                    account_id,
-                    None,
-                    "quota_exhausted",
-                    "codex_usage_limit_reached",
-                    reset_at,
-                )
-                .await?;
-            } else {
-                db.clear_provider_quota_limits(account_id).await?;
-                db.mark_provider_result(account_id, "healthy", None).await?;
+            let restriction = codex_quota_restriction(&quota);
+            let included_reported = quota.limits.iter().any(|limit| {
+                limit.limit_id == "codex"
+                    && (limit.allowed.is_some()
+                        || limit.limit_reached.is_some()
+                        || [&limit.primary_window, &limit.secondary_window]
+                            .into_iter()
+                            .flatten()
+                            .any(|window| window.used_percent.is_some()))
+            });
+            if restriction.is_some() || included_reported {
+                db.apply_codex_quota_observation(account_id, started, restriction)
+                    .await?;
             }
             Ok(quota)
         }
@@ -411,15 +413,50 @@ pub(crate) async fn fetch_codex_account_quota(
     Ok(quota)
 }
 
-fn codex_quota_exhausted_until(quota: &CodexAccountQuotaResponse) -> Option<Option<DateTime<Utc>>> {
-    let exhausted = quota
-        .limits
-        .iter()
-        .any(|limit| limit.allowed == Some(false) || limit.limit_reached == Some(true))
+fn limit_exhausted(limit: &CodexAccountQuotaLimit) -> bool {
+    limit.allowed == Some(false)
+        || limit.limit_reached == Some(true)
+        || [&limit.primary_window, &limit.secondary_window]
+            .into_iter()
+            .flatten()
+            .any(|window| window.used_percent.is_some_and(|used| used >= 100.0))
+}
+
+fn credits_usable(quota: &CodexAccountQuotaResponse) -> bool {
+    quota
+        .credits
+        .as_ref()
+        .is_some_and(|credits| credits.has_credits == Some(true) || credits.unlimited == Some(true))
+        && !has_non_credit_restriction(quota)
+}
+
+fn has_non_credit_restriction(quota: &CodexAccountQuotaResponse) -> bool {
+    quota.spend_control.as_ref().and_then(|spend| spend.reached) == Some(true)
+        || !matches!(
+            quota.rate_limit_reached_type.as_deref(),
+            None | Some("rate_limit_reached" | "usage_limit_reached")
+        )
+        || quota
+            .limits
+            .iter()
+            .any(|limit| limit.limit_id != "codex" && limit_exhausted(limit))
+}
+
+fn codex_quota_restriction(
+    quota: &CodexAccountQuotaResponse,
+) -> Option<(&'static str, Option<DateTime<Utc>>)> {
+    let exhausted = quota.limits.iter().any(limit_exhausted)
         || quota.spend_control.as_ref().and_then(|value| value.reached) == Some(true)
         || quota.rate_limit_reached_type.is_some();
     exhausted.then(|| {
-        quota
+        let reason = if credits_usable(quota) {
+            "codex_usage_limit_with_credits"
+        } else if has_non_credit_restriction(quota) {
+            "codex_quota_unavailable"
+        } else {
+            "codex_usage_limit_reached"
+        };
+        let reset_at = quota
             .limits
             .iter()
             .flat_map(|limit| [&limit.primary_window, &limit.secondary_window])
@@ -432,7 +469,8 @@ fn codex_quota_exhausted_until(quota: &CodexAccountQuotaResponse) -> Option<Opti
                     .and_then(|value| value.individual_limit.as_ref())
                     .and_then(|limit| limit.reset_at),
             )
-            .min()
+            .min();
+        (reason, reset_at)
     })
 }
 
@@ -530,7 +568,7 @@ fn codex_quota_response(
         limits.push(codex_quota_limit(limit_id, display_name, rate_limit, now));
     }
 
-    CodexAccountQuotaResponse {
+    let mut quota = CodexAccountQuotaResponse {
         capacity: Vec::new(),
         account_id,
         auth_mode,
@@ -542,6 +580,7 @@ fn codex_quota_response(
             unlimited: credits.unlimited,
             balance: credits.balance.and_then(value_string),
         }),
+        credits_usable: false,
         spend_control: payload.spend_control.map(|spend| CodexAccountSpendControl {
             reached: spend.reached,
             individual_limit: spend
@@ -569,7 +608,9 @@ fn codex_quota_response(
         reset_credits_available_count: payload
             .rate_limit_reset_credits
             .and_then(|credits| credits.available_count),
-    }
+    };
+    quota.credits_usable = credits_usable(&quota);
+    quota
 }
 
 fn codex_quota_limit(
@@ -1186,7 +1227,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn successful_quota_check_restores_account_health() {
+    async fn quota_checks_preserve_authentication_blocks() {
         let app = Router::new().route(
             "/backend-api/wham/usage",
             get(|| async { Json(json!({ "plan_type": "plus", "rate_limit": null })) }),
@@ -1250,8 +1291,8 @@ mod tests {
             .await
             .expect("load account")
             .expect("account exists");
-        assert_eq!(account.status, "healthy");
-        assert!(account.last_error.is_none());
+        assert_eq!(account.status, "blocked");
+        assert_eq!(account.last_error.as_deref(), Some("expired credential"));
 
         server.abort();
         drop(db);
@@ -1380,5 +1421,73 @@ mod tests {
             .timeout(Duration::from_secs(5))
             .build()
             .expect("HTTP client")
+    }
+
+    #[test]
+    fn credits_only_cover_the_included_subscription_limit() {
+        for (credits, hard_limit, expected) in [
+            (json!({"has_credits":true}), None, true),
+            (json!({"unlimited":true}), None, true),
+            (json!({"has_credits":false,"balance":"100"}), None, false),
+            (Value::Null, None, false),
+            (json!({"balance":"100"}), None, false),
+            (
+                json!({"has_credits":true}),
+                Some("workspace_owner_credits_depleted"),
+                false,
+            ),
+            (
+                json!({"has_credits":true}),
+                Some("workspace_member_usage_limit_reached"),
+                false,
+            ),
+            (
+                json!({"has_credits":true}),
+                Some("unknown_future_limit"),
+                false,
+            ),
+        ] {
+            let mut payload = json!({"credits":credits, "rate_limit":{
+                "allowed":true, "limit_reached":false, "primary_window":{"used_percent":100}
+            }});
+            if let Some(kind) = hard_limit {
+                payload["rate_limit_reached_type"] = json!(kind);
+            }
+            let quota = codex_quota_response(
+                "test".into(),
+                "codex-manual-refresh".into(),
+                "http://localhost/usage".into(),
+                serde_json::from_value(payload).unwrap(),
+                Utc::now(),
+            );
+            assert_eq!(quota.credits_usable, expected, "{credits}/{hard_limit:?}");
+            assert_eq!(
+                codex_quota_restriction(&quota).unwrap().0 == "codex_usage_limit_with_credits",
+                expected
+            );
+        }
+        for restriction in [
+            json!({"spend_control":{"reached":true}}),
+            json!({"additional_rate_limits":[{"metered_feature":"special", "rate_limit":{"limit_reached":true}}]}),
+        ] {
+            let mut payload =
+                json!({"credits":{"has_credits":true}, "rate_limit":{"limit_reached":true}});
+            payload
+                .as_object_mut()
+                .unwrap()
+                .extend(restriction.as_object().unwrap().clone());
+            let quota = codex_quota_response(
+                "test".into(),
+                "codex-manual-refresh".into(),
+                "http://localhost/usage".into(),
+                serde_json::from_value(payload).unwrap(),
+                Utc::now(),
+            );
+            assert!(!quota.credits_usable);
+            assert_eq!(
+                codex_quota_restriction(&quota).unwrap().0,
+                "codex_quota_unavailable"
+            );
+        }
     }
 }

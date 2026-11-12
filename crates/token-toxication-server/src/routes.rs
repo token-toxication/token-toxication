@@ -767,6 +767,11 @@ async fn relay_json_endpoint(
         .get("stream")
         .and_then(Value::as_bool)
         .unwrap_or(false);
+    let transport = if wire_api == WireApi::OpenAiResponses && is_stream {
+        HTTP_SSE_TRANSPORT
+    } else {
+        HTTP_TRANSPORT
+    };
     let replay_safe = request_is_replay_safe(wire_api, &original_request_json);
     let request_id = Uuid::new_v4().to_string();
     let retry_deadline = Instant::now() + state.relay_stream_max_duration;
@@ -799,9 +804,10 @@ async fn relay_json_endpoint(
                 .await
         } {
             Ok(attempt) => attempt,
-            Err(error @ AppError::ServiceUnavailable(_)) => return Err(error),
             Err(error) => {
-                if let Some((status, content_type, bytes, headers)) = last_rate_limit_response {
+                if !matches!(error, AppError::ServiceUnavailable(_))
+                    && let Some((status, content_type, bytes, headers)) = last_rate_limit_response
+                {
                     return response_with_upstream_headers(
                         status,
                         content_type,
@@ -810,6 +816,15 @@ async fn relay_json_endpoint(
                         "no-store",
                     );
                 }
+                tracing::info!(
+                    transport,
+                    request_id,
+                    status_code = error.status().as_u16(),
+                    outcome = crate::relay_metrics::request_outcome(error.status().as_u16(), None),
+                    retry_count = attempt_index,
+                    reason = "route_unavailable",
+                    "relay request rejected before upstream dispatch"
+                );
                 return Err(error);
             }
         };
@@ -857,11 +872,7 @@ async fn relay_json_endpoint(
             path: wire_api.public_path().to_string(),
             upstream_url: Some(base_upstream_url.clone()),
             request_summary: Some(request_summary),
-            transport: if wire_api == WireApi::OpenAiResponses && is_stream {
-                HTTP_SSE_TRANSPORT
-            } else {
-                HTTP_TRANSPORT
-            },
+            transport,
             overload_retry_count,
             is_overload_retry: retry_account_id.is_some(),
             overload_retry_started: overload_retry_count > 0,
@@ -1251,6 +1262,8 @@ async fn relay_json_endpoint(
                     error,
                     Utc::now(),
                 ) && route_failure.limit_kind.is_some()
+                    && route_failure.limit_kind
+                        != Some(crate::routing::LimitKind::AccountQuotaExhausted)
                     && attempt_index < 2
                     && replay_safe
                     && Instant::now() <= failover_deadline
@@ -1847,6 +1860,34 @@ pub async fn update_provider_account(
     Path(id): Path<String>,
     Json(input): Json<UpdateProviderAccountRequest>,
 ) -> Result<Json<ProviderAccountResponse>, AppError> {
+    if let Some(allow_credits) = input.allow_credits {
+        if !input.is_credits_policy_update() {
+            return Err(AppError::BadRequest(
+                "update credits permission separately from other account settings".into(),
+            ));
+        }
+        let account = state
+            .db
+            .get_provider_account(&id)
+            .await?
+            .ok_or_else(|| AppError::NotFound("provider account not found".into()))?;
+        if allow_credits {
+            if !is_codex_subscription_auth(&account.auth_mode) {
+                return Err(AppError::BadRequest(
+                    "credits continuation requires a Codex subscription account".into(),
+                ));
+            }
+            if !account.is_active || account.status == "blocked" {
+                return Err(AppError::BadRequest(
+                    "activate the account and repair its credentials before allowing credits"
+                        .into(),
+                ));
+            }
+            // Persist permission only after a successful, current quota read.
+            // Actual upstream failures remain separate, even with a positive balance.
+            codex_account_quota(&state.db, &state.http, &state.codex_device_oauth, &id).await?;
+        }
+    }
     if input
         .base_url
         .as_deref()
@@ -1856,11 +1897,16 @@ pub async fn update_provider_account(
             "provider account base URL cannot be empty".into(),
         ));
     }
+    let policy_changed = input.allow_credits.is_some();
     let mut account = state
         .db
         .update_provider_account(&id, input)
         .await
         .map_err(map_not_found)?;
+    if policy_changed {
+        tracing::info!(account_id = %id, allow_credits = account.allow_credits,
+            "Codex credits continuation permission changed");
+    }
     state
         .account_concurrency
         .set_limit(&account.id, account.max_running_requests);
@@ -3119,6 +3165,7 @@ fn normalized_stream_error_code(error: &Value) -> Option<String> {
     error
         .get("code")
         .and_then(Value::as_str)
+        .or_else(|| error.get("type").and_then(Value::as_str))
         .and_then(relay_retry::normalize_provider_code)
 }
 
@@ -3311,6 +3358,7 @@ async fn wait_for_codex_transient_retry(
 #[cfg(test)]
 mod tests {
     mod account_concurrency;
+    mod codex_credits;
     mod responses_contract;
     mod responses_websocket;
     mod service_tiers;

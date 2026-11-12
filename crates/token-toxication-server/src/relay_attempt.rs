@@ -480,6 +480,7 @@ impl AuthenticatedRelayAttempt {
             // removes the waiter from the queue, and shutdown aborts it.
             None => acquire_until_shutdown(&self.state, &selection).await?,
         };
+        ensure_credit_route_available(&self.state, &selection).await?;
         self.state.relay_metrics.record_selection(
             wire_api,
             &selection.role,
@@ -631,6 +632,7 @@ async fn acquire_until_shutdown(
                 _ => return Err(shutting_down_error()),
             },
             permit = &mut acquire => {
+                ensure_credit_route_available(state, selection).await?;
                 let waited = queued_at.elapsed();
                 if waited > Duration::ZERO {
                     tracing::info!(
@@ -646,6 +648,34 @@ async fn acquire_until_shutdown(
             }
         }
     }
+}
+
+async fn ensure_credit_route_available(
+    state: &AppState,
+    selection: &ProviderRouteSelection,
+) -> Result<(), AppError> {
+    if !crate::codex_subscription::is_codex_subscription_auth(&selection.account.account.auth_mode)
+    {
+        return Ok(());
+    }
+    let available = state
+        .db
+        .list_provider_route_candidates("openai-responses", &selection.public_model_id)
+        .await?
+        .iter()
+        .any(|candidate| candidate.route_id == selection.route_id);
+    if available {
+        return Ok(());
+    }
+    state.relay_metrics.record_selection_failure(
+        "openai-responses",
+        &selection.public_model_id,
+        "credits_policy_unavailable",
+    );
+    Err(AppError::TooManyRequestsWithRetryAfter(
+        "provider account is no longer available for this request".into(),
+        60,
+    ))
 }
 
 pub(crate) async fn authenticate_relay_api_key(
@@ -741,7 +771,9 @@ async fn record_route_failure_state(
             .db
             .record_provider_limit(
                 account_id,
-                (!upstream_model_id.is_empty()).then_some(upstream_model_id),
+                (kind != crate::routing::LimitKind::AccountQuotaExhausted
+                    && !upstream_model_id.is_empty())
+                .then_some(upstream_model_id),
                 kind.as_str(),
                 &failure.error,
                 (kind == crate::routing::LimitKind::RateLimited)

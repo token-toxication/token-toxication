@@ -72,6 +72,10 @@ pub struct ProviderAccount {
     pub auth_mode: String,
     pub wire_api: String,
     pub is_active: bool,
+    /// Permit Codex subscription continuation with available usage credits.
+    /// This is a local routing policy, not an upstream billing cap.
+    #[serde(default)]
+    pub allow_credits: bool,
     /// Maximum concurrently running upstream requests; zero means unlimited.
     pub max_running_requests: u32,
     /// Requests currently holding a slot on this account (runtime only).
@@ -122,6 +126,21 @@ pub struct UpdateProviderAccountRequest {
     pub api_key: Option<String>,
     pub is_active: Option<bool>,
     pub max_running_requests: Option<u32>,
+    pub allow_credits: Option<bool>,
+}
+
+impl UpdateProviderAccountRequest {
+    pub fn is_credits_policy_update(&self) -> bool {
+        self.allow_credits.is_some()
+            && self.name.is_none()
+            && self.provider.is_none()
+            && self.base_url.is_none()
+            && self.auth_mode.is_none()
+            && self.wire_api.is_none()
+            && self.api_key.is_none()
+            && self.is_active.is_none()
+            && self.max_running_requests.is_none()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -460,6 +479,10 @@ pub struct CodexAccountQuotaResponse {
     pub plan_type: Option<String>,
     pub limits: Vec<CodexAccountQuotaLimit>,
     pub credits: Option<CodexAccountCredits>,
+    /// Whether this observation permits credits continuation, independently of
+    /// the account's opt-in and actual upstream failures.
+    #[serde(default)]
+    pub credits_usable: bool,
     pub spend_control: Option<CodexAccountSpendControl>,
     pub rate_limit_reached_type: Option<String>,
     pub reset_credits_available_count: Option<i64>,

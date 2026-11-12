@@ -25,6 +25,58 @@ OpenAI Responses streams can fail after the upstream has already returned HTTP 2
 
 The original response stream is forwarded unchanged. Failure classification affects route health and request logs, not the bytes returned to the client.
 
+### Codex subscription credits
+
+In **Provider Accounts → Codex quota**, choose **Allow credits continuation** and
+confirm the spending notice. This account-level permission defaults off, persists
+across restarts and future quota cycles, and can be disabled in the same dialog,
+even when the quota query fails. It applies to all clients routed to that account.
+Reset credits (usage-limit reset vouchers) remain a separate, read-only display.
+
+The relay retains the exhausted included-quota observation. An opted-in account
+can bypass only that observation, with positively reported available or unlimited
+credits and no spending restriction. It rechecks once per minute; credit metadata
+older than two minutes cannot authorize continuation. Missing metadata, failed
+refreshes, additional-model restrictions and unknown limit types do not authorize
+a bypass. Disabling permission immediately restores normal quota eligibility for
+new requests, including queued work and requests on reused WebSockets. It does not
+cancel already-running work.
+
+Actual upstream quota, credit-balance and spend-limit failures are not erased by
+enabling permission or opening the quota dialog. Credit-balance and organization/
+project spend-limit failures block the account, not just the selected model, until
+the normal quota recheck is due and a subsequent observation permits retry.
+Authentication blocks, inactive accounts, route cooldowns and ordinary upstream
+rate limits remain effective. A WebSocket policy rejection is request-scoped and
+keeps the client connection open.
+
+This is a **local routing continuation permission, not a billing cap**. OpenAI uses
+included allowance first and can automatically debit credits afterward. Accounting
+may lag and the account may be used elsewhere, so switching this off cannot
+guarantee zero credit charges. The relay does not configure automatic purchases,
+change OpenAI spend controls, redeem vouchers or report a request as billed to
+credits without upstream evidence.
+
+API: `ProviderAccount.allowCredits` is false for existing and newly created
+accounts. Use `PATCH /admin/api/provider-accounts/{id}` with only
+`{"allowCredits":true}` or `{"allowCredits":false}`. Enabling requires an active,
+non-blocked Codex subscription account and a successful current quota read;
+disabling does not require an upstream read. Permission changes do not repair
+credentials or reset health. The quota response adds `creditsUsable`, describing
+that observation only, not the account's opt-in or actual upstream rejections.
+
+Metadata-only logs expose permission changes and bounded quota outcomes. Existing
+request outcomes retain transport, status and retry-count dimensions. Reused
+WebSocket rejections log request/connection IDs and `connection_action=keep_open`.
+No production debit verification was performed for this feature.
+
+Reference: OpenAI Codex `6bfdc75f0d9e6fae313234f694839866d7c63c39`
+(2026-11-12) and the [official credits guide](https://help.openai.com/en/articles/12642688-using-credits-for-flexible-usage-in-chatgpt-personal-plans).
+The installed CLI reports `0.163.0`; a matching build of the reference revision
+was blocked while fetching the `rusty_v8` Abseil Git submodule (a SecureTransport
+network error), so latest-client compatibility has not been validated. No
+request-level credits parameter or wire-format change is introduced.
+
 ## Usage analytics and privacy
 
 ### Request logs
