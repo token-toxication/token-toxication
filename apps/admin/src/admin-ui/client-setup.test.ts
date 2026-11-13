@@ -344,6 +344,7 @@ describe("dynamic model catalog setup", () => {
     expect(pluginSource).toContain("wire_api=openai-chat");
     expect(pluginSource).toContain("/openai/v1/codex/models");
     expect(pluginSource).toContain("process.env.TOKEN_TOXICATION_API_KEY");
+    expect(pluginSource).toContain("AbortSignal.timeout(30_000)");
     expect(pluginSource).toContain('"@opencode/ai/providers/openai"');
     expect(pluginSource).toContain('"reasoning.encrypted_content"');
     expect(pluginSource).toContain('"xhigh"');
