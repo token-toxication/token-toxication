@@ -139,7 +139,7 @@ async function fetchCatalog() {
   const responses = await Promise.all(
     endpoints.map(async ({ wireApi, url }) => {
       const response = await fetch(url, {
-        signal: AbortSignal.timeout(4_000),
+        signal: AbortSignal.timeout(30_000),
         headers: { accept: "application/json", authorization: "Bearer " + key },
       });
       if (!response.ok) throw new Error("Token Toxication model catalog failed: " + response.status);
