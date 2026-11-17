@@ -355,7 +355,7 @@ pub async fn gemini_account_quota(
         Err(error) => (None, Some(error.to_string())),
     };
 
-    Ok(GeminiAccountQuotaResponse {
+    let quota = GeminiAccountQuotaResponse {
         account_id: account.account.id,
         auth_mode: account.account.auth_mode,
         project: authorization.project,
@@ -366,7 +366,8 @@ pub async fn gemini_account_quota(
         quotas,
         quota_summary,
         quota_summary_error,
-    })
+    };
+    Ok(crate::provider_account_quota::remember_gemini(quota))
 }
 
 async fn gemini_account_record(

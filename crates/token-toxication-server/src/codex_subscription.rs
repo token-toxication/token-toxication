@@ -410,7 +410,7 @@ pub(crate) async fn fetch_codex_account_quota(
         }
         Err(_) => tracing::warn!("Codex reset credit details unavailable; using usage summary"),
     }
-    Ok(quota)
+    Ok(crate::provider_account_quota::remember_codex(quota))
 }
 
 fn limit_exhausted(limit: &CodexAccountQuotaLimit) -> bool {
