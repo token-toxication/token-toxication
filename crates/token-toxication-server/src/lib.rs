@@ -13,6 +13,7 @@ pub mod error;
 pub mod gemini_code_assist;
 pub mod models;
 pub mod openapi;
+pub mod provider_account_quota;
 pub mod provider_catalog;
 pub mod quota_capacity;
 pub mod quota_monitor;
@@ -75,6 +76,10 @@ pub fn app(state: AppState, static_dir: PathBuf) -> Router {
     let app = Router::new()
         .route("/health", axum::routing::get(health))
         .route("/metrics", axum::routing::get(metrics))
+        .route(
+            "/provider-accounts/quota",
+            axum::routing::get(provider_account_quota::list_provider_account_quota),
+        )
         .route("/openapi.json", axum::routing::get(openapi::openapi_json))
         .route(
             "/oauth-callback",
