@@ -26,7 +26,7 @@
 
 use serde_json::{Value, json};
 
-use crate::models::ManagedCatalogModel;
+use crate::models::{ManagedCatalogModel, ModelCapabilities};
 
 /// Largest body TT serves to a client.
 ///
@@ -121,11 +121,58 @@ fn slug_of(model: &Value) -> Option<&str> {
         .filter(|slug| !slug.is_empty())
 }
 
+/// Longest accepted capability string; descriptions and other free text are
+/// excluded from the managed metadata entirely.
+const MAX_METADATA_STRING_LEN: usize = 64;
+/// Most entries retained from one upstream capability array.
+const MAX_METADATA_ITEMS: usize = 32;
+
+fn metadata_string(value: Option<&Value>) -> Option<String> {
+    value
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty() && value.len() <= MAX_METADATA_STRING_LEN)
+        .map(str::to_string)
+}
+
+fn metadata_array(value: Option<&Value>, pointer: &str) -> Vec<String> {
+    let Some(items) = value.and_then(Value::as_array) else {
+        return Vec::new();
+    };
+    let mut values = Vec::new();
+    for item in items {
+        let item = item
+            .pointer(pointer)
+            .and_then(Value::as_str)
+            .or_else(|| item.as_str());
+        let Some(item) = item
+            .map(str::trim)
+            .filter(|item| !item.is_empty() && item.len() <= MAX_METADATA_STRING_LEN)
+        else {
+            continue;
+        };
+        if values.iter().any(|value| value == item) {
+            continue;
+        }
+        values.push(item.to_string());
+        if values.len() >= MAX_METADATA_ITEMS {
+            break;
+        }
+    }
+    values
+}
+
+fn positive_tokens(value: Option<&Value>) -> Option<i64> {
+    value.and_then(Value::as_i64).filter(|value| *value > 0)
+}
+
 /// Convert upstream entries into generic managed catalog observations.
 ///
 /// The Codex catalog is authoritative for model names and display metadata.
 /// Entries that are not supported in the API are still retained as catalog
 /// models, but the database synchronizer will not create relay routes for them.
+/// Only allowlisted capability fields are retained; instruction text, model
+/// messages, and free-form descriptions never leave the transient catalog body.
 pub fn managed_models(models: &[Value]) -> Vec<ManagedCatalogModel> {
     models
         .iter()
@@ -147,6 +194,19 @@ pub fn managed_models(models: &[Value]) -> Vec<ManagedCatalogModel> {
                     .get("supported_in_api")
                     .and_then(Value::as_bool)
                     .unwrap_or(false),
+                capabilities: ModelCapabilities {
+                    context_window: positive_tokens(model.get("context_window")),
+                    max_context_window: positive_tokens(model.get("max_context_window")),
+                    reasoning_levels: metadata_array(
+                        model.get("supported_reasoning_levels"),
+                        "/effort",
+                    ),
+                    default_reasoning_level: metadata_string(model.get("default_reasoning_level")),
+                    input_modalities: metadata_array(model.get("input_modalities"), ""),
+                    service_tiers: metadata_array(model.get("service_tiers"), "/id"),
+                },
+                visibility: metadata_string(model.get("visibility")),
+                minimal_client_version: metadata_string(model.get("minimal_client_version")),
             })
         })
         .collect()
@@ -246,6 +306,46 @@ mod tests {
             .iter()
             .map(|model| model["slug"].as_str().unwrap_or_default().to_string())
             .collect()
+    }
+
+    #[test]
+    fn managed_models_keep_only_allowlisted_capability_metadata() {
+        let mut model = upstream_model("gpt-6.2-sol");
+        model["supported_reasoning_levels"] = json!([
+            {"effort": "low", "description": "upstream text"},
+            {"effort": "max", "description": "upstream text"},
+            {"effort": "low", "description": "duplicate"}
+        ]);
+        model["default_reasoning_level"] = json!("low");
+        model["input_modalities"] = json!(["text", "image", "audio"]);
+        model["service_tiers"] = json!([
+            {"id": "priority", "name": "Fast"},
+            {"id": "ultrafast"}
+        ]);
+        model["minimal_client_version"] = json!("0.166.0");
+        model["model_messages"]["instructions_template"] = json!("private instructions");
+
+        let managed = managed_models(&[model]);
+        assert_eq!(managed.len(), 1);
+        let model = &managed[0];
+        assert_eq!(model.capabilities.context_window, Some(500_000));
+        assert_eq!(model.capabilities.max_context_window, Some(872_000));
+        assert_eq!(model.capabilities.reasoning_levels, vec!["low", "max"]);
+        assert_eq!(
+            model.capabilities.default_reasoning_level.as_deref(),
+            Some("low")
+        );
+        assert_eq!(
+            model.capabilities.input_modalities,
+            vec!["text", "image", "audio"]
+        );
+        assert_eq!(
+            model.capabilities.service_tiers,
+            vec!["priority", "ultrafast"]
+        );
+        assert_eq!(model.visibility.as_deref(), Some("list"));
+        assert_eq!(model.minimal_client_version.as_deref(), Some("0.166.0"));
+        assert!(model.supported_in_api);
     }
 
     #[test]

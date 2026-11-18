@@ -3532,6 +3532,7 @@ mod tests {
             display_name: String::new(),
             family: "test".to_string(),
             enabled: true,
+            declared: Default::default(),
         })
         .await
         .expect("create model catalog entry");
@@ -3590,6 +3591,7 @@ mod tests {
                 display_name: model_id.to_string(),
                 family: "test".to_string(),
                 enabled: true,
+                declared: Default::default(),
             })
             .await
             .expect("create model");
@@ -3689,6 +3691,7 @@ mod tests {
             display_name: String::new(),
             family: "openai".to_string(),
             enabled: true,
+            declared: Default::default(),
         })
         .await
         .expect("create model");

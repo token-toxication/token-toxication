@@ -3,7 +3,11 @@
 mod codex_credits_tests;
 #[path = "quota_capacity_db.rs"]
 mod quota_capacity;
-use std::{collections::HashSet, path::Path, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    path::Path,
+    sync::Arc,
+};
 
 use chrono::{DateTime, Duration, NaiveDate, Utc};
 use rusqlite::{Connection, OptionalExtension, params};
@@ -16,10 +20,10 @@ use crate::{
     models::{
         ApiKeyRecord, ApiKeyView, CreateApiKeyRequest, CreateModelCatalogEntryRequest,
         CreateProviderAccountRequest, CreateProviderModelRouteRequest, Dashboard,
-        ManagedCatalogModel, ModelCatalogEntry, ProviderAccount, ProviderAccountRecord,
-        ProviderModelRoute, RequestLog, RequestSummary, RequestTrend, RequestTrendBucket,
-        UpdateApiKeyRequest, UpdateModelCatalogEntryRequest, UpdateProviderAccountRequest,
-        UpdateProviderModelRouteRequest, UsageSummary,
+        ManagedCatalogModel, ModelCapabilities, ModelCatalogEntry, ModelUpstreamObservation,
+        ProviderAccount, ProviderAccountRecord, ProviderModelRoute, RequestLog, RequestSummary,
+        RequestTrend, RequestTrendBucket, UpdateApiKeyRequest, UpdateModelCatalogEntryRequest,
+        UpdateProviderAccountRequest, UpdateProviderModelRouteRequest, UsageSummary,
     },
     provider_catalog::{default_wire_api_for_provider, normalize_provider_alias},
 };
@@ -215,6 +219,25 @@ impl Db {
             "INTEGER NOT NULL DEFAULT 0",
         )?;
         ensure_column(&conn, "provider_accounts", "codex_quota_checked_at", "TEXT")?;
+        ensure_column(
+            &conn,
+            "model_catalog",
+            "declared_capabilities",
+            "TEXT NOT NULL DEFAULT '{}'",
+        )?;
+        ensure_column(
+            &conn,
+            "managed_model_sources",
+            "capabilities",
+            "TEXT NOT NULL DEFAULT '{}'",
+        )?;
+        ensure_column(&conn, "managed_model_sources", "visibility", "TEXT")?;
+        ensure_column(
+            &conn,
+            "managed_model_sources",
+            "minimal_client_version",
+            "TEXT",
+        )?;
         ensure_column(
             &conn,
             "request_logs",
@@ -638,12 +661,18 @@ impl Db {
     pub async fn list_model_catalog(&self) -> Result<Vec<ModelCatalogEntry>, rusqlite::Error> {
         let conn = self.conn.lock().await;
         let mut stmt = conn.prepare(
-            "SELECT id, display_name, family, enabled, managed, created_at
+            "SELECT id, display_name, family, enabled, managed, created_at, declared_capabilities
              FROM model_catalog
              ORDER BY id ASC",
         )?;
-        let rows = stmt.query_map([], model_catalog_from_row)?;
-        rows.collect()
+        let mut entries = stmt
+            .query_map([], model_catalog_from_row)?
+            .collect::<Result<Vec<_>, _>>()?;
+        let mut observations = all_upstream_observations(&conn)?;
+        for entry in &mut entries {
+            entry.upstream = observations.remove(&entry.id).unwrap_or_default();
+        }
+        Ok(entries)
     }
 
     /// Reconcile one provider account's authoritative model catalog.
@@ -677,14 +706,18 @@ impl Db {
             tx.execute(
                 "INSERT INTO managed_model_sources
                     (model_id, provider_account_id, source_kind, upstream_model_id,
-                     display_name, family, wire_api, supported_in_api, last_seen_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+                     display_name, family, wire_api, supported_in_api, capabilities,
+                     visibility, minimal_client_version, last_seen_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
                  ON CONFLICT(model_id, provider_account_id, source_kind) DO UPDATE SET
                     upstream_model_id = excluded.upstream_model_id,
                     display_name = excluded.display_name,
                     family = excluded.family,
                     wire_api = excluded.wire_api,
                     supported_in_api = excluded.supported_in_api,
+                    capabilities = excluded.capabilities,
+                    visibility = excluded.visibility,
+                    minimal_client_version = excluded.minimal_client_version,
                     last_seen_at = excluded.last_seen_at",
                 params![
                     &model.id,
@@ -695,6 +728,9 @@ impl Db {
                     &model.family,
                     &model.wire_api,
                     bool_to_i64(model.supported_in_api),
+                    serde_json::to_string(&model.capabilities).unwrap_or_else(|_| "{}".into()),
+                    &model.visibility,
+                    &model.minimal_client_version,
                     &now,
                 ],
             )?;
@@ -803,11 +839,14 @@ impl Db {
             enabled: input.enabled,
             managed: false,
             created_at: now,
+            declared: input.declared.normalized(),
+            upstream: Vec::new(),
         };
         let conn = self.conn.lock().await;
         conn.execute(
-            "INSERT INTO model_catalog (id, display_name, family, enabled, managed, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            "INSERT INTO model_catalog
+                (id, display_name, family, enabled, managed, created_at, declared_capabilities)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             params![
                 &entry.id,
                 &entry.display_name,
@@ -815,6 +854,7 @@ impl Db {
                 bool_to_i64(entry.enabled),
                 bool_to_i64(entry.managed),
                 entry.created_at.to_rfc3339(),
+                serde_json::to_string(&entry.declared).unwrap_or_else(|_| "{}".into()),
             ],
         )?;
         Ok(entry)
@@ -842,16 +882,22 @@ impl Db {
             enabled: input.enabled.unwrap_or(current.enabled),
             managed: current.managed,
             created_at: current.created_at,
+            declared: input
+                .declared
+                .map(ModelCapabilities::normalized)
+                .unwrap_or(current.declared),
+            upstream: current.upstream,
         };
         let conn = self.conn.lock().await;
         conn.execute(
             "UPDATE model_catalog
-             SET display_name = ?1, family = ?2, enabled = ?3
-             WHERE id = ?4",
+             SET display_name = ?1, family = ?2, enabled = ?3, declared_capabilities = ?4
+             WHERE id = ?5",
             params![
                 &updated.display_name,
                 &updated.family,
                 bool_to_i64(updated.enabled),
+                serde_json::to_string(&updated.declared).unwrap_or_else(|_| "{}".into()),
                 &updated.id,
             ],
         )?;
@@ -864,12 +910,18 @@ impl Db {
     ) -> Result<Option<ModelCatalogEntry>, rusqlite::Error> {
         let conn = self.conn.lock().await;
         let mut stmt = conn.prepare(
-            "SELECT id, display_name, family, enabled, managed, created_at
+            "SELECT id, display_name, family, enabled, managed, created_at, declared_capabilities
              FROM model_catalog
              WHERE id = ?1",
         )?;
-        stmt.query_row(params![id], model_catalog_from_row)
-            .optional()
+        let Some(mut entry) = stmt
+            .query_row(params![id], model_catalog_from_row)
+            .optional()?
+        else {
+            return Ok(None);
+        };
+        entry.upstream = upstream_observations(&conn, &entry.id)?;
+        Ok(Some(entry))
     }
 
     pub async fn list_provider_model_routes(
@@ -1941,7 +1993,70 @@ fn model_catalog_from_row(row: &rusqlite::Row<'_>) -> Result<ModelCatalogEntry, 
         enabled: row.get::<_, i64>(3)? == 1,
         managed: row.get::<_, i64>(4)? == 1,
         created_at: parse_time(row.get::<_, String>(5)?.as_str()),
+        declared: parse_capabilities(&row.get::<_, String>(6)?),
+        upstream: Vec::new(),
     })
+}
+
+fn parse_capabilities(value: &str) -> ModelCapabilities {
+    serde_json::from_str(value).unwrap_or_default()
+}
+
+fn upstream_observation_from_row(
+    row: &rusqlite::Row<'_>,
+) -> Result<(String, ModelUpstreamObservation), rusqlite::Error> {
+    let model_id = row.get(0)?;
+    Ok((
+        model_id,
+        ModelUpstreamObservation {
+            provider_account_id: row.get(1)?,
+            provider_account_name: row.get(2)?,
+            upstream_model_id: row.get(3)?,
+            supported_in_api: row.get::<_, i64>(4)? == 1,
+            visibility: row.get(5)?,
+            minimal_client_version: row.get(6)?,
+            capabilities: parse_capabilities(&row.get::<_, String>(7)?),
+            observed_at: parse_time(row.get::<_, String>(8)?.as_str()),
+        },
+    ))
+}
+
+fn all_upstream_observations(
+    conn: &Connection,
+) -> Result<HashMap<String, Vec<ModelUpstreamObservation>>, rusqlite::Error> {
+    let mut stmt = conn.prepare(
+        "SELECT s.model_id, s.provider_account_id, a.name, s.upstream_model_id,
+                s.supported_in_api, s.visibility, s.minimal_client_version,
+                s.capabilities, s.last_seen_at
+         FROM managed_model_sources s
+         JOIN provider_accounts a ON a.id = s.provider_account_id
+         ORDER BY s.model_id ASC, a.name ASC",
+    )?;
+    let rows = stmt.query_map([], upstream_observation_from_row)?;
+    let mut grouped: HashMap<String, Vec<ModelUpstreamObservation>> = HashMap::new();
+    for row in rows {
+        let (model_id, observation) = row?;
+        grouped.entry(model_id).or_default().push(observation);
+    }
+    Ok(grouped)
+}
+
+fn upstream_observations(
+    conn: &Connection,
+    model_id: &str,
+) -> Result<Vec<ModelUpstreamObservation>, rusqlite::Error> {
+    let mut stmt = conn.prepare(
+        "SELECT s.model_id, s.provider_account_id, a.name, s.upstream_model_id,
+                s.supported_in_api, s.visibility, s.minimal_client_version,
+                s.capabilities, s.last_seen_at
+         FROM managed_model_sources s
+         JOIN provider_accounts a ON a.id = s.provider_account_id
+         WHERE s.model_id = ?1
+         ORDER BY a.name ASC",
+    )?;
+    let rows = stmt.query_map(params![model_id], upstream_observation_from_row)?;
+    rows.map(|row| row.map(|(_, observation)| observation))
+        .collect()
 }
 
 /// Migrate legacy Codex subscription models that predate provider-catalog
@@ -2320,6 +2435,7 @@ mod tests {
     }
 
     use super::*;
+    use serde_json::json;
 
     #[test]
     fn migrates_existing_codex_routes_to_managed_catalog_entries() {
@@ -2411,6 +2527,16 @@ mod tests {
             upstream_model_id: "gpt-managed".to_string(),
             wire_api: "openai-responses".to_string(),
             supported_in_api: true,
+            capabilities: ModelCapabilities {
+                context_window: Some(500_000),
+                max_context_window: Some(872_000),
+                reasoning_levels: vec!["low".into(), "max".into()],
+                default_reasoning_level: Some("low".into()),
+                input_modalities: vec!["text".into(), "image".into()],
+                service_tiers: vec!["priority".into()],
+            },
+            visibility: Some("list".into()),
+            minimal_client_version: Some("0.166.0".into()),
         };
 
         db.reconcile_managed_catalog(&account.id, "provider_catalog", &[model])
@@ -2423,7 +2549,48 @@ mod tests {
             .expect("managed model exists");
         assert!(entry.managed);
         assert!(entry.enabled);
+        assert_eq!(entry.upstream.len(), 1);
+        assert_eq!(entry.upstream[0].capabilities.context_window, Some(500_000));
+        assert_eq!(
+            entry.upstream[0].capabilities.max_context_window,
+            Some(872_000)
+        );
+        assert_eq!(
+            entry.upstream[0].minimal_client_version.as_deref(),
+            Some("0.166.0")
+        );
         assert_eq!(db.list_provider_model_routes().await.unwrap().len(), 1);
+
+        let manual = db
+            .create_model_catalog_entry(
+                serde_json::from_value(json!({
+                    "id": "manual-model",
+                    "declared": {
+                        "contextWindow": 128000,
+                        "reasoningLevels": ["low", "high"],
+                        "inputModalities": ["text"]
+                    }
+                }))
+                .unwrap(),
+            )
+            .await
+            .expect("create manual model");
+        assert_eq!(manual.declared.context_window, Some(128_000));
+        assert_eq!(manual.declared.reasoning_levels, vec!["low", "high"]);
+        assert!(manual.upstream.is_empty());
+        let updated = db
+            .update_model_catalog_entry(
+                "manual-model",
+                serde_json::from_value(json!({
+                    "declared": {"maxContextWindow": 256000}
+                }))
+                .unwrap(),
+            )
+            .await
+            .expect("update manual metadata");
+        assert_eq!(updated.declared.max_context_window, Some(256_000));
+        assert_eq!(updated.declared.context_window, None);
+        assert!(updated.upstream.is_empty());
 
         db.reconcile_managed_catalog(&account.id, "provider_catalog", &[])
             .await
@@ -2695,6 +2862,7 @@ mod tests {
             display_name: String::new(),
             family: "minimax".to_string(),
             enabled: true,
+            declared: Default::default(),
         })
         .await
         .expect("create catalog model");
@@ -2784,6 +2952,7 @@ mod tests {
             display_name: String::new(),
             family: "openai".to_string(),
             enabled: true,
+            declared: Default::default(),
         })
         .await
         .expect("create model");
@@ -2883,6 +3052,7 @@ mod tests {
             display_name: String::new(),
             family: "deepseek".to_string(),
             enabled: true,
+            declared: Default::default(),
         })
         .await
         .expect("create catalog model");
@@ -2966,6 +3136,7 @@ mod tests {
             display_name: String::new(),
             family: "deepseek".to_string(),
             enabled: true,
+            declared: Default::default(),
         })
         .await
         .expect("create catalog model");
@@ -3344,6 +3515,7 @@ mod tests {
             display_name: "DeepSeek V4 Pro".to_string(),
             family: "deepseek".to_string(),
             enabled: true,
+            declared: Default::default(),
         })
         .await
         .expect("create deepseek model");
@@ -3352,6 +3524,7 @@ mod tests {
             display_name: String::new(),
             family: "openai".to_string(),
             enabled: true,
+            declared: Default::default(),
         })
         .await
         .expect("create inactive model");
@@ -3360,6 +3533,7 @@ mod tests {
             display_name: String::new(),
             family: "deepseek".to_string(),
             enabled: true,
+            declared: Default::default(),
         })
         .await
         .expect("create unrouted model");
@@ -3425,6 +3599,7 @@ mod tests {
                 display_name: String::new(),
                 family: "deepseek".to_string(),
                 enabled: model_enabled,
+                declared: Default::default(),
             })
             .await
             .expect("create ineligible model");

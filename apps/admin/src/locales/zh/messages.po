@@ -19,7 +19,7 @@ msgid " · stripped {0}"
 msgstr " · 已剥离 {0}"
 
 #. placeholder {0}: routeCountForModel(routes, model.id)
-#: src/admin-ui/models.tsx:212
+#: src/admin-ui/models.tsx:246
 msgid "{0, plural, one {# route} other {# routes}}"
 msgstr "{0, plural, other {# 条路由}}"
 
@@ -180,6 +180,7 @@ msgstr "{value, plural, other {# 次请求}}"
 #: src/admin-ui/accounts.tsx:1177
 #: src/admin-ui/analytics-panel.tsx:125
 #: src/admin-ui/dashboard.tsx:45
+#: src/admin-ui/models.tsx:582
 msgid "Account"
 msgstr "账号"
 
@@ -205,11 +206,11 @@ msgstr "添加供应商账号以转发流量。"
 msgid "Add a provider route from a Catalog Model to make this account schedulable."
 msgstr "从目录模型添加供应商路由，使此账号可被调度。"
 
-#: src/admin-ui/models.tsx:454
+#: src/admin-ui/models.tsx:505
 msgid "Add a route from the model catalog to make this Catalog Model routable."
 msgstr "从模型目录添加路由，使此目录模型可被路由。"
 
-#: src/admin-ui/models.tsx:310
+#: src/admin-ui/models.tsx:345
 msgid "Add a route to make a catalog model reachable."
 msgstr "添加路由以使目录模型可达。"
 
@@ -245,7 +246,7 @@ msgstr "添加已启用的 Anthropic Messages 路由，以配置 Claude Code。"
 msgid "Add an enabled OpenAI Responses route to configure Codex."
 msgstr "添加已启用的 OpenAI Responses 路由，以配置 Codex。"
 
-#: src/admin-ui/models.tsx:759
+#: src/admin-ui/models.tsx:1004
 msgid "Add catalog model"
 msgstr "添加目录模型"
 
@@ -253,16 +254,16 @@ msgstr "添加目录模型"
 msgid "Add exact model names in Model Catalog, then bind them to provider routes. Client setup will populate from that catalog."
 msgstr "先在模型目录中添加精确模型名，再绑定到供应商路由。客户端配置会从该目录填充。"
 
-#: src/admin-ui/models.tsx:178
-#: src/admin-ui/models.tsx:190
+#: src/admin-ui/models.tsx:204
+#: src/admin-ui/models.tsx:216
 msgid "Add exact public model names before creating provider routes."
 msgstr "创建供应商路由前，请先添加精确的公开模型名。"
 
-#: src/admin-ui/models.tsx:815
+#: src/admin-ui/models.tsx:1065
 msgid "Add model"
 msgstr "添加模型"
 
-#: src/admin-ui/models.tsx:108
+#: src/admin-ui/models.tsx:114
 msgid "Add Model"
 msgstr "添加模型"
 
@@ -270,15 +271,15 @@ msgstr "添加模型"
 msgid "Add provider account"
 msgstr "添加供应商账号"
 
-#: src/admin-ui/models.tsx:846
+#: src/admin-ui/models.tsx:1096
 msgid "Add provider model route"
 msgstr "添加供应商模型路由"
 
-#: src/admin-ui/models.tsx:863
+#: src/admin-ui/models.tsx:1113
 msgid "Add route"
 msgstr "添加路由"
 
-#: src/admin-ui/models.tsx:104
+#: src/admin-ui/models.tsx:110
 msgid "Add Route"
 msgstr "添加路由"
 
@@ -294,11 +295,11 @@ msgstr "管理 API"
 msgid "Admin sign in"
 msgstr "管理员登录"
 
-#: src/admin-ui/models.tsx:798
+#: src/admin-ui/models.tsx:1048
 msgid "Advertise when routed"
 msgstr "有路由时对外展示"
 
-#: src/admin-ui/models.tsx:128
+#: src/admin-ui/models.tsx:134
 msgid "all"
 msgstr "全部"
 
@@ -326,7 +327,7 @@ msgstr "允许使用 Credits 继续"
 msgid "Allow future credits usage?"
 msgstr "允许今后使用 Credits 续用？"
 
-#: src/admin-ui/use-admin-workspace.ts:460
+#: src/admin-ui/use-admin-workspace.ts:461
 msgid "Allow popups to sign in with Antigravity"
 msgstr "请允许弹窗以使用 Antigravity 登录"
 
@@ -350,7 +351,7 @@ msgstr "Anthropic 基址"
 msgid "Anthropic Messages"
 msgstr "Anthropic Messages"
 
-#: src/admin-ui/use-admin-workspace.ts:225
+#: src/admin-ui/use-admin-workspace.ts:226
 msgid "Antigravity account connected"
 msgstr "Antigravity 账号已连接"
 
@@ -358,9 +359,13 @@ msgstr "Antigravity 账号已连接"
 msgid "Antigravity OAuth"
 msgstr "Antigravity OAuth"
 
-#: src/admin-ui/use-admin-workspace.ts:228
+#: src/admin-ui/use-admin-workspace.ts:229
 msgid "Antigravity sign-in failed"
 msgstr "Antigravity 登录失败"
+
+#: src/admin-ui/models.tsx:609
+msgid "API"
+msgstr "API"
 
 #: src/admin-ui/helpers.tsx:328
 msgid "API key"
@@ -372,15 +377,15 @@ msgstr "API 密钥"
 msgid "API Key"
 msgstr "API 密钥"
 
-#: src/admin-ui/use-admin-workspace.ts:554
+#: src/admin-ui/use-admin-workspace.ts:556
 msgid "API key activated"
 msgstr "API 密钥已启用"
 
-#: src/admin-ui/use-admin-workspace.ts:280
+#: src/admin-ui/use-admin-workspace.ts:281
 msgid "API key created"
 msgstr "API 密钥已创建"
 
-#: src/admin-ui/use-admin-workspace.ts:606
+#: src/admin-ui/use-admin-workspace.ts:609
 msgid "API key deleted"
 msgstr "API 密钥已删除"
 
@@ -388,7 +393,7 @@ msgstr "API 密钥已删除"
 msgid "API key not found"
 msgstr "未找到 API 密钥"
 
-#: src/admin-ui/use-admin-workspace.ts:554
+#: src/admin-ui/use-admin-workspace.ts:556
 msgid "API key paused"
 msgstr "API 密钥已暂停"
 
@@ -454,8 +459,8 @@ msgstr "可用"
 msgid "Back to API keys"
 msgstr "返回 API 密钥"
 
-#: src/admin-ui/models.tsx:361
-#: src/admin-ui/models.tsx:537
+#: src/admin-ui/models.tsx:392
+#: src/admin-ui/models.tsx:703
 msgid "Back to model catalog"
 msgstr "返回模型目录"
 
@@ -471,7 +476,7 @@ msgstr "返回供应商账号"
 msgid "Back to request log"
 msgstr "返回请求日志"
 
-#: src/admin-ui/models.tsx:986
+#: src/admin-ui/models.tsx:1236
 msgid "Backup"
 msgstr "备用"
 
@@ -489,15 +494,15 @@ msgstr "基址 URL"
 msgid "Bearer token"
 msgstr "Bearer 令牌"
 
-#: src/admin-ui/models.tsx:849
+#: src/admin-ui/models.tsx:1099
 msgid "Bind a public model to an upstream provider model."
 msgstr "将公开模型绑定到上游供应商模型。"
 
-#: src/admin-ui/models.tsx:631
+#: src/admin-ui/models.tsx:797
 msgid "Binding details"
 msgstr "绑定详情"
 
-#: src/admin-ui/models.tsx:447
+#: src/admin-ui/models.tsx:498
 msgid "Bindings that make this Catalog Model reachable."
 msgstr "使此目录模型可达的绑定。"
 
@@ -535,14 +540,14 @@ msgstr "取消"
 msgid "Cancel sign-in"
 msgstr "取消登录"
 
-#: src/admin-ui/models.tsx:402
+#: src/admin-ui/models.tsx:434
 msgid "Catalog details"
 msgstr "目录详情"
 
 #: src/admin-routes.tsx:15
 #: src/admin-ui/accounts.tsx:513
-#: src/admin-ui/models.tsx:388
-#: src/admin-ui/models.tsx:659
+#: src/admin-ui/models.tsx:420
+#: src/admin-ui/models.tsx:825
 msgid "Catalog Model"
 msgstr "目录模型"
 
@@ -550,7 +555,7 @@ msgstr "目录模型"
 msgid "Catalog Model bindings that use this Provider Account."
 msgstr "使用此供应商账号的目录模型绑定。"
 
-#: src/admin-ui/models.tsx:358
+#: src/admin-ui/models.tsx:389
 msgid "Catalog Model not found"
 msgstr "未找到目录模型"
 
@@ -639,7 +644,7 @@ msgstr "Codex 账号"
 msgid "Codex account API base"
 msgstr "Codex 账号 API 基址"
 
-#: src/admin-ui/use-admin-workspace.ts:412
+#: src/admin-ui/use-admin-workspace.ts:413
 msgid "Codex account connected"
 msgstr "Codex 账号已连接"
 
@@ -647,7 +652,7 @@ msgstr "Codex 账号已连接"
 msgid "Codex device login"
 msgstr "Codex 设备登录"
 
-#: src/admin-ui/use-admin-workspace.ts:429
+#: src/admin-ui/use-admin-workspace.ts:430
 msgid "Codex device login expired"
 msgstr "Codex 设备登录已过期"
 
@@ -726,6 +731,16 @@ msgstr "检测到额度回升，等待确认"
 #: src/admin-ui/accounts.tsx:394
 msgid "Connection"
 msgstr "连接"
+
+#: src/admin-ui/models.tsx:153
+#: src/admin-ui/models.tsx:240
+#: src/admin-ui/models.tsx:588
+msgid "Context"
+msgstr "上下文"
+
+#: src/admin-ui/models.tsx:929
+msgid "Context window"
+msgstr "上下文窗口"
 
 #: src/admin-ui/accounts.tsx:1374
 msgid "Control where requests go and how much work this account can run."
@@ -821,17 +836,33 @@ msgstr "深色"
 msgid "Dashboard unavailable"
 msgstr "仪表盘不可用"
 
+#: src/admin-ui/models.tsx:185
+msgid "declared"
+msgstr "已声明"
+
+#: src/admin-ui/models.tsx:920
+msgid "Declared metadata"
+msgstr "已声明元数据"
+
 #: src/admin-ui/client-setup.tsx:678
 msgid "DeepSeek Harness provider"
 msgstr "DeepSeek Harness 供应商"
 
-#: src/admin-ui/models.tsx:782
+#: src/admin-ui/models.tsx:597
+msgid "Default"
+msgstr "默认"
+
+#: src/admin-ui/models.tsx:957
+msgid "Default reasoning level"
+msgstr "默认推理等级"
+
+#: src/admin-ui/models.tsx:1027
 msgid "Defaults to model ID"
 msgstr "默认为模型 ID"
 
 #: src/admin-ui/accounts.tsx:384
 #: src/admin-ui/api-keys.tsx:261
-#: src/admin-ui/models.tsx:623
+#: src/admin-ui/models.tsx:789
 msgid "Delete"
 msgstr "删除"
 
@@ -859,8 +890,8 @@ msgstr "设备代码已过期"
 
 #: src/admin-ui/accounts.tsx:376
 #: src/admin-ui/api-keys.tsx:257
-#: src/admin-ui/models.tsx:394
-#: src/admin-ui/models.tsx:619
+#: src/admin-ui/models.tsx:426
+#: src/admin-ui/models.tsx:785
 msgid "Disable"
 msgstr "停用"
 
@@ -872,16 +903,16 @@ msgstr "关闭 Credits 续用"
 msgid "Disabled"
 msgstr "已停用"
 
-#: src/admin-ui/models.tsx:801
+#: src/admin-ui/models.tsx:1051
 msgid "Disabled models are hidden from client model lists."
 msgstr "停用的模型不会出现在客户端模型列表中。"
 
-#: src/admin-ui/models.tsx:410
-#: src/admin-ui/models.tsx:775
+#: src/admin-ui/models.tsx:442
+#: src/admin-ui/models.tsx:1020
 msgid "Display name"
 msgstr "显示名称"
 
-#: src/admin-ui/models.tsx:141
+#: src/admin-ui/models.tsx:147
 msgid "Display Name"
 msgstr "显示名称"
 
@@ -895,13 +926,13 @@ msgstr "编辑供应商账号"
 
 #: src/admin-ui/accounts.tsx:376
 #: src/admin-ui/api-keys.tsx:257
-#: src/admin-ui/models.tsx:394
-#: src/admin-ui/models.tsx:619
+#: src/admin-ui/models.tsx:426
+#: src/admin-ui/models.tsx:785
 msgid "Enable"
 msgstr "启用"
 
 #: src/admin-ui/accounts.tsx:277
-#: src/admin-ui/models.tsx:1019
+#: src/admin-ui/models.tsx:1269
 msgid "Enabled"
 msgstr "已启用"
 
@@ -925,11 +956,11 @@ msgstr "可估算"
 msgid "Estimated tokens for 100% quota"
 msgstr "100% 额度对应的 token 估算"
 
-#: src/admin-ui/models.tsx:98
+#: src/admin-ui/models.tsx:104
 msgid "Every exact model name clients may send."
 msgstr "客户端可以发送的全部精确模型名。"
 
-#: src/admin-ui/models.tsx:949
+#: src/admin-ui/models.tsx:1199
 msgid "Exact upstream model ID"
 msgstr "精确上游模型 ID"
 
@@ -956,7 +987,7 @@ msgstr "超出的请求会先溢出到同层级的其他账号，仍无空位时
 msgid "Failed attempts"
 msgstr "失败尝试"
 
-#: src/admin-ui/use-admin-workspace.ts:171
+#: src/admin-ui/use-admin-workspace.ts:172
 msgid "Failed to load dashboard"
 msgstr "加载仪表盘失败"
 
@@ -964,9 +995,9 @@ msgstr "加载仪表盘失败"
 msgid "Failures"
 msgstr "失败次数"
 
-#: src/admin-ui/models.tsx:144
-#: src/admin-ui/models.tsx:419
-#: src/admin-ui/models.tsx:785
+#: src/admin-ui/models.tsx:150
+#: src/admin-ui/models.tsx:453
+#: src/admin-ui/models.tsx:1030
 msgid "Family"
 msgstr "系列"
 
@@ -1022,7 +1053,7 @@ msgstr "健康"
 msgid "Historical classifications"
 msgstr "历史结果分类"
 
-#: src/admin-ui/models.tsx:634
+#: src/admin-ui/models.tsx:800
 msgid "How this Catalog Model reaches its upstream model."
 msgstr "此目录模型如何到达其上游模型。"
 
@@ -1042,9 +1073,17 @@ msgstr "包含在该时间范围内有记录的已删除账号。"
 msgid "Incomplete token metering or a request crossed the baseline. Estimate withheld."
 msgstr "存在计量缺失或跨越起点的请求，暂不估算。"
 
+#: src/admin-ui/models.tsx:600
+msgid "Input"
+msgstr "输入"
+
+#: src/admin-ui/models.tsx:965
+msgid "Input modalities"
+msgstr "输入模态"
+
 #: src/admin-ui/client-setup.tsx:644
 msgid "Installs a global plugin and config that refresh the relay model catalog, with the generated list as a fallback. Back up your existing OpenCode config first."
-msgstr ""
+msgstr "安装全局插件和配置，用于刷新中继模型目录，并以生成的列表作为回退。请先备份现有的 OpenCode 配置。"
 
 #. placeholder {0}: runtime.overloadRetries
 #: src/admin-ui/analytics-panel.tsx:631
@@ -1080,7 +1119,7 @@ msgstr "最近 24 小时"
 msgid "Last 7 days"
 msgstr "最近 7 天"
 
-#: src/admin-ui/models.tsx:728
+#: src/admin-ui/models.tsx:894
 msgid "Last error"
 msgstr "最近错误"
 
@@ -1090,7 +1129,7 @@ msgstr "最近一小时"
 
 #: src/admin-ui/api-keys.tsx:85
 #: src/admin-ui/api-keys.tsx:339
-#: src/admin-ui/models.tsx:721
+#: src/admin-ui/models.tsx:887
 msgid "Last used"
 msgstr "最近使用"
 
@@ -1136,9 +1175,17 @@ msgstr "本地"
 msgid "Managed"
 msgstr "托管"
 
+#: src/admin-ui/models.tsx:466
+msgid "Managed model metadata is read-only and reported by the subscription account."
+msgstr "托管模型的元数据为只读，由订阅账号上报。"
+
 #: src/admin-ui/helpers.tsx:346
 msgid "Manual"
 msgstr "手动"
+
+#: src/admin-ui/models.tsx:574
+msgid "Manual models use declared metadata. Managed models appear here after the next catalog sync."
+msgstr "手工模型使用已声明元数据。托管模型会在下次目录同步后显示在这里。"
 
 #: src/admin-ui/helpers.tsx:324
 msgid "Manual refresh token"
@@ -1155,6 +1202,19 @@ msgstr "手动 refresh token 已弃用。请使用 Codex 设备登录创建新�
 #: src/admin-ui/accounts.tsx:159
 msgid "Manual refresh tokens are deprecated. New accounts should use Codex device login."
 msgstr "手动 refresh token 已弃用。新账号应使用 Codex 设备登录。"
+
+#: src/admin-ui/models.tsx:243
+msgid "Max"
+msgstr "最大"
+
+#: src/admin-ui/models.tsx:156
+#: src/admin-ui/models.tsx:591
+msgid "Max context"
+msgstr "最大上下文"
+
+#: src/admin-ui/models.tsx:939
+msgid "Max context window"
+msgstr "最大上下文窗口"
 
 #: src/admin-ui/accounts.tsx:1382
 msgid "Max running requests"
@@ -1181,15 +1241,19 @@ msgstr "已路由 Messages"
 msgid "Metrics"
 msgstr "运行指标"
 
+#: src/admin-ui/models.tsx:612
+msgid "Min client"
+msgstr "最低客户端"
+
 #: src/admin-ui/accounts.tsx:739
 #: src/admin-ui/analytics-panel.tsx:125
 #: src/admin-ui/client-setup.tsx:725
 #: src/admin-ui/logs.tsx:296
-#: src/admin-ui/models.tsx:138
+#: src/admin-ui/models.tsx:144
 msgid "Model"
 msgstr "模型"
 
-#: src/admin-ui/use-admin-workspace.ts:539
+#: src/admin-ui/use-admin-workspace.ts:541
 msgid "Model added"
 msgstr "模型已添加"
 
@@ -1198,17 +1262,17 @@ msgid "Model and account comparison"
 msgstr "模型与账号对比"
 
 #: src/admin-routes.tsx:14
-#: src/admin-ui/models.tsx:95
-#: src/admin-ui/models.tsx:383
-#: src/admin-ui/models.tsx:605
+#: src/admin-ui/models.tsx:101
+#: src/admin-ui/models.tsx:415
+#: src/admin-ui/models.tsx:771
 msgid "Model Catalog"
 msgstr "模型目录"
 
-#: src/admin-ui/use-admin-workspace.ts:560
+#: src/admin-ui/use-admin-workspace.ts:562
 msgid "Model disabled"
 msgstr "模型已停用"
 
-#: src/admin-ui/use-admin-workspace.ts:560
+#: src/admin-ui/use-admin-workspace.ts:562
 msgid "Model enabled"
 msgstr "模型已启用"
 
@@ -1217,11 +1281,11 @@ msgid "Model group"
 msgstr "模型组"
 
 #: src/admin-ui/accounts.tsx:742
-#: src/admin-ui/models.tsx:766
+#: src/admin-ui/models.tsx:1011
 msgid "Model ID"
 msgstr "模型 ID"
 
-#: src/admin-ui/use-admin-workspace.ts:569
+#: src/admin-ui/use-admin-workspace.ts:572
 msgid "Model updated"
 msgstr "模型已更新"
 
@@ -1284,8 +1348,8 @@ msgstr "没有 API 密钥"
 msgid "No backend assigned"
 msgstr "未分配后端"
 
-#: src/admin-ui/models.tsx:177
-#: src/admin-ui/models.tsx:189
+#: src/admin-ui/models.tsx:203
+#: src/admin-ui/models.tsx:215
 msgid "No catalog models"
 msgstr "没有目录模型"
 
@@ -1355,8 +1419,8 @@ msgid "No provider accounts"
 msgstr "没有供应商账号"
 
 #: src/admin-ui/accounts.tsx:504
-#: src/admin-ui/models.tsx:309
-#: src/admin-ui/models.tsx:453
+#: src/admin-ui/models.tsx:344
+#: src/admin-ui/models.tsx:504
 msgid "No provider routes"
 msgstr "没有供应商路由"
 
@@ -1384,6 +1448,10 @@ msgstr "无 rpm 限制"
 msgid "No stripped params"
 msgstr "未剥离参数"
 
+#: src/admin-ui/models.tsx:573
+msgid "No upstream observations"
+msgstr "暂无上游观测"
+
 #: src/admin-ui/helpers.tsx:145
 msgid "non-stream"
 msgstr "非流式"
@@ -1391,6 +1459,10 @@ msgstr "非流式"
 #: src/admin-ui/helpers.tsx:527
 msgid "None"
 msgstr "无"
+
+#: src/admin-ui/models.tsx:659
+msgid "not exposed"
+msgstr "未暴露"
 
 #: src/admin-routes.tsx:21
 msgid "Not found"
@@ -1407,6 +1479,10 @@ msgstr "OAuth token 由中继完成交换并管理。"
 #: src/admin-ui/quota-capacity.tsx:138
 msgid "Observation details"
 msgstr "观测详情"
+
+#: src/admin-ui/models.tsx:615
+msgid "Observed"
+msgstr "观测时间"
 
 #: src/admin-ui/quota-capacity.tsx:162
 #: src/admin-ui/quota-capacity.tsx:165
@@ -1439,7 +1515,11 @@ msgstr "仅 OpenAI 兼容"
 
 #: src/admin-ui/client-setup.tsx:643
 msgid "opencode global config"
-msgstr ""
+msgstr "opencode 全局配置"
+
+#: src/admin-ui/models.tsx:923
+msgid "Optional capability values. Upstream observations are read-only and shown separately."
+msgstr "可选的能力值。上游观测为只读，并单独展示。"
 
 #: src/admin-ui/analytics-panel.tsx:78
 msgid "Other"
@@ -1538,8 +1618,8 @@ msgstr "套餐或额度窗口变化"
 msgid "Points Claude Code at the Anthropic Messages namespace."
 msgstr "将 Claude Code 指向 Anthropic Messages 命名空间。"
 
-#: src/admin-ui/models.tsx:254
-#: src/admin-ui/models.tsx:715
+#: src/admin-ui/models.tsx:289
+#: src/admin-ui/models.tsx:881
 msgid "Policy"
 msgstr "策略"
 
@@ -1560,12 +1640,12 @@ msgid "primary"
 msgstr "主"
 
 #: src/admin-ui/accounts.tsx:907
-#: src/admin-ui/models.tsx:983
+#: src/admin-ui/models.tsx:1233
 #: src/admin-ui/quota-capacity.tsx:70
 msgid "Primary"
 msgstr "主"
 
-#: src/admin-ui/models.tsx:231
+#: src/admin-ui/models.tsx:266
 msgid "Primary and backup bindings from public models to upstream models."
 msgstr "从公开模型到上游模型的主备绑定。"
 
@@ -1575,9 +1655,9 @@ msgstr "项目"
 
 #: src/admin-ui/accounts.tsx:423
 #: src/admin-ui/accounts.tsx:1229
-#: src/admin-ui/models.tsx:248
-#: src/admin-ui/models.tsx:691
-#: src/admin-ui/models.tsx:954
+#: src/admin-ui/models.tsx:283
+#: src/admin-ui/models.tsx:857
+#: src/admin-ui/models.tsx:1204
 msgid "Protocol"
 msgstr "协议"
 
@@ -1586,7 +1666,7 @@ msgstr "协议"
 msgid "Provider"
 msgstr "供应商"
 
-#: src/admin-ui/models.tsx:915
+#: src/admin-ui/models.tsx:1165
 msgid "Provider account"
 msgstr "供应商账号"
 
@@ -1594,17 +1674,17 @@ msgstr "供应商账号"
 #: src/admin-ui/accounts.tsx:350
 #: src/admin-ui/logs.tsx:74
 #: src/admin-ui/logs.tsx:212
-#: src/admin-ui/models.tsx:245
-#: src/admin-ui/models.tsx:465
-#: src/admin-ui/models.tsx:672
+#: src/admin-ui/models.tsx:280
+#: src/admin-ui/models.tsx:516
+#: src/admin-ui/models.tsx:838
 msgid "Provider Account"
 msgstr "供应商账号"
 
-#: src/admin-ui/use-admin-workspace.ts:368
+#: src/admin-ui/use-admin-workspace.ts:369
 msgid "Provider account created"
 msgstr "供应商账号已创建"
 
-#: src/admin-ui/use-admin-workspace.ts:642
+#: src/admin-ui/use-admin-workspace.ts:645
 msgid "Provider account deleted"
 msgstr "供应商账号已删除"
 
@@ -1612,7 +1692,7 @@ msgstr "供应商账号已删除"
 msgid "Provider account not found"
 msgstr "未找到供应商账号"
 
-#: src/admin-ui/use-admin-workspace.ts:356
+#: src/admin-ui/use-admin-workspace.ts:357
 msgid "Provider account updated"
 msgstr "供应商账号已更新"
 
@@ -1622,26 +1702,26 @@ msgstr "供应商账号已更新"
 msgid "Provider Accounts"
 msgstr "供应商账号"
 
-#: src/admin-ui/use-admin-workspace.ts:613
+#: src/admin-ui/use-admin-workspace.ts:616
 msgid "Provider activated"
 msgstr "供应商已启用"
 
 #: src/admin-routes.tsx:16
-#: src/admin-ui/models.tsx:610
+#: src/admin-ui/models.tsx:776
 msgid "Provider Model Route"
 msgstr "供应商模型路由"
 
-#: src/admin-ui/models.tsx:534
+#: src/admin-ui/models.tsx:700
 msgid "Provider Model Route not found"
 msgstr "未找到供应商模型路由"
 
 #: src/admin-ui/accounts.tsx:495
-#: src/admin-ui/models.tsx:228
-#: src/admin-ui/models.tsx:444
+#: src/admin-ui/models.tsx:263
+#: src/admin-ui/models.tsx:495
 msgid "Provider Model Routes"
 msgstr "供应商模型路由"
 
-#: src/admin-ui/use-admin-workspace.ts:613
+#: src/admin-ui/use-admin-workspace.ts:616
 msgid "Provider paused"
 msgstr "供应商已暂停"
 
@@ -1649,27 +1729,27 @@ msgstr "供应商已暂停"
 msgid "Provider pool"
 msgstr "供应商池"
 
-#: src/admin-ui/use-admin-workspace.ts:548
+#: src/admin-ui/use-admin-workspace.ts:550
 msgid "Provider route added"
 msgstr "供应商路由已添加"
 
-#: src/admin-ui/use-admin-workspace.ts:595
+#: src/admin-ui/use-admin-workspace.ts:598
 msgid "Provider route deleted"
 msgstr "供应商路由已删除"
 
-#: src/admin-ui/use-admin-workspace.ts:586
+#: src/admin-ui/use-admin-workspace.ts:589
 msgid "Provider route updated"
 msgstr "供应商路由已更新"
 
-#: src/admin-ui/models.tsx:887
+#: src/admin-ui/models.tsx:1137
 msgid "Public model"
 msgstr "公开模型"
 
-#: src/admin-ui/models.tsx:239
+#: src/admin-ui/models.tsx:274
 msgid "Public Model"
 msgstr "公开模型"
 
-#: src/admin-ui/models.tsx:405
+#: src/admin-ui/models.tsx:437
 msgid "Public model identity and client-facing metadata."
 msgstr "公开模型标识与面向客户端的元数据。"
 
@@ -1741,6 +1821,18 @@ msgstr "原始 refresh token"
 msgid "Reached"
 msgstr "已达上限"
 
+#: src/admin-ui/models.tsx:567
+msgid "Read-only capability metadata reported by managed subscription accounts."
+msgstr "由托管订阅账号上报的只读能力元数据。"
+
+#: src/admin-ui/models.tsx:594
+msgid "Reasoning"
+msgstr "推理"
+
+#: src/admin-ui/models.tsx:949
+msgid "Reasoning levels"
+msgstr "推理等级"
+
 #: src/admin-ui/quota-capacity.tsx:195
 msgid "Recent observation segments"
 msgstr "最近的历史观测段"
@@ -1809,7 +1901,7 @@ msgstr "页面可见时每 15 秒刷新"
 msgid "Refreshing analytics…"
 msgstr "正在刷新指标…"
 
-#: src/admin-ui/models.tsx:762
+#: src/admin-ui/models.tsx:1007
 msgid "Register an exact public model name clients may send."
 msgstr "登记客户端可能发送的精确公开模型名。"
 
@@ -1922,10 +2014,10 @@ msgid "Retry-After"
 msgstr "Retry-After"
 
 #: src/admin-ui/accounts.tsx:519
-#: src/admin-ui/models.tsx:251
-#: src/admin-ui/models.tsx:468
-#: src/admin-ui/models.tsx:697
-#: src/admin-ui/models.tsx:972
+#: src/admin-ui/models.tsx:286
+#: src/admin-ui/models.tsx:519
+#: src/admin-ui/models.tsx:863
+#: src/admin-ui/models.tsx:1222
 msgid "Role"
 msgstr "角色"
 
@@ -1941,15 +2033,15 @@ msgstr "路由"
 msgid "Route binding"
 msgstr "路由绑定"
 
-#: src/admin-ui/use-admin-workspace.ts:575
+#: src/admin-ui/use-admin-workspace.ts:578
 msgid "Route disabled"
 msgstr "路由已停用"
 
-#: src/admin-ui/use-admin-workspace.ts:575
+#: src/admin-ui/use-admin-workspace.ts:578
 msgid "Route enabled"
 msgstr "路由已启用"
 
-#: src/admin-ui/models.tsx:147
+#: src/admin-ui/models.tsx:159
 msgid "Routes"
 msgstr "路由"
 
@@ -1978,7 +2070,7 @@ msgstr "运行中"
 msgid "Running requests"
 msgstr "运行中请求"
 
-#: src/admin-ui/models.tsx:654
+#: src/admin-ui/models.tsx:820
 #: src/admin-ui/settings.tsx:14
 #: src/admin-ui/settings.tsx:24
 msgid "Runtime"
@@ -1989,8 +2081,8 @@ msgid "Sampling gap"
 msgstr "采样中断"
 
 #: src/admin-ui/accounts.tsx:1433
-#: src/admin-ui/models.tsx:435
-#: src/admin-ui/models.tsx:648
+#: src/admin-ui/models.tsx:486
+#: src/admin-ui/models.tsx:814
 msgid "Save changes"
 msgstr "保存更改"
 
@@ -2002,7 +2094,7 @@ msgstr "可调度"
 msgid "Search historical names or IDs"
 msgstr "搜索历史名称或 ID"
 
-#: src/admin-ui/models.tsx:117
+#: src/admin-ui/models.tsx:123
 msgid "Search model, display name, or family"
 msgstr "搜索模型、显示名称或系列"
 
@@ -2011,11 +2103,11 @@ msgstr "搜索模型、显示名称或系列"
 msgid "Secondary"
 msgstr "次级"
 
-#: src/admin-ui/models.tsx:931
+#: src/admin-ui/models.tsx:1181
 msgid "Select account"
 msgstr "选择账号"
 
-#: src/admin-ui/models.tsx:904
+#: src/admin-ui/models.tsx:1154
 msgid "Select model"
 msgstr "选择模型"
 
@@ -2026,6 +2118,10 @@ msgstr "服务重启"
 #: src/admin-ui/analytics-panel.tsx:437
 msgid "Server shutdown"
 msgstr "服务关闭"
+
+#: src/admin-ui/models.tsx:973
+msgid "Service tiers"
+msgstr "服务层级"
 
 #: src/admin-ui/analytics-panel.tsx:646
 msgid "Session affinity and route selections"
@@ -2068,15 +2164,15 @@ msgstr "使用 Codex 登录"
 msgid "Sign out"
 msgstr "退出登录"
 
-#: src/admin-ui/use-admin-workspace.ts:246
+#: src/admin-ui/use-admin-workspace.ts:247
 msgid "Sign-in failed"
 msgstr "登录失败"
 
-#: src/admin-ui/use-admin-workspace.ts:243
+#: src/admin-ui/use-admin-workspace.ts:244
 msgid "Signed in"
 msgstr "已登录"
 
-#: src/admin-ui/use-admin-workspace.ts:260
+#: src/admin-ui/use-admin-workspace.ts:261
 msgid "Signed out"
 msgstr "已退出"
 
@@ -2099,11 +2195,11 @@ msgstr "请重新登录再试。"
 #: src/admin-ui/api-keys.tsx:295
 #: src/admin-ui/logs.tsx:299
 #: src/admin-ui/logs.tsx:406
-#: src/admin-ui/models.tsx:150
-#: src/admin-ui/models.tsx:257
-#: src/admin-ui/models.tsx:430
-#: src/admin-ui/models.tsx:474
-#: src/admin-ui/models.tsx:709
+#: src/admin-ui/models.tsx:162
+#: src/admin-ui/models.tsx:292
+#: src/admin-ui/models.tsx:481
+#: src/admin-ui/models.tsx:525
+#: src/admin-ui/models.tsx:875
 msgid "Status"
 msgstr "状态"
 
@@ -2127,7 +2223,7 @@ msgstr "流式"
 msgid "strip {params}"
 msgstr "剥离 {params}"
 
-#: src/admin-ui/models.tsx:1005
+#: src/admin-ui/models.tsx:1255
 msgid "Strip request params"
 msgstr "剥离请求参数"
 
@@ -2146,6 +2242,10 @@ msgstr "尝试成功率"
 #: src/admin-ui/analytics-panel.tsx:473
 msgid "Successful attempts with queue measurements."
 msgstr "仅统计有排队计量的成功尝试。"
+
+#: src/admin-ui/models.tsx:655
+msgid "supported"
+msgstr "支持"
 
 #: src/components/theme-toggle.tsx:19
 msgid "System"
@@ -2183,7 +2283,7 @@ msgstr "此管理路径不存在。"
 msgid "This API key may have been deleted or the link is incomplete."
 msgstr "此 API 密钥可能已删除，或链接不完整。"
 
-#: src/admin-ui/models.tsx:359
+#: src/admin-ui/models.tsx:390
 msgid "This Catalog Model may have been deleted or the link is incomplete."
 msgstr "此目录模型可能已删除，或链接不完整。"
 
@@ -2191,7 +2291,7 @@ msgstr "此目录模型可能已删除，或链接不完整。"
 msgid "This provider account may have been deleted or the link is incomplete."
 msgstr "此供应商账号可能已删除，或链接不完整。"
 
-#: src/admin-ui/models.tsx:535
+#: src/admin-ui/models.tsx:701
 msgid "This Provider Model Route may have been deleted or the link is incomplete."
 msgstr "此供应商模型路由可能已删除，或链接不完整。"
 
@@ -2214,6 +2314,10 @@ msgstr "档位"
 #: src/admin-ui/quota-capacity.tsx:151
 msgid "Tier is the requested service tier. Retries count as separate attempts."
 msgstr "档位为请求指定的服务档位；重试单独计入请求尝试次数。"
+
+#: src/admin-ui/models.tsx:603
+msgid "Tiers"
+msgstr "层级"
 
 #: src/admin-ui/logs.tsx:290
 #: src/admin-ui/logs.tsx:594
@@ -2270,7 +2374,7 @@ msgstr "TTFT {0}"
 msgid "TTFT P95"
 msgstr "首 Token 延迟 P95"
 
-#: src/admin-ui/use-admin-workspace.ts:435
+#: src/admin-ui/use-admin-workspace.ts:436
 msgid "Unable to connect Codex account"
 msgstr "无法连接 Codex 账号"
 
@@ -2278,11 +2382,11 @@ msgstr "无法连接 Codex 账号"
 msgid "Unable to load account data"
 msgstr "无法加载账号数据"
 
-#: src/admin-ui/use-admin-workspace.ts:514
+#: src/admin-ui/use-admin-workspace.ts:515
 msgid "Unable to load Codex quota"
 msgstr "无法加载 Codex 配额"
 
-#: src/admin-ui/use-admin-workspace.ts:498
+#: src/admin-ui/use-admin-workspace.ts:499
 msgid "Unable to load Gemini account data"
 msgstr "无法加载 Gemini 账号数据"
 
@@ -2290,7 +2394,7 @@ msgstr "无法加载 Gemini 账号数据"
 msgid "Unable to load quota"
 msgstr "无法加载配额"
 
-#: src/admin-ui/use-admin-workspace.ts:472
+#: src/admin-ui/use-admin-workspace.ts:473
 msgid "Unable to start Antigravity sign-in"
 msgstr "无法开始 Antigravity 登录"
 
@@ -2357,7 +2461,7 @@ msgid "Unreported"
 msgstr "未报告"
 
 #. placeholder {0}: formatDate(route.cooldownUntil)
-#: src/admin-ui/models.tsx:298
+#: src/admin-ui/models.tsx:333
 msgid "until {0}"
 msgstr "直到 {0}"
 
@@ -2386,16 +2490,24 @@ msgstr "上游凭证"
 msgid "Upstream credentials used by model routes."
 msgstr "模型路由使用的上游凭证。"
 
+#: src/admin-ui/models.tsx:585
+msgid "Upstream model"
+msgstr "上游模型"
+
 #: src/admin-ui/accounts.tsx:516
-#: src/admin-ui/models.tsx:242
-#: src/admin-ui/models.tsx:462
-#: src/admin-ui/models.tsx:685
+#: src/admin-ui/models.tsx:277
+#: src/admin-ui/models.tsx:513
+#: src/admin-ui/models.tsx:851
 msgid "Upstream Model"
 msgstr "上游模型"
 
-#: src/admin-ui/models.tsx:942
+#: src/admin-ui/models.tsx:1192
 msgid "Upstream model ID"
 msgstr "上游模型 ID"
+
+#: src/admin-ui/models.tsx:564
+msgid "Upstream observations"
+msgstr "上游观测"
 
 #: src/admin-ui/accounts.tsx:1379
 msgid "Upstream path"
@@ -2430,6 +2542,10 @@ msgstr "用户名"
 msgid "View data table"
 msgstr "查看数据表"
 
+#: src/admin-ui/models.tsx:606
+msgid "Visibility"
+msgstr "可见性"
+
 #: src/admin-ui/accounts.tsx:845
 msgid "Waiting for Codex sign-in to complete…"
 msgstr "正在等待 Codex 登录完成…"
@@ -2443,13 +2559,13 @@ msgid "Waiting for the first quota observation."
 msgstr "等待首次额度观测。"
 
 #: src/admin-ui/accounts.tsx:522
-#: src/admin-ui/models.tsx:471
-#: src/admin-ui/models.tsx:703
-#: src/admin-ui/models.tsx:994
+#: src/admin-ui/models.tsx:522
+#: src/admin-ui/models.tsx:869
+#: src/admin-ui/models.tsx:1244
 msgid "Weight"
 msgstr "权重"
 
-#: src/admin-ui/models.tsx:1022
+#: src/admin-ui/models.tsx:1272
 msgid "Weight applies among healthy routes with the same role. Primary routes are preferred over backups."
 msgstr "权重在具有相同角色的健康路由之间生效。主路由优先于备用路由。"
 
@@ -2464,4 +2580,4 @@ msgstr "窗口"
 
 #: src/admin-ui/client-setup.tsx:660
 msgid "Writes a fallback models.json file and a provider extension that refreshes the relay catalog. Back up existing Pi configuration first."
-msgstr ""
+msgstr "写入回退 models.json 文件和供应商扩展，用于刷新中继目录。请先备份现有的 Pi 配置。"

@@ -15,6 +15,12 @@ import {
   statusBadge,
   wireApiLabel,
 } from "./helpers";
+import {
+  contextDisplay,
+  formatCapabilityList,
+  formatTokenCapacity,
+  modelFormFromEntry,
+} from "./model-metadata";
 import { EmptyNotice, Field, MissingRecordView } from "./shared";
 import {
   providerRouteEditorKey,
@@ -144,6 +150,12 @@ export function ModelCatalogView({
                     <Trans>Family</Trans>
                   </TableHead>
                   <TableHead>
+                    <Trans>Context</Trans>
+                  </TableHead>
+                  <TableHead>
+                    <Trans>Max context</Trans>
+                  </TableHead>
+                  <TableHead>
                     <Trans>Routes</Trans>
                   </TableHead>
                   <TableHead>
@@ -152,27 +164,41 @@ export function ModelCatalogView({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredModels.map((model) => (
-                  <TableRow key={model.id}>
-                    <TableCell className="font-mono text-xs">
-                      <Link
-                        to={adminPaths.model(model.id)}
-                        className="underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      >
-                        {model.id}
-                      </Link>
-                    </TableCell>
-                    <TableCell>{model.displayName}</TableCell>
-                    <TableCell>{model.family}</TableCell>
-                    <TableCell>{routeCountForModel(routes, model.id)}</TableCell>
-                    <TableCell>
-                      {model.enabled ? statusBadge("healthy", true) : statusBadge("paused", false)}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {filteredModels.map((model) => {
+                  const display = contextDisplay(model);
+                  return (
+                    <TableRow key={model.id}>
+                      <TableCell className="font-mono text-xs">
+                        <Link
+                          to={adminPaths.model(model.id)}
+                          className="underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          {model.id}
+                        </Link>
+                      </TableCell>
+                      <TableCell>{model.displayName}</TableCell>
+                      <TableCell>{model.family}</TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        {display.context}
+                        {display.source === "declared" ? (
+                          <span className="ml-1 text-xs text-muted-foreground">
+                            <Trans>declared</Trans>
+                          </span>
+                        ) : null}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">{display.maxContext}</TableCell>
+                      <TableCell>{routeCountForModel(routes, model.id)}</TableCell>
+                      <TableCell>
+                        {model.enabled
+                          ? statusBadge("healthy", true)
+                          : statusBadge("paused", false)}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
                 {filteredModels.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5}>
+                    <TableCell colSpan={7}>
                       <EmptyNotice
                         title={t`No catalog models`}
                         body={t`Add exact public model names before creating provider routes.`}
@@ -190,33 +216,42 @@ export function ModelCatalogView({
                 body={t`Add exact public model names before creating provider routes.`}
               />
             ) : (
-              filteredModels.map((model) => (
-                <div key={model.id} className="flex flex-col gap-3 rounded-md border p-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <Link
-                        to={adminPaths.model(model.id)}
-                        className="block truncate font-mono text-sm underline-offset-4 hover:underline"
-                      >
-                        {model.id}
-                      </Link>
-                      <div className="truncate text-xs text-muted-foreground">
-                        {model.displayName}
+              filteredModels.map((model) => {
+                const display = contextDisplay(model);
+                return (
+                  <div key={model.id} className="flex flex-col gap-3 rounded-md border p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <Link
+                          to={adminPaths.model(model.id)}
+                          className="block truncate font-mono text-sm underline-offset-4 hover:underline"
+                        >
+                          {model.id}
+                        </Link>
+                        <div className="truncate text-xs text-muted-foreground">
+                          {model.displayName}
+                        </div>
                       </div>
+                      {model.enabled ? statusBadge("healthy", true) : statusBadge("paused", false)}
                     </div>
-                    {model.enabled ? statusBadge("healthy", true) : statusBadge("paused", false)}
+                    <div className="flex flex-wrap gap-2">
+                      <Badge variant="outline">{model.family}</Badge>
+                      <Badge variant="outline">
+                        <Trans>Context</Trans> {display.context}
+                      </Badge>
+                      <Badge variant="outline">
+                        <Trans>Max</Trans> {display.maxContext}
+                      </Badge>
+                      <Badge variant="secondary">
+                        {plural(routeCountForModel(routes, model.id), {
+                          one: "# route",
+                          other: "# routes",
+                        })}
+                      </Badge>
+                    </div>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Badge variant="outline">{model.family}</Badge>
-                    <Badge variant="secondary">
-                      {plural(routeCountForModel(routes, model.id), {
-                        one: "# route",
-                        other: "# routes",
-                      })}
-                    </Badge>
-                  </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </CardContent>
@@ -331,28 +366,24 @@ export function ModelDetailView({
   models: readonly ModelCatalogEntry[];
   routes: readonly ProviderModelRoute[];
   onToggle: (model: ModelCatalogEntry) => Promise<void>;
-  onUpdate: (
-    model: ModelCatalogEntry,
-    values: { displayName: string; family: string },
-  ) => Promise<void>;
+  onUpdate: (model: ModelCatalogEntry, values: ModelCatalogForm) => Promise<void>;
 }) {
   const { modelId } = useParams();
   const model = models.find((item) => item.id === modelId);
-  const [draft, setDraft] = useState({
-    displayName: model?.displayName ?? "",
-    family: model?.family ?? "",
-  });
+  const [draft, setDraft] = useState<ModelCatalogForm | null>(() =>
+    model ? modelFormFromEntry(model) : null,
+  );
   // Reset the draft when the loaded record changes (adjusting state while
   // rendering avoids an extra effect-driven render).
   const [draftSource, setDraftSource] = useState(model);
   if (model !== draftSource) {
     setDraftSource(model);
     if (model) {
-      setDraft({ displayName: model.displayName, family: model.family });
+      setDraft(modelFormFromEntry(model));
     }
   }
 
-  if (!model) {
+  if (!model || !draft) {
     return (
       <MissingRecordView
         title={t`Catalog Model not found`}
@@ -364,13 +395,14 @@ export function ModelDetailView({
   }
 
   const selectedModel = model;
+  const selectedDraft = draft;
   const linkedRoutes = routes.filter((route) => route.publicModelId === model.id);
-  const changed = draft.displayName !== model.displayName || draft.family !== model.family;
+  const changed = JSON.stringify(draft) !== JSON.stringify(modelFormFromEntry(model));
 
   async function handleSave(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (changed) {
-      await onUpdate(selectedModel, draft);
+      await onUpdate(selectedModel, selectedDraft);
     }
   }
 
@@ -412,7 +444,9 @@ export function ModelDetailView({
                   id="catalog-model-display-name"
                   value={draft.displayName}
                   onChange={(event) =>
-                    setDraft((current) => ({ ...current, displayName: event.target.value }))
+                    setDraft((current) =>
+                      current ? { ...current, displayName: event.target.value } : current,
+                    )
                   }
                 />
               </Field>
@@ -421,10 +455,27 @@ export function ModelDetailView({
                   id="catalog-model-family"
                   value={draft.family}
                   onChange={(event) =>
-                    setDraft((current) => ({ ...current, family: event.target.value }))
+                    setDraft((current) =>
+                      current ? { ...current, family: event.target.value } : current,
+                    )
                   }
                 />
               </Field>
+              {model.managed ? (
+                <p className="text-xs text-muted-foreground">
+                  <Trans>
+                    Managed model metadata is read-only and reported by the subscription account.
+                  </Trans>
+                </p>
+              ) : (
+                <ModelCapabilitiesFields
+                  idPrefix="catalog-model"
+                  form={draft}
+                  onChange={(patch) =>
+                    setDraft((current) => (current ? { ...current, ...patch } : current))
+                  }
+                />
+              )}
               <div className="flex items-center justify-between gap-3 text-sm">
                 <span className="text-muted-foreground">
                   <Trans>Status</Trans>
@@ -506,6 +557,121 @@ export function ModelDetailView({
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>
+            <Trans>Upstream observations</Trans>
+          </CardTitle>
+          <CardDescription>
+            <Trans>Read-only capability metadata reported by managed subscription accounts.</Trans>
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {model.upstream.length === 0 ? (
+            <EmptyNotice
+              title={t`No upstream observations`}
+              body={t`Manual models use declared metadata. Managed models appear here after the next catalog sync.`}
+            />
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>
+                      <Trans>Account</Trans>
+                    </TableHead>
+                    <TableHead>
+                      <Trans>Upstream model</Trans>
+                    </TableHead>
+                    <TableHead>
+                      <Trans>Context</Trans>
+                    </TableHead>
+                    <TableHead>
+                      <Trans>Max context</Trans>
+                    </TableHead>
+                    <TableHead>
+                      <Trans>Reasoning</Trans>
+                    </TableHead>
+                    <TableHead>
+                      <Trans>Default</Trans>
+                    </TableHead>
+                    <TableHead>
+                      <Trans>Input</Trans>
+                    </TableHead>
+                    <TableHead>
+                      <Trans>Tiers</Trans>
+                    </TableHead>
+                    <TableHead>
+                      <Trans>Visibility</Trans>
+                    </TableHead>
+                    <TableHead>
+                      <Trans>API</Trans>
+                    </TableHead>
+                    <TableHead>
+                      <Trans>Min client</Trans>
+                    </TableHead>
+                    <TableHead>
+                      <Trans>Observed</Trans>
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {model.upstream.map((observation) => (
+                    <TableRow
+                      key={`${observation.providerAccountId}:${observation.upstreamModelId}`}
+                    >
+                      <TableCell>
+                        <Link
+                          to={adminPaths.account(observation.providerAccountId)}
+                          className="underline-offset-4 hover:underline"
+                        >
+                          {observation.providerAccountName}
+                        </Link>
+                      </TableCell>
+                      <TableCell className="font-mono text-xs">
+                        {observation.upstreamModelId}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        {formatTokenCapacity(observation.capabilities.contextWindow)}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        {formatTokenCapacity(observation.capabilities.maxContextWindow)}
+                      </TableCell>
+                      <TableCell>
+                        {formatCapabilityList(observation.capabilities.reasoningLevels)}
+                      </TableCell>
+                      <TableCell>{observation.capabilities.defaultReasoningLevel ?? "—"}</TableCell>
+                      <TableCell>
+                        {formatCapabilityList(observation.capabilities.inputModalities)}
+                      </TableCell>
+                      <TableCell>
+                        {formatCapabilityList(observation.capabilities.serviceTiers)}
+                      </TableCell>
+                      <TableCell>{observation.visibility ?? "—"}</TableCell>
+                      <TableCell>
+                        {observation.supportedInApi ? (
+                          <Badge variant="secondary">
+                            <Trans>supported</Trans>
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline">
+                            <Trans>not exposed</Trans>
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>{observation.minimalClientVersion ?? "—"}</TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        {formatDate(observation.observedAt)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -738,6 +904,85 @@ function ProviderRouteEditor({
   );
 }
 
+function ModelCapabilitiesFields({
+  idPrefix,
+  form,
+  onChange,
+}: {
+  idPrefix: string;
+  form: ModelCatalogForm;
+  onChange: (patch: Partial<ModelCatalogForm>) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-3 rounded-md border p-3">
+      <div className="flex flex-col gap-1">
+        <span className="text-sm font-medium">
+          <Trans>Declared metadata</Trans>
+        </span>
+        <span className="text-xs text-muted-foreground">
+          <Trans>
+            Optional capability values. Upstream observations are read-only and shown separately.
+          </Trans>
+        </span>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label={t`Context window`} htmlFor={`${idPrefix}-context-window`}>
+          <Input
+            id={`${idPrefix}-context-window`}
+            type="number"
+            min={1}
+            value={form.contextWindow}
+            onChange={(event) => onChange({ contextWindow: event.target.value })}
+            placeholder="500000"
+          />
+        </Field>
+        <Field label={t`Max context window`} htmlFor={`${idPrefix}-max-context-window`}>
+          <Input
+            id={`${idPrefix}-max-context-window`}
+            type="number"
+            min={1}
+            value={form.maxContextWindow}
+            onChange={(event) => onChange({ maxContextWindow: event.target.value })}
+            placeholder="872000"
+          />
+        </Field>
+        <Field label={t`Reasoning levels`} htmlFor={`${idPrefix}-reasoning-levels`}>
+          <Input
+            id={`${idPrefix}-reasoning-levels`}
+            value={form.reasoningLevels}
+            onChange={(event) => onChange({ reasoningLevels: event.target.value })}
+            placeholder="low, medium, high"
+          />
+        </Field>
+        <Field label={t`Default reasoning level`} htmlFor={`${idPrefix}-default-reasoning-level`}>
+          <Input
+            id={`${idPrefix}-default-reasoning-level`}
+            value={form.defaultReasoningLevel}
+            onChange={(event) => onChange({ defaultReasoningLevel: event.target.value })}
+            placeholder="medium"
+          />
+        </Field>
+        <Field label={t`Input modalities`} htmlFor={`${idPrefix}-input-modalities`}>
+          <Input
+            id={`${idPrefix}-input-modalities`}
+            value={form.inputModalities}
+            onChange={(event) => onChange({ inputModalities: event.target.value })}
+            placeholder="text, image"
+          />
+        </Field>
+        <Field label={t`Service tiers`} htmlFor={`${idPrefix}-service-tiers`}>
+          <Input
+            id={`${idPrefix}-service-tiers`}
+            value={form.serviceTiers}
+            onChange={(event) => onChange({ serviceTiers: event.target.value })}
+            placeholder="priority, ultrafast"
+          />
+        </Field>
+      </div>
+    </div>
+  );
+}
+
 export function CreateModelSheet({
   open,
   form,
@@ -792,6 +1037,11 @@ export function CreateModelSheet({
               placeholder="minimax, deepseek, glm, openai, anthropic"
             />
           </Field>
+          <ModelCapabilitiesFields
+            idPrefix="model"
+            form={form}
+            onChange={(patch) => setForm((current) => ({ ...current, ...patch }))}
+          />
           <div className="flex items-center justify-between gap-3 rounded-md border p-3">
             <div className="flex flex-col gap-1">
               <Label htmlFor="model-enabled">
