@@ -75,6 +75,13 @@ async fn run_server(config: Config) -> Result<(), MainError> {
         token_toxication_server::websocket_transport::build_client(relay_stream_idle_timeout)
             .map_err(|source| MainError::BuildHttpClient { source })?;
 
+    // Prime the latest Codex client version before serving traffic so the first
+    // catalog request does not pay a registry round trip.
+    let codex_client_version = std::sync::Arc::new(
+        token_toxication_server::codex_catalog::remote::ClientVersionCache::startup(),
+    );
+    codex_client_version.current(&http).await;
+
     let state = AppState {
         config: config.clone(),
         db,
@@ -84,6 +91,7 @@ async fn run_server(config: Config) -> Result<(), MainError> {
         antigravity_oauth: Default::default(),
         codex_device_oauth: Default::default(),
         codex_catalog_cache: Default::default(),
+        codex_client_version,
         relay_metrics: Default::default(),
         account_concurrency: Default::default(),
         relay_stream_idle_timeout,

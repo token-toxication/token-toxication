@@ -62,6 +62,8 @@ pub struct AppState {
     /// Held in memory only: the bodies carry upstream instruction text, which TT
     /// does not persist to disk.
     pub codex_catalog_cache: Arc<codex_catalog::cache::CatalogCache>,
+    /// Cached latest Codex client version used for all catalog requests.
+    pub codex_client_version: Arc<codex_catalog::remote::ClientVersionCache>,
     pub relay_metrics: relay_metrics::RelayMetrics,
     pub account_concurrency: account_concurrency::AccountConcurrency,
     pub relay_stream_idle_timeout: Duration,

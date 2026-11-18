@@ -291,13 +291,12 @@ pub async fn list_codex_models(
     State(state): State<AppState>,
     headers: HeaderMap,
     uri: Uri,
-    Query(query): Query<CodexCatalogQuery>,
+    Query(_query): Query<CodexCatalogQuery>,
 ) -> Result<Response, AppError> {
     authenticate_relay_api_key(&state, &headers, uri.query()).await?;
     let account = codex_catalog_account(&state).await?;
     let account_id = account.account.id.clone();
-    let client_version =
-        codex_catalog_remote::upstream_client_version(query.client_version.as_deref());
+    let client_version = state.codex_client_version.current(&state.http).await;
     // The upstream shapes the catalog by version, so the version belongs in the
     // key: a body fetched for one client must never be served to another.
     let cache_key = codex_catalog_cache::cache_key(&account_id, &client_version);
@@ -456,7 +455,7 @@ async fn sync_managed_codex_catalogs(state: &AppState) {
             return;
         }
     };
-    let client_version = codex_catalog_remote::FALLBACK_CLIENT_VERSION.to_string();
+    let client_version = state.codex_client_version.current(&state.http).await;
     for account in accounts.iter().filter(|account| {
         is_codex_subscription_auth(&account.auth_mode)
             && !(account.is_active && account.status != "blocked")
@@ -3441,6 +3440,7 @@ mod tests {
             antigravity_oauth: AntigravityOAuthStore::default(),
             codex_device_oauth: crate::codex_device_oauth::CodexDeviceOAuthStore::default(),
             codex_catalog_cache: Default::default(),
+            codex_client_version: Default::default(),
             relay_metrics: Default::default(),
             account_concurrency: Default::default(),
             relay_stream_idle_timeout: Duration::from_secs(5),
@@ -4064,7 +4064,13 @@ mod tests {
             .first()
             .cloned()
             .expect("captured upstream request");
-        assert_eq!(uri, "/codex/models?client_version=0.162.1");
+        assert_eq!(
+            uri,
+            format!(
+                "/codex/models?client_version={}",
+                codex_catalog_remote::DEFAULT_CLIENT_VERSION
+            )
+        );
         assert_eq!(headers["authorization"], "Bearer synthetic-provider-key");
         assert_eq!(headers["chatgpt-account-id"], "synthetic-account");
         assert_eq!(headers["originator"], "opencode");
@@ -4084,10 +4090,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn codex_catalog_endpoint_keeps_client_versions_apart() {
-        // The backend shapes the catalog by client version. Sharing one cache
-        // entry across versions meant a single versionless request handed its
-        // reduced catalog to every client that followed.
+    async fn codex_catalog_endpoint_always_uses_the_latest_client_version() {
+        // An older client must not make managed reconciliation observe a
+        // reduced catalog and remove models newly enabled upstream.
         let seen: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
         let capture = Arc::clone(&seen);
         let upstream = Router::new().route(
@@ -4143,13 +4148,13 @@ mod tests {
         });
 
         let http = test_http_client();
-        // No version first (which resolves to the current release), then that
-        // same release, then an older client.
+        // Every client version is intentionally mapped to the same upstream
+        // release.
         for query in [
             "",
             "?client_version=0.163.0",
             "?client_version=0.162.0",
-            "?client_version=0.163.0",
+            "?client_version=0.169.1",
         ] {
             let response = http
                 .get(&format!("http://{address}/openai/v1/codex/models{query}"))
@@ -4164,21 +4169,16 @@ mod tests {
         let upstream_uris = seen.lock().await.clone();
         assert_eq!(
             upstream_uris.len(),
-            2,
-            "one upstream fetch per distinct version, repeats served from cache: {upstream_uris:?}"
+            1,
+            "all client versions share the latest catalog cache entry: {upstream_uris:?}"
         );
         assert!(
             upstream_uris[0].contains(&format!(
                 "client_version={}",
-                codex_catalog_remote::FALLBACK_CLIENT_VERSION
+                codex_catalog_remote::DEFAULT_CLIENT_VERSION
             )),
-            "a versionless client must report the current release, not a placeholder: {}",
+            "every client must report the latest release: {}",
             upstream_uris[0]
-        );
-        assert!(
-            upstream_uris[1].contains("client_version=0.162.0"),
-            "an older client must fetch its own catalog: {}",
-            upstream_uris[1]
         );
 
         upstream_server.abort();
@@ -4356,19 +4356,15 @@ mod tests {
 
         let upstream_uris = captured.lock().await.clone();
         assert_eq!(upstream_uris.len(), 2);
-        assert!(
-            upstream_uris[0].contains(&format!(
-                "client_version={}",
-                codex_catalog_remote::FALLBACK_CLIENT_VERSION
-            )),
-            "a missing client version must report the current release, not a placeholder: {}",
-            upstream_uris[0]
-        );
-        assert!(
-            upstream_uris[1].contains("client_version=weirdbuild"),
-            "an unexpected client version must be sanitized, not rejected: {}",
-            upstream_uris[1]
-        );
+        for upstream_uri in upstream_uris {
+            assert!(
+                upstream_uri.contains(&format!(
+                    "client_version={}",
+                    codex_catalog_remote::DEFAULT_CLIENT_VERSION
+                )),
+                "every client must report the latest release: {upstream_uri}"
+            );
+        }
 
         upstream_server.abort();
         server.abort();
