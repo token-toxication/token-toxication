@@ -39,6 +39,8 @@ Send `Token-Toxication-Session-ID` when the client does not already expose a sup
 
 The explicit header wins over native values. A request with affinity uses weighted rendezvous hashing within the Primary tier, or within the Backup tier only when no Primary is eligible. A request without affinity uses weighted random selection and may reach a different account on each request.
 
+HTTP relay responses now include Token-Toxication-Account-ID to identify the provider account used for the final attempt.
+
 The relay normally does not retry the current request on a different route.
 Codex Device subscription requests have the bounded overload/rate-limit policy
 described below. OpenAI `previous_response_id` values are forwarded unchanged

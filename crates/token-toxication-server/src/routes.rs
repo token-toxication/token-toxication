@@ -1001,7 +1001,8 @@ async fn relay_json_endpoint(
             }
         };
         let status = response.status();
-        let response_headers = response.headers().clone();
+        let mut response_headers = response.headers().clone();
+        codex_context::insert_account_id(&mut response_headers, &account.account.id);
         log.retry_after_ms = relay_retry::retry_after(&response_headers, Utc::now())
             .map(|delay| delay.as_millis() as u64);
         let content_type = response
@@ -1607,6 +1608,7 @@ async fn relay_gemini_endpoint(
             header::CACHE_CONTROL,
             HeaderValue::from_static("no-cache, no-transform"),
         );
+        codex_context::insert_account_id(relay.headers_mut(), &account.account.id);
         Ok(relay)
     } else {
         let upstream_bytes = response.bytes().await?;
@@ -1632,6 +1634,7 @@ async fn relay_gemini_endpoint(
         relay
             .headers_mut()
             .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+        codex_context::insert_account_id(relay.headers_mut(), &account.account.id);
         Ok(relay)
     }
 }
