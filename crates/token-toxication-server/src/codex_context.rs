@@ -14,7 +14,10 @@ const CONTEXT_HEADERS: [&str; 6] = [
     "x-openai-subagent",
 ];
 
-const RESPONSE_HEADERS: [&str; 12] = [
+/// Names the provider account that served a relay response.
+pub const ACCOUNT_ID_HEADER: &str = "token-toxication-account-id";
+
+const RESPONSE_HEADERS: [&str; 13] = [
     "x-codex-turn-state",
     "retry-after",
     "x-request-id",
@@ -27,6 +30,7 @@ const RESPONSE_HEADERS: [&str; 12] = [
     "x-ratelimit-limit-tokens",
     "x-ratelimit-remaining-tokens",
     "x-ratelimit-reset-tokens",
+    ACCOUNT_ID_HEADER,
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -99,6 +103,13 @@ pub fn copy_response_headers(source: &HeaderMap, destination: &mut HeaderMap) {
         if let Some(value) = source.get(name) {
             destination.insert(HeaderName::from_static(name), value.clone());
         }
+    }
+}
+
+/// Replaces any upstream value so clients only see the relay's own account id.
+pub fn insert_account_id(headers: &mut HeaderMap, account_id: &str) {
+    if let Ok(value) = HeaderValue::from_str(account_id) {
+        headers.insert(ACCOUNT_ID_HEADER, value);
     }
 }
 
@@ -206,5 +217,15 @@ mod tests {
         copy_response_headers(&source, &mut destination);
         assert_eq!(destination.len(), 2);
         assert!(!destination.contains_key("set-cookie"));
+    }
+
+    #[test]
+    fn forwards_the_relay_account_id_instead_of_an_upstream_value() {
+        let mut source = HeaderMap::new();
+        source.insert(ACCOUNT_ID_HEADER, HeaderValue::from_static("upstream"));
+        insert_account_id(&mut source, "account-1");
+        let mut destination = HeaderMap::new();
+        copy_response_headers(&source, &mut destination);
+        assert_eq!(destination[ACCOUNT_ID_HEADER], "account-1");
     }
 }
