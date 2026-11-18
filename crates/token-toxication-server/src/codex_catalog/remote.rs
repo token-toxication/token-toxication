@@ -9,18 +9,20 @@
 //!
 //! - `/codex/models` **requires** a `client_version` query parameter. An absent
 //!   parameter returns `400`, so a request that omitted it would fail the whole
-//!   catalog. TT therefore always sends one, falling back to
-//!   [`FALLBACK_CLIENT_VERSION`] when the client sent nothing usable.
+//!   catalog. TT always sends the latest verified release, including when the
+//!   client supplied an older version.
 //! - The catalog is shaped **by version**: an older or unknown value returns a
-//!   smaller set. The version is therefore part of the cache key, and never a
-//!   constant that is not a real release.
+//!   smaller set. TT deliberately uses one current release so an older client
+//!   cannot downgrade the managed catalog.
 //! - The Codex client abandons its catalog refresh after 5 seconds. TT's own
 //!   budget stays well inside that so a slow upstream cannot make the client
 //!   time out and lose its model list.
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use axum::http::header;
+use serde::Deserialize;
+use tokio::sync::Mutex;
 
 use crate::{codex_subscription::CodexSubscriptionAuthorization, error::AppError};
 
@@ -33,19 +35,162 @@ pub const MAX_UPSTREAM_CATALOG_BYTES: usize = 4 * 1024 * 1024;
 /// TT's upstream budget, comfortably inside the client's 5 second refresh.
 const CATALOG_TIMEOUT: Duration = Duration::from_secs(3);
 
-/// Version TT reports upstream when the client sent nothing usable.
+/// Default Codex release used until the periodic latest-version check succeeds.
 ///
-/// The backend shapes the catalog to the requested version, so a placeholder
-/// such as `0.0.0` is not neutral: it yields a **reduced** catalog that is
-/// missing models newer clients can use. TT therefore reports the current Codex
-/// release, which is what a client that sends no version most likely is.
+/// The backend shapes the catalog to the requested version. Sending an older
+/// client version would hide models newly enabled for the subscription and
+/// could make managed reconciliation delete their routes.
 ///
-/// Keep this current. Latest verified `2026-10-16` from `~/.codex/version.json`
-/// (`latest_version`) and `https://registry.npmjs.org/@openai/codex/latest`.
-pub const FALLBACK_CLIENT_VERSION: &str = "0.163.0";
+/// Keep this current as an emergency fallback. The running service refreshes
+/// the value from the official package registry every two hours.
+pub const DEFAULT_CLIENT_VERSION: &str = "0.169.1";
+/// Official package metadata used to discover the newest Codex client release.
+pub const CODEX_LATEST_VERSION_URL: &str = "https://registry.npmjs.org/@openai/codex/latest";
+/// How often a running relay checks the package registry for a newer client.
+pub const CLIENT_VERSION_REFRESH_INTERVAL: Duration = Duration::from_secs(2 * 60 * 60);
+const CLIENT_VERSION_TIMEOUT: Duration = Duration::from_secs(10);
+const MAX_CLIENT_VERSION_BODY_BYTES: usize = 64 * 1024;
 
-/// Longest client version TT forwards.
-const MAX_CLIENT_VERSION_LEN: usize = 32;
+#[derive(Debug)]
+struct ClientVersionState {
+    version: String,
+    checked_at: Option<Instant>,
+}
+
+/// Cached latest Codex client version shared by catalog requests and the
+/// managed-catalog monitor.
+#[derive(Debug)]
+pub struct ClientVersionCache {
+    latest_url: String,
+    state: Mutex<ClientVersionState>,
+}
+
+impl Default for ClientVersionCache {
+    fn default() -> Self {
+        Self {
+            latest_url: CODEX_LATEST_VERSION_URL.to_string(),
+            state: Mutex::new(ClientVersionState {
+                version: DEFAULT_CLIENT_VERSION.to_string(),
+                checked_at: Some(Instant::now()),
+            }),
+        }
+    }
+}
+
+impl ClientVersionCache {
+    /// Start with the fallback version and force a registry check on first use.
+    pub fn startup() -> Self {
+        Self {
+            latest_url: CODEX_LATEST_VERSION_URL.to_string(),
+            state: Mutex::new(ClientVersionState {
+                version: DEFAULT_CLIENT_VERSION.to_string(),
+                checked_at: None,
+            }),
+        }
+    }
+
+    /// Point the refresh at a test registry while retaining production timing.
+    #[cfg(test)]
+    fn for_test(latest_url: String, version: String, checked_at: Option<Instant>) -> Self {
+        Self {
+            latest_url,
+            state: Mutex::new(ClientVersionState {
+                version,
+                checked_at,
+            }),
+        }
+    }
+
+    /// Return the cached latest version, refreshing it at most once per interval.
+    ///
+    /// A registry failure keeps the last successful version and suppresses
+    /// another refresh until the interval elapses.
+    pub async fn current(&self, http: &aioduct::TokioClient) -> String {
+        let mut state = self.state.lock().await;
+        if state
+            .checked_at
+            .is_some_and(|checked_at| checked_at.elapsed() < CLIENT_VERSION_REFRESH_INTERVAL)
+        {
+            return state.version.clone();
+        }
+
+        match fetch_latest_client_version(http, &self.latest_url).await {
+            Ok(version) => {
+                tracing::info!(
+                    client_version = version.as_str(),
+                    "refreshed latest Codex client version"
+                );
+                state.version = version;
+            }
+            Err(error) => {
+                tracing::warn!(
+                    reason = %error,
+                    client_version = state.version.as_str(),
+                    "latest Codex client version refresh failed; using cached version"
+                );
+            }
+        }
+        state.checked_at = Some(Instant::now());
+        state.version.clone()
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct NpmLatestPackage {
+    version: String,
+}
+
+async fn fetch_latest_client_version(
+    http: &aioduct::TokioClient,
+    url: &str,
+) -> Result<String, String> {
+    let request = http
+        .get(url)
+        .map_err(|error| error.to_string())?
+        .header_str(header::ACCEPT.as_str(), "application/json")
+        .map_err(|error| error.to_string())?;
+    let response = tokio::time::timeout(CLIENT_VERSION_TIMEOUT, request.send())
+        .await
+        .map_err(|_| "latest version request timed out".to_string())?
+        .map_err(|error| error.to_string())?;
+    if !response.status().is_success() {
+        return Err(format!(
+            "latest version request failed with status {}",
+            response.status().as_u16()
+        ));
+    }
+    let bytes = response.bytes().await.map_err(|error| error.to_string())?;
+    if bytes.len() > MAX_CLIENT_VERSION_BODY_BYTES {
+        return Err("latest version response exceeded size limit".to_string());
+    }
+    let package: NpmLatestPackage = serde_json::from_slice(&bytes)
+        .map_err(|error| format!("invalid latest version JSON: {error}"))?;
+    validate_client_version(&package.version)
+        .ok_or_else(|| "latest version response contained an invalid version".to_string())
+}
+
+fn validate_client_version(value: &str) -> Option<String> {
+    let value = value.trim();
+    let core = value.split(['-', '+']).next().unwrap_or_default();
+    let mut parts = core.split('.');
+    let major = parts.next()?;
+    let minor = parts.next()?;
+    let patch = parts.next()?;
+    if parts.next().is_some()
+        || major.is_empty()
+        || minor.is_empty()
+        || patch.is_empty()
+        || !major.chars().all(|character| character.is_ascii_digit())
+        || !minor.chars().all(|character| character.is_ascii_digit())
+        || !patch.chars().all(|character| {
+            character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '+')
+        })
+        || value.len() > 32
+    {
+        return None;
+    }
+    Some(value.to_string())
+}
 
 /// A catalog response, or a `304` revalidation result.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -54,27 +199,6 @@ pub enum FetchedCatalog {
     Ok { body: Vec<u8>, etag: Option<String> },
     /// The cached copy is still current.
     NotModified,
-}
-
-/// Reduce an untrusted client version to something safe to place in a query.
-///
-/// Never rejects: a client with an unexpected version string still needs a
-/// catalog, and losing every model is worse than reporting a placeholder.
-pub fn upstream_client_version(value: Option<&str>) -> String {
-    let sanitized: String = value
-        .unwrap_or_default()
-        .trim()
-        .chars()
-        .filter(|character| {
-            character.is_ascii_alphanumeric() || matches!(character, '.' | '-' | '_')
-        })
-        .take(MAX_CLIENT_VERSION_LEN)
-        .collect();
-    if sanitized.is_empty() {
-        FALLBACK_CLIENT_VERSION.to_string()
-    } else {
-        sanitized
-    }
 }
 
 /// Fetch the catalog for one subscription account.
@@ -309,52 +433,87 @@ mod tests {
     }
 
     #[test]
-    fn the_fallback_version_is_a_real_release() {
-        // A placeholder such as `0.0.0` is not neutral: the backend shapes the
-        // catalog by version and returns a smaller set for an unknown one, which
-        // is how a single versionless request used to downgrade every client.
-        let parts: Vec<&str> = FALLBACK_CLIENT_VERSION.split('.').collect();
+    fn the_latest_version_is_a_real_release() {
+        let parts: Vec<&str> = DEFAULT_CLIENT_VERSION.split('.').collect();
         assert_eq!(parts.len(), 3, "expected major.minor.patch");
         for part in &parts {
             assert!(
                 part.parse::<u32>().is_ok(),
-                "fallback version component {part:?} is not numeric"
+                "version component {part:?} is not numeric"
             );
         }
-        assert_ne!(FALLBACK_CLIENT_VERSION, "0.0.0");
+        assert_ne!(DEFAULT_CLIENT_VERSION, "0.0.0");
         assert!(
             parts.iter().any(|part| *part != "0"),
-            "fallback version must name a real release"
+            "latest version must name a real release"
         );
     }
 
     #[test]
-    fn a_client_version_is_always_usable() {
-        // The backend rejects an absent parameter, so this must never be empty.
-        assert_eq!(upstream_client_version(None), FALLBACK_CLIENT_VERSION);
-        assert_eq!(FALLBACK_CLIENT_VERSION, "0.163.0");
-        assert_eq!(upstream_client_version(Some("")), FALLBACK_CLIENT_VERSION);
+    fn latest_version_validation_accepts_semver_and_rejects_untrusted_values() {
         assert_eq!(
-            upstream_client_version(Some("   ")),
-            FALLBACK_CLIENT_VERSION
+            validate_client_version("0.169.1"),
+            Some("0.169.1".to_string())
         );
         assert_eq!(
-            upstream_client_version(Some("0.162.0-alpha.17.2")),
-            "0.162.0-alpha.17.2"
+            validate_client_version("0.169.1-alpha.1"),
+            Some("0.169.1-alpha.1".to_string())
         );
-        // Unexpected input is sanitized rather than rejected: a client with an
-        // odd version string still needs its model list.
+        assert_eq!(validate_client_version("latest"), None);
+        assert_eq!(validate_client_version("../../etc/passwd"), None);
+    }
+
+    #[tokio::test]
+    async fn a_stale_cache_refreshes_from_the_registry_and_is_reused() {
+        let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let counter = calls.clone();
+        let app = Router::new().route(
+            "/latest",
+            get(move || {
+                let counter = counter.clone();
+                async move {
+                    counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    axum::Json(serde_json::json!({ "version": "0.170.0" }))
+                }
+            }),
+        );
+        let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
+        let address = listener.local_addr().expect("address");
+        tokio::spawn(async move {
+            let _ = axum::serve(listener, app).await;
+        });
+
+        let cache = ClientVersionCache::for_test(
+            format!("http://{address}/latest"),
+            DEFAULT_CLIENT_VERSION.to_string(),
+            None,
+        );
+        assert_eq!(cache.current(&client()).await, "0.170.0");
+        assert_eq!(cache.current(&client()).await, "0.170.0");
         assert_eq!(
-            upstream_client_version(Some("1.2.3+build 4")),
-            "1.2.3build4"
+            calls.load(std::sync::atomic::Ordering::Relaxed),
+            1,
+            "a fresh cached version must not be fetched again"
         );
-        assert_eq!(
-            upstream_client_version(Some("../../etc/passwd")),
-            "....etcpasswd"
+    }
+
+    #[tokio::test]
+    async fn a_failed_registry_refresh_keeps_the_cached_version() {
+        let app = Router::new().route(
+            "/latest",
+            get(|| async { axum::http::StatusCode::SERVICE_UNAVAILABLE }),
         );
-        assert_eq!(
-            upstream_client_version(Some(&"9".repeat(80))).len(),
-            MAX_CLIENT_VERSION_LEN
+        let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
+        let address = listener.local_addr().expect("address");
+        tokio::spawn(async move {
+            let _ = axum::serve(listener, app).await;
+        });
+
+        let cache = ClientVersionCache::for_test(
+            format!("http://{address}/latest"),
+            "0.169.1".to_string(),
+            None,
         );
+        assert_eq!(cache.current(&client()).await, "0.169.1");
     }
 }

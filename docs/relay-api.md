@@ -79,10 +79,12 @@ is configured. The JSON response is pretty-printed so the downloaded catalog is
 readable without an additional formatting step.
 
 Two upstream constraints are handled for the client. `/codex/models` **requires**
-a `client_version` query parameter, and the backend answers `400` without one, so
-the relay always sends one and falls back to a placeholder when the client sent
-nothing usable. The relay also keeps its upstream budget inside the client's five
-second refresh window.
+a `client_version` query parameter, and the backend answers `400` without one.
+The relay checks the official `@openai/codex` package every two hours and always
+sends the latest discovered release, ignoring older client versions so a stale
+client cannot downgrade managed model reconciliation. A failed registry check
+keeps the last successful version. The relay also keeps its upstream budget
+inside the client's five-second refresh window.
 
 The served catalog is cached in memory per account and revalidated with the
 upstream `ETag`. When an upstream refresh fails, the last known good catalog is

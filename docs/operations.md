@@ -25,6 +25,14 @@ OpenAI Responses streams can fail after the upstream has already returned HTTP 2
 
 The original response stream is forwarded unchanged. Failure classification affects route health and request logs, not the bytes returned to the client.
 
+### Codex catalog client version
+
+`GET /openai/v1/codex/models` sends the newest `@openai/codex` release as
+`client_version`, not the version reported by the calling client. The relay
+checks the package registry at startup and then at most once every two hours,
+reusing the last successful value when a check fails. The checked version and
+the fallback used after a failed check are logged as bounded metadata.
+
 ### Codex subscription credits
 
 In **Provider Accounts → Codex quota**, choose **Allow credits continuation** and
