@@ -25,6 +25,12 @@ export type ModelCatalogForm = {
   displayName: string;
   family: string;
   enabled: boolean;
+  contextWindow: string;
+  maxContextWindow: string;
+  reasoningLevels: string;
+  defaultReasoningLevel: string;
+  inputModalities: string;
+  serviceTiers: string;
 };
 
 export type ProviderRouteForm = {
@@ -120,6 +126,12 @@ export const emptyModelForm: ModelCatalogForm = {
   displayName: "",
   family: "other",
   enabled: true,
+  contextWindow: "",
+  maxContextWindow: "",
+  reasoningLevels: "",
+  defaultReasoningLevel: "",
+  inputModalities: "",
+  serviceTiers: "",
 };
 
 export const emptyRouteForm: ProviderRouteForm = {

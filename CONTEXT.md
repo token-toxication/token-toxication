@@ -14,7 +14,8 @@ It owns authentication configuration, priority, activation, and provider health.
 A Catalog Model is a public model identifier exposed by the relay. It describes
 the model independently from any provider that can serve it. A Catalog Model is
 either manually managed by an operator or managed from one or more provider
-catalog sources.
+catalog sources. It may carry operator-declared capability metadata; upstream
+observations remain account-specific and read-only.
 
 ## Managed Catalog Source
 

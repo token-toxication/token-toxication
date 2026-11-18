@@ -28,11 +28,20 @@ function catalogEntry(
 ): ModelCatalogEntry {
   return {
     createdAt: "2026-07-23T00:00:00Z",
+    declared: {
+      contextWindow: null,
+      maxContextWindow: null,
+      reasoningLevels: [],
+      defaultReasoningLevel: null,
+      inputModalities: [],
+      serviceTiers: [],
+    },
     displayName,
     enabled,
     family,
     id,
     managed: false,
+    upstream: [],
   };
 }
 

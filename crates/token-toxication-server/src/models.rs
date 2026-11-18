@@ -511,6 +511,76 @@ pub struct ProviderPresetListResponse {
     pub data: Vec<ProviderPreset>,
 }
 
+/// Capability metadata declared by a catalog source or entered by an operator.
+///
+/// These values describe the model; routing does not consume them. Upstream
+/// values are observations, declared values are operator input, and neither is
+/// a substitute for the other.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ModelCapabilities {
+    pub context_window: Option<i64>,
+    pub max_context_window: Option<i64>,
+    pub reasoning_levels: Vec<String>,
+    pub default_reasoning_level: Option<String>,
+    pub input_modalities: Vec<String>,
+    pub service_tiers: Vec<String>,
+}
+
+impl ModelCapabilities {
+    /// Keep operator input bounded and free of empty or duplicate values.
+    pub fn normalized(self) -> Self {
+        Self {
+            context_window: self.context_window.filter(|value| *value > 0),
+            max_context_window: self.max_context_window.filter(|value| *value > 0),
+            reasoning_levels: normalize_metadata_list(self.reasoning_levels),
+            default_reasoning_level: normalize_metadata_string(self.default_reasoning_level),
+            input_modalities: normalize_metadata_list(self.input_modalities),
+            service_tiers: normalize_metadata_list(self.service_tiers),
+        }
+    }
+}
+
+const MAX_METADATA_STRING_LEN: usize = 64;
+const MAX_METADATA_ITEMS: usize = 32;
+
+fn normalize_metadata_string(value: Option<String>) -> Option<String> {
+    value
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty() && value.len() <= MAX_METADATA_STRING_LEN)
+}
+
+fn normalize_metadata_list(values: Vec<String>) -> Vec<String> {
+    let mut normalized = Vec::new();
+    for value in values {
+        let Some(value) = normalize_metadata_string(Some(value)) else {
+            continue;
+        };
+        if normalized.iter().any(|item| item == &value) {
+            continue;
+        }
+        normalized.push(value);
+        if normalized.len() >= MAX_METADATA_ITEMS {
+            break;
+        }
+    }
+    normalized
+}
+
+/// One subscription account's observation of a managed model.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelUpstreamObservation {
+    pub provider_account_id: String,
+    pub provider_account_name: String,
+    pub upstream_model_id: String,
+    pub supported_in_api: bool,
+    pub visibility: Option<String>,
+    pub minimal_client_version: Option<String>,
+    pub observed_at: DateTime<Utc>,
+    pub capabilities: ModelCapabilities,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelCatalogEntry {
@@ -521,6 +591,10 @@ pub struct ModelCatalogEntry {
     /// Whether the relay owns this entry through a provider catalog sync.
     pub managed: bool,
     pub created_at: DateTime<Utc>,
+    /// Operator-entered metadata for manual models, or optional overrides.
+    pub declared: ModelCapabilities,
+    /// Read-only capability observations from managed subscription accounts.
+    pub upstream: Vec<ModelUpstreamObservation>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -531,6 +605,9 @@ pub struct ManagedCatalogModel {
     pub upstream_model_id: String,
     pub wire_api: String,
     pub supported_in_api: bool,
+    pub capabilities: ModelCapabilities,
+    pub visibility: Option<String>,
+    pub minimal_client_version: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -543,6 +620,8 @@ pub struct CreateModelCatalogEntryRequest {
     pub family: String,
     #[serde(default = "default_active")]
     pub enabled: bool,
+    #[serde(default)]
+    pub declared: ModelCapabilities,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -551,6 +630,8 @@ pub struct UpdateModelCatalogEntryRequest {
     pub display_name: Option<String>,
     pub family: Option<String>,
     pub enabled: Option<bool>,
+    /// Replaces the operator-entered metadata when present; omitted leaves it unchanged.
+    pub declared: Option<ModelCapabilities>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -837,4 +918,34 @@ pub fn default_profile_priority() -> i32 {
 
 pub fn default_input_modalities() -> Vec<String> {
     vec!["text".to_string()]
+}
+
+#[cfg(test)]
+mod capability_tests {
+    use super::*;
+
+    #[test]
+    fn declared_capabilities_are_bounded_and_deduplicated() {
+        let capabilities = ModelCapabilities {
+            context_window: Some(0),
+            max_context_window: Some(872_000),
+            reasoning_levels: vec![
+                " low ".to_string(),
+                "low".to_string(),
+                String::new(),
+                "x".repeat(MAX_METADATA_STRING_LEN + 1),
+            ],
+            default_reasoning_level: Some("   ".to_string()),
+            input_modalities: vec!["text".to_string(), "text".to_string()],
+            service_tiers: vec!["priority".to_string()],
+        }
+        .normalized();
+
+        assert_eq!(capabilities.context_window, None);
+        assert_eq!(capabilities.max_context_window, Some(872_000));
+        assert_eq!(capabilities.reasoning_levels, vec!["low"]);
+        assert_eq!(capabilities.default_reasoning_level, None);
+        assert_eq!(capabilities.input_modalities, vec!["text"]);
+        assert_eq!(capabilities.service_tiers, vec!["priority"]);
+    }
 }

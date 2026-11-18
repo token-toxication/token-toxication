@@ -68,6 +68,15 @@ and supported API models receive managed Responses routes. A model remains
 available while any account still advertises it; a successful refresh removes
 only that account's stale route. Refresh failures do not remove existing models.
 
+Managed entries also retain an allowlisted, read-only snapshot of each account's
+capability metadata: context window, max context window, reasoning levels and
+default, input modalities, service tiers, visibility, API support, and minimum
+client version. The model catalog shows one row per account observation and a
+range when accounts disagree. Manual models accept the same capability fields as
+optional operator declarations. Declared metadata is informational only and is
+never used for routing. The upstream catalog does not report a maximum output
+token count, so TT does not display one for managed models.
+
 Codex subscription routes remove `max_output_tokens` to match the Codex CLI request shape. OpenAI API-key routes continue forwarding that field.
 
 Configure Codex clients with base URL `http://localhost:3000/openai/v1`, the Responses API, and a generated relay key.

@@ -12,6 +12,7 @@ import {
   numberFromInput,
   routeCountForAccount,
 } from "./helpers";
+import { capabilitiesFromForm } from "./model-metadata";
 import {
   accountFormFromAccount,
   emptyAccountForm,
@@ -533,6 +534,7 @@ export function useAdminWorkspace() {
       displayName: createModelForm.displayName,
       family: createModelForm.family,
       enabled: createModelForm.enabled,
+      declared: capabilitiesFromForm(createModelForm),
     });
     setCreateModelForm(emptyModelForm);
     setIsModelSheetOpen(false);
@@ -561,11 +563,12 @@ export function useAdminWorkspace() {
     await refresh();
   }
 
-  async function updateModelDetails(
-    entry: ModelCatalogEntry,
-    values: { displayName: string; family: string },
-  ) {
-    await api.updateModelCatalogEntry(entry.id, values);
+  async function updateModelDetails(entry: ModelCatalogEntry, values: ModelCatalogForm) {
+    await api.updateModelCatalogEntry(entry.id, {
+      displayName: values.displayName,
+      family: values.family,
+      ...(entry.managed ? {} : { declared: capabilitiesFromForm(values) }),
+    });
     toast.success(t`Model updated`);
     await refresh();
   }
